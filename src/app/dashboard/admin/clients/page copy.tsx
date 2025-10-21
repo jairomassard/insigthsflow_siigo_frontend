@@ -17,7 +17,6 @@ type Cliente = {
   logo_url?: string;
   limite_usuarios?: number | null;
   limite_sesiones?: number | null;
-  timezone?: string;
 };
 
 export default function ClientsPage() {
@@ -43,9 +42,7 @@ export default function ClientsPage() {
     logo_url: "",
     limite_usuarios: "",
     limite_sesiones: "",
-    timezone: "America/Bogota",
     activo: "true", // como string para el <select>
-
   });
 
   const resetForm = () =>
@@ -60,7 +57,6 @@ export default function ClientsPage() {
       logo_url: "",
       limite_usuarios: "",
       limite_sesiones: "",
-      timezone: "America/Bogota", // 👈 importante
       activo: "true",
     });
 
@@ -94,7 +90,6 @@ export default function ClientsPage() {
     limite_usuarios: form.limite_usuarios ? Number(form.limite_usuarios) : null,
     limite_sesiones: form.limite_sesiones ? Number(form.limite_sesiones) : null,
     activo: form.activo === "true",
-    timezone: form.timezone || "America/Bogota",
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -146,7 +141,6 @@ export default function ClientsPage() {
       limite_sesiones:
         typeof c.limite_sesiones === "number" ? String(c.limite_sesiones) : "",
       activo: c.activo ? "true" : "false",
-      timezone: c.timezone || "America/Bogota",
     });
     // el botón cambiará a "Guardar"
   };
@@ -300,36 +294,6 @@ export default function ClientsPage() {
             inputMode="numeric"
           />
         </div>
-        
-        <div>
-          <label className="mb-1 block text-sm text-gray-700">Zona horaria</label>
-          <select
-            className="w-full rounded border p-2"
-            value={form.timezone}
-            onChange={(e) => setForm({ ...form, timezone: e.target.value })}
-          >
-            <option value="America/Bogota">America/Bogota (🇨🇴 Colombia)</option>
-            <option value="America/Lima">America/Lima (🇵🇪 Perú)</option>
-            <option value="America/Mexico_City">America/Mexico_City (🇲🇽 México)</option>
-            <option value="America/Caracas">America/Caracas (🇻🇪 Venezuela)</option>
-            <option value="America/Guatemala">America/Guatemala (🇬🇹 Guatemala)</option>
-            <option value="America/La_Paz">America/La_Paz (🇧🇴 Bolivia)</option>
-            <option value="America/Panama">America/Panama (🇵🇦 Panamá)</option>
-            <option value="America/Asuncion">America/Asuncion (🇵🇾 Paraguay)</option>
-            <option value="America/Santiago">America/Santiago (🇨🇱 Chile)</option>
-            <option value="America/Buenos_Aires">America/Buenos_Aires (🇦🇷 Argentina)</option>
-            <option value="America/Montevideo">America/Montevideo (🇺🇾 Uruguay)</option>
-            <option value="America/El_Salvador">America/El_Salvador (🇸🇻 El Salvador)</option>
-            <option value="America/Tegucigalpa">America/Tegucigalpa (🇭🇳 Honduras)</option>
-            <option value="America/Managua">America/Managua (🇳🇮 Nicaragua)</option>
-            <option value="America/Costa_Rica">America/Costa_Rica (🇨🇷 Costa Rica)</option>
-            <option value="America/Phoenix">America/Phoenix (🇺🇸 Arizona)</option>
-            <option value="America/New_York">America/New_York (🇺🇸 Este USA)</option>
-            <option value="America/Chicago">America/Chicago (🇺🇸 Centro USA)</option>
-            <option value="America/Denver">America/Denver (🇺🇸 Montaña USA)</option>
-            <option value="America/Los_Angeles">America/Los_Angeles (🇺🇸 Pacífico USA)</option>
-          </select>
-        </div>
 
         <div className="md:col-span-3 flex gap-2">
           <button
@@ -378,7 +342,6 @@ export default function ClientsPage() {
                 <th className="border p-2">Teléfono</th>
                 <th className="border p-2">Lím. usuarios</th>
                 <th className="border p-2">Lím. sesiones</th>
-                <th className="border p-2">Timezone</th>
                 <th className="border p-2">Activo</th>
                 <th className="border p-2">Acciones</th>
               </tr>
@@ -403,7 +366,6 @@ export default function ClientsPage() {
                       ? c.limite_sesiones
                       : "-"}
                   </td>
-                  <td className="border p-2">{c.timezone || "-"}</td>
                   <td className="border p-2">{c.activo ? "Sí" : "No"}</td>
                   <td className="border p-2">
                     <div className="flex gap-2">

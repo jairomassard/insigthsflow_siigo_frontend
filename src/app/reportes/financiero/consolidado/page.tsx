@@ -102,6 +102,7 @@ export default function ReporteFinancieroConsolidadoPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        console.log("🔍 Fetching reporte financiero con filtros:", queryParams);      // se puede ocultar despues para no mostrarlo en pagina
         const data = await authFetch(`/reportes/financiero/consolidado${queryParams}`);
         setKpis(data.kpis || null);
         setEvolucion(data.evolucion || []);

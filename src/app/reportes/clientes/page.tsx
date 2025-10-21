@@ -142,6 +142,8 @@ export default function ReporteClientes() {
       if (costCenter) qs.append("cost_center", costCenter);
       if (estadoCartera) qs.append("estado", estadoCartera); // 👈 se envía al backend
 
+      console.log("🔍 Fetching analisis_clientes con filtros:", qs.toString());    // se puede quitar para no mostrar en la pagina
+
       const res = await authFetch(`/reportes/analisis_clientes?${qs.toString()}`);
       if (res?.error) {
         setErr(res.error);

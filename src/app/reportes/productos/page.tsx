@@ -299,25 +299,15 @@ export default function ReporteProductosPage() {
                         dataKey="mes"
                         tickFormatter={(mes) => {
                           try {
-                            if (typeof mes !== "string") return mes;
+                            const d = new Date(mes);
+                            if (isNaN(d.getTime())) return "Fecha inválida";
 
-                            // Asegurar formato compatible ISO
-                            const safe = mes.includes("T") ? mes : mes.replace(" ", "T");
+                            const month = d.toLocaleString("es-CO", { month: "short" });
+                            const year = d.getFullYear().toString().slice(-2);
 
-                            const d = new Date(safe);
-
-                            if (isNaN(d.getTime())) {
-                              console.warn("❌ Fecha inválida recibida:", mes);
-                              return "Fecha inválida";
-                            }
-
-                            return d.toLocaleDateString("es-CO", {
-                              month: "short",
-                              year: "2-digit",
-                            });
-                          } catch (err) {
-                            console.error("Error en tickFormatter:", err);
-                            return mes;
+                            return `${month} de ${year}`;
+                          } catch {
+                            return "Fecha inválida";
                           }
                         }}
                       />

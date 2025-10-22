@@ -103,7 +103,7 @@ export default function ReporteFinancieroConsolidadoPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        console.log("🔍 Fetching reporte financiero con filtros:", queryParams);      // se puede ocultar despues para no mostrarlo en pagina
+        //console.log("🔍 Fetching reporte financiero con filtros:", queryParams);      // se puede ocultar despues para no mostrarlo en pagina
         const data = await authFetch(`/reportes/financiero/consolidado${queryParams}`);
         setKpis(data.kpis || null);
         setEvolucion(data.evolucion || []);
@@ -521,7 +521,9 @@ export default function ReporteFinancieroConsolidadoPage() {
                 <YAxis
                   type="category"
                   dataKey="mes"
-                  tickFormatter={(mes) => format(new Date(mes), "MMM yyyy")}
+                  tickFormatter={(mes) =>
+                    formatInTimeZone(new Date(mes), "UTC", "MMM yyyy")
+                  }
                   width={100}
                   tick={{ fontSize: 12 }}
                 />

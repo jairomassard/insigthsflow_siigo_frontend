@@ -134,21 +134,34 @@ export default function ReporteFinancieroConsolidadoPage() {
 
     /* --- manejar clic en barras --- */
     const handleBarClick = async (tipo: "ingresos" | "egresos", data: any) => {
-      // Aseguramos interpretar data.mes en UTC y forzar el inicio de mes correcto
+      console.log("🔍 clicked month data:", data.mes);
+
       let d: Date;
       if (typeof data.mes === "string") {
-        // si viene como "2025‑01‑01T00:00:00Z" o "2025‑01‑01"
-        const dateString = data.mes.endsWith("Z") ? data.mes : (`${data.mes}T00:00:00Z`);
-        d = new Date(dateString);
-      } else {
+        // Si viene sin “Z” al final, lo agregamos para forzar UTC
+        const str = data.mes.endsWith("Z") ? data.mes : `${data.mes}T00:00:00Z`;
+        d = new Date(str);
+      } else if (data.mes instanceof Date) {
+        d = data.mes;
+      } else if (typeof data.mes === "number") {
         d = new Date(data.mes);
+      } else {
+        // Valor inesperado
+        console.error("handleBarClick: formato de mes inesperado:", data.mes);
+        return; // salir si no podemos interpretar
       }
 
-      // Ahora forzamos al primer día del mes en UTC
+      // Verificar que la fecha es válida
+      if (isNaN(d.getTime())) {
+        console.error("handleBarClick: fecha inválida calculada:", d);
+        return;
+      }
+
+      // Forzar primer día del mes en UTC
       const year = d.getUTCFullYear();
       const month = d.getUTCMonth(); // 0‑based
       const firstOfMonthUTC = new Date(Date.UTC(year, month, 1));
-      const lastOfMonthUTC = new Date(Date.UTC(year, month + 1, 0)); // último día del mes
+      const lastOfMonthUTC = new Date(Date.UTC(year, month + 1, 0));
 
       const desdeMes = format(firstOfMonthUTC, "yyyy-MM-dd");
       const hastaMes = format(lastOfMonthUTC, "yyyy-MM-dd");
@@ -162,13 +175,11 @@ export default function ReporteFinancieroConsolidadoPage() {
         if (tipo === "ingresos") {
           const qs = new URLSearchParams({ desde: desdeMes, hasta: hastaMes });
           if (centroCostos) qs.set("cost_center", String(centroCostos));
-
           const result = await authFetch(`/reportes/facturas_cliente?${qs.toString()}`);
           setDetalleFacturas(result.rows || []);
         } else {
           const qs = new URLSearchParams({ desde: desdeMes, hasta: hastaMes });
           if (centroCostos) qs.set("centro_costos", String(centroCostos));
-
           const result = await authFetch(`/reportes/facturas_proveedor?${qs.toString()}`);
           setDetalleFacturas(result.rows || []);
         }
@@ -177,6 +188,7 @@ export default function ReporteFinancieroConsolidadoPage() {
         setDetalleFacturas([]);
       }
     };
+
 
 
     // Nuevas funciones para manejar clicks en los graficos de top clientes y proveedores

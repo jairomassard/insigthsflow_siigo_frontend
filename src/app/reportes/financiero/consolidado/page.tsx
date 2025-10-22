@@ -134,7 +134,12 @@ export default function ReporteFinancieroConsolidadoPage() {
 
     /* --- manejar clic en barras --- */
     const handleBarClick = async (tipo: "ingresos" | "egresos", data: any) => {
-        const d = parseISO(data.mes + "T00:00:00Z");
+        let d: Date;
+        if (typeof data.mes === "string") {
+          d = new Date(data.mes.endsWith("Z") ? data.mes : data.mes + "Z");
+        } else {
+          d = new Date(data.mes);
+        }
 
         const mes = format(d, "yyyy-MM"); // usado en título del modal
         const desdeMes = format(startOfMonth(d), "yyyy-MM-dd");

@@ -134,50 +134,45 @@ export default function ReporteFinancieroConsolidadoPage() {
 
     /* --- manejar clic en barras --- */
     const handleBarClick = async (tipo: "ingresos" | "egresos", data: any) => {
-      // Aseguramos interpretar data.mes en UTC y forzar el inicio de mes correcto
-      let d: Date;
-      if (typeof data.mes === "string") {
-        // si viene como "2025‑01‑01T00:00:00Z" o "2025‑01‑01"
-        const dateString = data.mes.endsWith("Z") ? data.mes : (`${data.mes}T00:00:00Z`);
-        d = new Date(dateString);
-      } else {
-        d = new Date(data.mes);
-      }
-
-      // Ahora forzamos al primer día del mes en UTC
-      const year = d.getUTCFullYear();
-      const month = d.getUTCMonth(); // 0‑based
-      const firstOfMonthUTC = new Date(Date.UTC(year, month, 1));
-      const lastOfMonthUTC = new Date(Date.UTC(year, month + 1, 0)); // último día del mes
-
-      const desdeMes = format(firstOfMonthUTC, "yyyy-MM-dd");
-      const hastaMes = format(lastOfMonthUTC, "yyyy-MM-dd");
-      const mes = format(firstOfMonthUTC, "yyyy-MM");
-
-      setModalTipo(tipo);
-      setModalMes(mes);
-      setModalOpen(true);
-
-      try {
-        if (tipo === "ingresos") {
-          const qs = new URLSearchParams({ desde: desdeMes, hasta: hastaMes });
-          if (centroCostos) qs.set("cost_center", String(centroCostos));
-
-          const result = await authFetch(`/reportes/facturas_cliente?${qs.toString()}`);
-          setDetalleFacturas(result.rows || []);
+        let d: Date;
+        if (typeof data.mes === "string") {
+          d = new Date(data.mes.endsWith("Z") ? data.mes : data.mes + "Z");
         } else {
-          const qs = new URLSearchParams({ desde: desdeMes, hasta: hastaMes });
-          if (centroCostos) qs.set("centro_costos", String(centroCostos));
-
-          const result = await authFetch(`/reportes/facturas_proveedor?${qs.toString()}`);
-          setDetalleFacturas(result.rows || []);
+          d = new Date(data.mes);
         }
-      } catch (err) {
-        console.error("Error cargando detalle", err);
-        setDetalleFacturas([]);
-      }
-    };
 
+        const mes = format(d, "yyyy-MM"); // usado en título del modal
+        const desdeMes = format(startOfMonth(d), "yyyy-MM-dd");
+        const hastaMes = format(endOfMonth(d), "yyyy-MM-dd");
+
+        setModalTipo(tipo);
+        setModalMes(mes);
+        setModalOpen(true);
+
+        try {
+            if (tipo === "ingresos") {
+            // Ventas: requiere rango de fechas y opcionalmente centro de costos
+            const qs = new URLSearchParams({
+                desde: desdeMes,
+                hasta: hastaMes,
+            });
+            if (centroCostos) qs.set("cost_center", String(centroCostos));
+
+            const result = await authFetch(`/reportes/facturas_cliente?${qs.toString()}`);
+            setDetalleFacturas(result.rows || []);
+            } else {
+            // Compras: requiere mes y opcionalmente centro de costos
+            const qs = new URLSearchParams({ mes });
+            if (centroCostos) qs.set("centro_costos", String(centroCostos));
+
+            const result = await authFetch(`/reportes/facturas_proveedor?desde=${desdeMes}&hasta=${hastaMes}&centro_costos=${centroCostos}`);
+            setDetalleFacturas(result.rows || []);
+            }
+        } catch (err) {
+            console.error("Error cargando detalle", err);
+            setDetalleFacturas([]);
+        }
+    };
 
     // Nuevas funciones para manejar clicks en los graficos de top clientes y proveedores
     const handleClienteClick = async (nombre: string) => {

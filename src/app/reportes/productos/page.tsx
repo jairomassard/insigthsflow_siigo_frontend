@@ -140,6 +140,13 @@ export default function ReporteProductosPage() {
     setDetalle(null);
   };
 
+  useEffect(() => {
+    if (detalle?.historico?.length) {
+      console.log("🧪 Histórico recibido:", detalle.historico.map((d) => d.mes));
+    }
+  }, [detalle]);
+
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">📦 Reporte Ventas por Producto</h1>

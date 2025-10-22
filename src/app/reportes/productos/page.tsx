@@ -292,14 +292,29 @@ export default function ReporteProductosPage() {
                         dataKey="mes"
                         tickFormatter={(mes) => {
                           try {
-                            const isoFixed = mes.replace(" ", "T");
-                            const d = new Date(isoFixed);
-                            return d.toLocaleDateString("es-CO", { month: "short", year: "2-digit" });
-                          } catch {
+                            if (typeof mes !== "string") return mes;
+
+                            // Asegurar formato compatible ISO
+                            const safe = mes.includes("T") ? mes : mes.replace(" ", "T");
+
+                            const d = new Date(safe);
+
+                            if (isNaN(d.getTime())) {
+                              console.warn("❌ Fecha inválida recibida:", mes);
+                              return "Fecha inválida";
+                            }
+
+                            return d.toLocaleDateString("es-CO", {
+                              month: "short",
+                              year: "2-digit",
+                            });
+                          } catch (err) {
+                            console.error("Error en tickFormatter:", err);
                             return mes;
                           }
                         }}
                       />
+
                       <YAxis yAxisId="left" orientation="left" tickFormatter={(v) => abreviar(v)} />
                       <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => abreviarMoneda(v)} />
                       <Tooltip formatter={(v: number, name) => name === "cantidad" ? abreviar(v) : abreviarMoneda(v)} />

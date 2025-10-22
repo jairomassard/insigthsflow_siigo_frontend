@@ -304,7 +304,8 @@ export default function ReporteFinancieroConsolidadoPage() {
                 textAnchor="end"
                 height={60}
               />
-              <YAxis tickFormatter={(v) => formatCurrency(v)} />
+              <YAxis tickFormatter={(v: any) => abreviar(Number(v))}  // asi estaba: tickFormatter={(v) => formatCurrency(v)}
+              />
               <Tooltip
                 labelFormatter={(mes) => format(new Date(mes), "MM-yyyy")}
                 formatter={(v: number) => formatCurrency(v)}

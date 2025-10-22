@@ -288,7 +288,18 @@ export default function ReporteProductosPage() {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={detalle.historico} margin={{ top: 10, right: 20, bottom: 10, left: 10 }}>
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="mes" tickFormatter={(v) => new Date(v).toLocaleDateString("es-CO", { month: "short", year: "2-digit" })} />
+                      <XAxis
+                        dataKey="mes"
+                        tickFormatter={(mes) => {
+                          try {
+                            const isoFixed = mes.replace(" ", "T");
+                            const d = new Date(isoFixed);
+                            return d.toLocaleDateString("es-CO", { month: "short", year: "2-digit" });
+                          } catch {
+                            return mes;
+                          }
+                        }}
+                      />
                       <YAxis yAxisId="left" orientation="left" tickFormatter={(v) => abreviar(v)} />
                       <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => abreviarMoneda(v)} />
                       <Tooltip formatter={(v: number, name) => name === "cantidad" ? abreviar(v) : abreviarMoneda(v)} />

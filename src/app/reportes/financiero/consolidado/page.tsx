@@ -21,6 +21,7 @@ import {
 } from "recharts";
 import { startOfMonth, endOfMonth, format } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
+import { parseISO } from "date-fns";
 
 /* -------- tipos -------- */
 interface EvolucionMes {
@@ -133,7 +134,8 @@ export default function ReporteFinancieroConsolidadoPage() {
 
     /* --- manejar clic en barras --- */
     const handleBarClick = async (tipo: "ingresos" | "egresos", data: any) => {
-        const d = new Date(data.mes);
+        const d = parseISO(data.mes + "T00:00:00Z");
+
         const mes = format(d, "yyyy-MM"); // usado en título del modal
         const desdeMes = format(startOfMonth(d), "yyyy-MM-dd");
         const hastaMes = format(endOfMonth(d), "yyyy-MM-dd");

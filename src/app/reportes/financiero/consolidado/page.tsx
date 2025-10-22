@@ -138,24 +138,23 @@ export default function ReporteFinancieroConsolidadoPage() {
 
       let d: Date;
       if (typeof data.mes === "string") {
-        // Si viene sin “Z” al final, lo agregamos para forzar UTC
-        const str = data.mes.endsWith("Z") ? data.mes : `${data.mes}T00:00:00Z`;
-        d = new Date(str);
+        const isoFixed = data.mes.replace(" ", "T"); // 👈 solución clave
+        const withUTC = isoFixed.endsWith("Z") ? isoFixed : `${isoFixed}`;
+        d = new Date(withUTC);
       } else if (data.mes instanceof Date) {
         d = data.mes;
       } else if (typeof data.mes === "number") {
         d = new Date(data.mes);
       } else {
-        // Valor inesperado
         console.error("handleBarClick: formato de mes inesperado:", data.mes);
-        return; // salir si no podemos interpretar
+        return;
       }
 
-      // Verificar que la fecha es válida
       if (isNaN(d.getTime())) {
         console.error("handleBarClick: fecha inválida calculada:", d);
         return;
       }
+
 
       // Forzar primer día del mes en UTC
       const year = d.getUTCFullYear();

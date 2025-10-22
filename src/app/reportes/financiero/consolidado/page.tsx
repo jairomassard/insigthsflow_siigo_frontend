@@ -21,6 +21,7 @@ import {
 } from "recharts";
 import { startOfMonth, endOfMonth, format } from "date-fns";
 
+
 /* -------- tipos -------- */
 interface EvolucionMes {
   mes: string;
@@ -273,7 +274,11 @@ export default function ReporteFinancieroConsolidadoPage() {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis
                 dataKey="mes"
-                tickFormatter={(mes) => format(new Date(mes), "MMM yyyy")}
+                tickFormatter={(mes) => {
+                  // Aseguramos que mes sea interpretado como UTC
+                  const d = new Date(mes + "Z"); // añade 'Z' para forzar UTC si no lo trae
+                  return format(d, "MMM yyyy");
+                }}
                 angle={-30}
                 textAnchor="end"
                 height={60}

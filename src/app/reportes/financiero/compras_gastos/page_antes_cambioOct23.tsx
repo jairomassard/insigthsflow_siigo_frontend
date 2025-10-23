@@ -141,12 +141,21 @@ export default function ReporteFinancieroComprasGastosPage() {
     const fetchData = async () => {
       setLoading(true);
       try {
+        // KPIs + Evolución
         const data = await authFetch(`/reportes/financiero/compras-gastos${queryParams}`);
         setKpis(data.kpis);
         setEvolucion(data.evolucion || []);
-        const topVal = await authFetch(`/reportes/financiero/compras-gastos/top-proveedores${queryParams}`);
+
+        // Top Proveedores por valor
+        const topVal = await authFetch(
+        `/reportes/financiero/compras-gastos/top-proveedores${queryParams}`
+        );
         setTopValor(topVal || []);
-        const topFac = await authFetch(`/reportes/financiero/compras-gastos/top-proveedores-facturas${queryParams}`);
+
+        // Top Proveedores por número de facturas
+        const topFac = await authFetch(
+        `/reportes/financiero/compras-gastos/top-proveedores-facturas${queryParams}`
+        );
         setTopFacturas(topFac || []);
       } catch (e) {
         console.error("Error al cargar el reporte financiero", e);
@@ -162,7 +171,7 @@ export default function ReporteFinancieroComprasGastosPage() {
     try {
       setModalLoading(true);
       const estado = serie === "total" ? "total" : serie === "pagadas" ? "pagado" : "pendiente";
-      const mesYYYYMM = toYYYYMM(item.mes);
+      const mesYYYYMM = toYYYYMM(item.mes); // <-- "YYYY-MM"
       const url = `/reportes/financiero/compras-gastos/detalle?mes=${mesYYYYMM}&estado=${estado}`;
       const rows: FacturaDetalle[] = await authFetch(url);
       const titulo = `Facturas ${estado === "total" ? "Totales" : estado === "pagado" ? "Pagadas" : "Pendientes"} • ${format(new Date(item.mes), "MMM yyyy")}`;
@@ -175,14 +184,6 @@ export default function ReporteFinancieroComprasGastosPage() {
       setModalLoading(false);
     }
   }
-
-  const evolucionSegura = useMemo(() => {
-    return evolucion.map((item) => {
-      const d = new Date(item.mes);
-      d.setUTCHours(12);
-      return { ...item, mes: d.toISOString() };
-    });
-  }, [evolucion]);
 
 
     /* -------- handler modal proveedor -------- */
@@ -314,7 +315,7 @@ export default function ReporteFinancieroComprasGastosPage() {
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={evolucionSegura} margin={{ top: 10, bottom: 40, left: 40, right: 20 }}>
+            <BarChart data={evolucion} margin={{ top: 10, bottom: 40, left: 40, right: 20 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis
                 dataKey="mes"
@@ -346,7 +347,7 @@ export default function ReporteFinancieroComprasGastosPage() {
                 fill="#2563eb"
                 radius={[6, 6, 0, 0]}
                 onClick={(_, idx) => {
-                  const item = evolucionSegura[idx];
+                  const item = evolucion[idx];
                   if (item) handleBarClick("total", item);
                 }}
               >
@@ -365,7 +366,7 @@ export default function ReporteFinancieroComprasGastosPage() {
                 fill="#22c55e"
                 radius={[6, 6, 0, 0]}
                 onClick={(_, idx) => {
-                  const item = evolucionSegura[idx];
+                  const item = evolucion[idx];
                   if (item) handleBarClick("pagadas", item);
                 }}
               >
@@ -384,7 +385,7 @@ export default function ReporteFinancieroComprasGastosPage() {
                 fill="#ef4444"
                 radius={[6, 6, 0, 0]}
                 onClick={(_, idx) => {
-                  const item = evolucionSegura[idx];
+                  const item = evolucion[idx];
                   if (item) handleBarClick("pendiente", item);
                 }}
               >

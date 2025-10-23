@@ -127,7 +127,9 @@ export default function ReporteProductosPage() {
     if (!productoSeleccionado) return;
     try {
       const data = await authFetch(
-        `/reportes/productos/detalle?producto_code=${encodeURIComponent(productoSeleccionado)}&desde=${fechaDesde}&hasta=${fechaHasta}&centro_costo=${centroCostos}`
+        `/reportes/productos/detalle?producto_code=${encodeURIComponent(
+          productoSeleccionado
+        )}&desde=${fechaDesde}&hasta=${fechaHasta}&centro_costo=${centroCostos}`
       );
       setDetalle(data || null);
     } catch (e) {
@@ -140,12 +142,15 @@ export default function ReporteProductosPage() {
     setDetalle(null);
   };
 
-  useEffect(() => {
-    if (detalle?.historico?.length) {
-      console.log("🧪 Histórico recibido:", detalle.historico.map((d) => d.mes));
-    }
+  // ✅ Fix: asegurar que las fechas se mantengan en el mes correcto (UTC)
+  const historicoConFechasSeguras = useMemo(() => {
+    if (!detalle?.historico?.length) return [];
+    return detalle.historico.map((item) => {
+      const d = new Date(item.mes);
+      d.setUTCHours(12); // fuerza a mitad del día UTC para evitar desfase
+      return { ...item, mes: d.toISOString() };
+    });
   }, [detalle]);
-
 
   return (
     <div className="space-y-6">
@@ -181,10 +186,16 @@ export default function ReporteProductosPage() {
       {/* Switch métrica */}
       <div className="flex items-center space-x-2">
         <span className="text-sm font-medium">Métrica:</span>
-        <Button variant={metric === "cantidad" ? "default" : "outline"} onClick={() => setMetric("cantidad")}>
+        <Button
+          variant={metric === "cantidad" ? "default" : "outline"}
+          onClick={() => setMetric("cantidad")}
+        >
           Unidades
         </Button>
-        <Button variant={metric === "total" ? "default" : "outline"} onClick={() => setMetric("total")}>
+        <Button
+          variant={metric === "total" ? "default" : "outline"}
+          onClick={() => setMetric("total")}
+        >
           Valor ($)
         </Button>
       </div>
@@ -194,7 +205,9 @@ export default function ReporteProductosPage() {
         <Card>
           <CardContent className="p-4 text-center">
             <div className="text-lg text-gray-500 font-bold">Ventas Totales</div>
-            <div className="text-xl font-bold text-green-600">{formatCurrency(kpis?.ventas_totales || 0)}</div>
+            <div className="text-xl font-bold text-green-600">
+              {formatCurrency(kpis?.ventas_totales || 0)}
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -206,7 +219,9 @@ export default function ReporteProductosPage() {
         <Card>
           <CardContent className="p-4 text-center">
             <div className="text-lg text-gray-500 font-bold">Ticket Promedio</div>
-            <div className="text-xl font-bold text-purple-600">{formatCurrency(kpis?.ticket_promedio || 0)}</div>
+            <div className="text-xl font-bold text-purple-600">
+              {formatCurrency(kpis?.ticket_promedio || 0)}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -214,16 +229,31 @@ export default function ReporteProductosPage() {
       {/* Top 10 en fila */}
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
-          <CardHeader><CardTitle>Top 10 Más Vendidos ({metric === "cantidad" ? "Unidades" : "Valor en $"})</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>
+              Top 10 Más Vendidos ({metric === "cantidad" ? "Unidades" : "Valor en $"})
+            </CardTitle>
+          </CardHeader>
           <CardContent className="h-[350px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart layout="vertical" data={top10} margin={{ top: 15, bottom: 15, left: 5, right: 35 }}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" tickFormatter={(v) => metric === "cantidad" ? abreviar(v) : abreviarMoneda(v)} />
+                <XAxis
+                  type="number"
+                  tickFormatter={(v) => (metric === "cantidad" ? abreviar(v) : abreviarMoneda(v))}
+                />
                 <YAxis type="category" dataKey="producto" width={180} tick={{ fontSize: 12 }} />
-                <Tooltip formatter={(v: number) => metric === "cantidad" ? abreviar(v) : abreviarMoneda(v)} />
+                <Tooltip
+                  formatter={(v: number) => (metric === "cantidad" ? abreviar(v) : abreviarMoneda(v))}
+                />
                 <Bar dataKey={metric} fill="#22c55e" radius={[0, 6, 6, 0]}>
-                  <LabelList dataKey={metric} position="right" formatter={(v: any) => metric === "cantidad" ? abreviar(Number(v)) : abreviarMoneda(Number(v))} />
+                  <LabelList
+                    dataKey={metric}
+                    position="right"
+                    formatter={(v: any) =>
+                      metric === "cantidad" ? abreviar(Number(v)) : abreviarMoneda(Number(v))
+                    }
+                  />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -231,24 +261,41 @@ export default function ReporteProductosPage() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Top 10 Menos Vendidos ({metric === "cantidad" ? "Unidades" : "Valor en $"})</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>
+              Top 10 Menos Vendidos ({metric === "cantidad" ? "Unidades" : "Valor en $"})
+            </CardTitle>
+          </CardHeader>
           <CardContent className="h-[350px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart layout="vertical" data={bottom10} margin={{ top: 15, bottom: 15, left: 5, right: 35 }}>
+              <BarChart
+                layout="vertical"
+                data={bottom10}
+                margin={{ top: 15, bottom: 15, left: 5, right: 35 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" tickFormatter={(v) => metric === "cantidad" ? abreviar(v) : abreviarMoneda(v)} />
+                <XAxis
+                  type="number"
+                  tickFormatter={(v) => (metric === "cantidad" ? abreviar(v) : abreviarMoneda(v))}
+                />
                 <YAxis type="category" dataKey="producto" width={180} tick={{ fontSize: 12 }} />
-                <Tooltip formatter={(v: number) => metric === "cantidad" ? abreviar(v) : abreviarMoneda(v)} />
+                <Tooltip
+                  formatter={(v: number) => (metric === "cantidad" ? abreviar(v) : abreviarMoneda(v))}
+                />
                 <Bar dataKey={metric} fill="#ef4444" radius={[0, 6, 6, 0]}>
-                  <LabelList dataKey={metric} position="right" formatter={(v: any) => metric === "cantidad" ? abreviar(Number(v)) : abreviarMoneda(Number(v))} />
+                  <LabelList
+                    dataKey={metric}
+                    position="right"
+                    formatter={(v: any) =>
+                      metric === "cantidad" ? abreviar(Number(v)) : abreviarMoneda(Number(v))
+                    }
+                  />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
       </div>
-
-
 
       {/* Detalle producto */}
       <Card className="relative">
@@ -273,50 +320,75 @@ export default function ReporteProductosPage() {
             >
               <option value="">Seleccione un producto</option>
               {productos.map((p) => (
-                <option key={p.code} value={p.code}>{p.label}</option>
+                <option key={p.code} value={p.code}>
+                  {p.label}
+                </option>
               ))}
             </select>
             <Button onClick={fetchDetalleProducto}>Ver Detalle</Button>
-            <Button variant="outline" onClick={handleLimpiar}>Limpiar</Button>
+            <Button variant="outline" onClick={handleLimpiar}>
+              Limpiar
+            </Button>
           </div>
 
           {detalle && (
             <div className="mt-4 space-y-4">
-              <div><b>Producto:</b> {detalle.producto}</div>
-              <div><b>Código:</b> {detalle.code}</div>
-              <div><b>Unidades vendidas:</b> {detalle.cantidad}</div>
-              <div><b>Total ventas:</b> {formatCurrency(detalle.total)}</div>
-              <div><b>Facturas asociadas:</b> {detalle.facturas}</div>
+              <div>
+                <b>Producto:</b> {detalle.producto}
+              </div>
+              <div>
+                <b>Código:</b> {detalle.code}
+              </div>
+              <div>
+                <b>Unidades vendidas:</b> {detalle.cantidad}
+              </div>
+              <div>
+                <b>Total ventas:</b> {formatCurrency(detalle.total)}
+              </div>
+              <div>
+                <b>Facturas asociadas:</b> {detalle.facturas}
+              </div>
 
               {/* Histórico mensual */}
               <Card className="mt-4">
-                <CardHeader><CardTitle>Evolución Mensual</CardTitle></CardHeader>
+                <CardHeader>
+                  <CardTitle>Evolución Mensual</CardTitle>
+                </CardHeader>
                 <CardContent className="h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={detalle.historico} margin={{ top: 10, right: 20, bottom: 10, left: 10 }}>
+                    <BarChart
+                      data={historicoConFechasSeguras}
+                      margin={{ top: 10, right: 20, bottom: 10, left: 10 }}
+                    >
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis
                         dataKey="mes"
                         tickFormatter={(mes) => {
                           try {
                             const d = new Date(mes);
-                            if (isNaN(d.getTime())) return "Fecha inválida";
-
-                            const month = d.toLocaleString("es-CO", { month: "short" });
-                            const year = d.getFullYear().toString().slice(-2);
-
-                            return `${month} de ${year}`;
+                            return d.toLocaleString("es-CO", {
+                              month: "short",
+                              year: "2-digit",
+                              timeZone: "UTC",
+                            });
                           } catch {
                             return "Fecha inválida";
                           }
                         }}
                       />
-
                       <YAxis yAxisId="left" orientation="left" tickFormatter={(v) => abreviar(v)} />
-                      <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => abreviarMoneda(v)} />
-                      <Tooltip formatter={(v: number, name) => name === "cantidad" ? abreviar(v) : abreviarMoneda(v)} />
-                      <Bar yAxisId="left" dataKey="cantidad" fill="#3b82f6" radius={[4,4,0,0]} />
-                      <Bar yAxisId="right" dataKey="total" fill="#10b981" radius={[4,4,0,0]} />
+                      <YAxis
+                        yAxisId="right"
+                        orientation="right"
+                        tickFormatter={(v) => abreviarMoneda(v)}
+                      />
+                      <Tooltip
+                        formatter={(v: number, name) =>
+                          name === "cantidad" ? abreviar(v) : abreviarMoneda(v)
+                        }
+                      />
+                      <Bar yAxisId="left" dataKey="cantidad" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                      <Bar yAxisId="right" dataKey="total" fill="#10b981" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -325,8 +397,6 @@ export default function ReporteProductosPage() {
           )}
         </CardContent>
       </Card>
-
-
     </div>
   );
 }

@@ -289,7 +289,7 @@ export default function ReporteFinancieroComprasGastosPage() {
             {/* # Facturas */}
             <Card className="min-h-[74px]">
             <CardContent className="p-3 flex flex-col justify-center">
-                <div className="text-m font-bold text-black-600 tracking-tight text-center"># Facturas / Ctas.Cobro</div>
+                <div className="text-m font-bold text-black-600 tracking-tight text-center"># Compras</div>
                 <div className="mt-1 text-lg font-extrabold leading-none text-blue-600 text-center">
                 {kpis.total_facturas.toLocaleString("es-CO")}
                 </div>

@@ -340,7 +340,7 @@ export default function DashboardFinanciero() {
                     name="Total facturado" 
                     >
                     <LabelList 
-                      dataKey="subtotal" 
+                      dataKey="total_facturado" 
                       position="top" 
                       formatter={(v: any) => abreviar(Number(v))} 
                       style={{ fontSize: 10 }}
@@ -352,7 +352,7 @@ export default function DashboardFinanciero() {
                     name="Pagado" 
                     >
                     <LabelList 
-                      dataKey="subtotal" 
+                      dataKey="pagado" 
                       position="top" 
                       formatter={(v: any) => abreviar(Number(v))} 
                       style={{ fontSize: 10 }}
@@ -364,7 +364,7 @@ export default function DashboardFinanciero() {
                     name="Pendiente" 
                     >
                     <LabelList 
-                      dataKey="subtotal" 
+                      dataKey="pendiente" 
                       position="top" 
                       formatter={(v: any) => abreviar(Number(v))} 
                       style={{ fontSize: 10 }}

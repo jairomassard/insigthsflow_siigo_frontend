@@ -289,7 +289,7 @@ export default function ReporteFinancieroComprasGastosPage() {
             {/* # Facturas */}
             <Card className="min-h-[74px]">
             <CardContent className="p-3 flex flex-col justify-center">
-                <div className="text-m font-bold text-black-600 tracking-tight text-center"># Facturas</div>
+                <div className="text-m font-bold text-black-600 tracking-tight text-center"># Facturas / Ctas.Cobro</div>
                 <div className="mt-1 text-lg font-extrabold leading-none text-blue-600 text-center">
                 {kpis.total_facturas.toLocaleString("es-CO")}
                 </div>
@@ -319,7 +319,7 @@ export default function ReporteFinancieroComprasGastosPage() {
             {/* Compras x Factura */}
             <Card className="min-h-[74px]">
               <CardContent className="p-3 flex flex-col justify-center">
-                <div className="text-m font-bold text-center"># Compras x Factura</div>
+                <div className="text-m font-bold text-center"># Facturas</div>
                 <div className="mt-1 text-lg font-extrabold text-indigo-600 text-center">
                   {kpis.compras_x_factura.toLocaleString("es-CO")}
                 </div>
@@ -329,7 +329,7 @@ export default function ReporteFinancieroComprasGastosPage() {
             {/* Valor Compras x Factura */}
             <Card className="min-h-[74px]">
               <CardContent className="p-3 flex flex-col justify-center">
-                <div className="text-m font-bold text-center">Valor Compras x Factura</div>
+                <div className="text-m font-bold text-center">Valor x Facturas</div>
                 <div className="mt-1 text-lg font-extrabold text-indigo-600 text-center">
                   {formatCurrency(kpis.valor_compras_x_factura)}
                 </div>
@@ -339,7 +339,7 @@ export default function ReporteFinancieroComprasGastosPage() {
             {/* Compras x Cta. Cobro */}
             <Card className="min-h-[74px]">
               <CardContent className="p-3 flex flex-col justify-center">
-                <div className="text-m font-bold text-center"># Compras x Cta. Cobro</div>
+                <div className="text-m font-bold text-center"># Ctas. Cobro</div>
                 <div className="mt-1 text-lg font-extrabold text-purple-600 text-center">
                   {kpis.compras_x_cta_cobro.toLocaleString("es-CO")}
                 </div>
@@ -349,16 +349,14 @@ export default function ReporteFinancieroComprasGastosPage() {
             {/* Valor Compras x Cta. Cobro */}
             <Card className="min-h-[74px]">
               <CardContent className="p-3 flex flex-col justify-center">
-                <div className="text-m font-bold text-center">Valor Compras x Cta. Cobro</div>
+                <div className="text-m font-bold text-center">Valor Ctas. Cobro</div>
                 <div className="mt-1 text-lg font-extrabold text-purple-600 text-center">
                   {formatCurrency(kpis.valor_compras_x_cta_cobro)}
                 </div>
               </CardContent>
             </Card>
-
         </div>
      )}
-
 
       {/* Evolución mensual */}
       <Card className="shadow-sm">

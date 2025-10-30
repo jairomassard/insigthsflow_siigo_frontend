@@ -45,9 +45,10 @@ interface FacturaDetalle {
   factura: string; // idcompra (alias en BE)
   fecha: string;
   vencimiento: string;
-  estado: "Pagada" | "No Pagada";
+  estado: "pagado" | "pendiente";   // 👈 corregido
   total: number;
   saldo: number;
+  centro_costo_nombre?: string; // 👈 nuevo
 }
 
 interface TopProveedorValor {
@@ -140,21 +141,12 @@ export default function ReporteFinancieroComprasGastosPage() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // KPIs + Evolución
         const data = await authFetch(`/reportes/financiero/compras-gastos${queryParams}`);
         setKpis(data.kpis);
         setEvolucion(data.evolucion || []);
-
-        // Top Proveedores por valor
-        const topVal = await authFetch(
-        `/reportes/financiero/compras-gastos/top-proveedores${queryParams}`
-        );
+        const topVal = await authFetch(`/reportes/financiero/compras-gastos/top-proveedores${queryParams}`);
         setTopValor(topVal || []);
-
-        // Top Proveedores por número de facturas
-        const topFac = await authFetch(
-        `/reportes/financiero/compras-gastos/top-proveedores-facturas${queryParams}`
-        );
+        const topFac = await authFetch(`/reportes/financiero/compras-gastos/top-proveedores-facturas${queryParams}`);
         setTopFacturas(topFac || []);
       } catch (e) {
         console.error("Error al cargar el reporte financiero", e);
@@ -170,7 +162,7 @@ export default function ReporteFinancieroComprasGastosPage() {
     try {
       setModalLoading(true);
       const estado = serie === "total" ? "total" : serie === "pagadas" ? "pagado" : "pendiente";
-      const mesYYYYMM = toYYYYMM(item.mes); // <-- "YYYY-MM"
+      const mesYYYYMM = toYYYYMM(item.mes);
       const url = `/reportes/financiero/compras-gastos/detalle?mes=${mesYYYYMM}&estado=${estado}`;
       const rows: FacturaDetalle[] = await authFetch(url);
       const titulo = `Facturas ${estado === "total" ? "Totales" : estado === "pagado" ? "Pagadas" : "Pendientes"} • ${format(new Date(item.mes), "MMM yyyy")}`;
@@ -183,6 +175,14 @@ export default function ReporteFinancieroComprasGastosPage() {
       setModalLoading(false);
     }
   }
+
+  const evolucionSegura = useMemo(() => {
+    return evolucion.map((item) => {
+      const d = new Date(item.mes);
+      d.setUTCHours(12);
+      return { ...item, mes: d.toISOString() };
+    });
+  }, [evolucion]);
 
 
     /* -------- handler modal proveedor -------- */
@@ -222,8 +222,8 @@ export default function ReporteFinancieroComprasGastosPage() {
 
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">📊 Reporte Financiero Compras & Gastos</h1>
+    <div className="space-y-4">
+      <h1 className="text-2xl font-bold">📊 Reporte Egresos por Compras & Gastos</h1>
 
       {/* Filtros */}
       <div className="grid gap-2 md:grid-cols-3">
@@ -247,69 +247,65 @@ export default function ReporteFinancieroComprasGastosPage() {
       </div>
 
       {/* KPIs */}
+      {/* KPIs */}
       {kpis && (
-        <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle>Total Compras</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-extrabold text-blue-600 tracking-tight">
+        <div className="grid grid-cols-6 gap-2">
+            <Card className="min-h-[74px]">
+            <CardContent className="p-3 flex flex-col justify-center">
+                <div className="text-m font-bold text-black-600 tracking-tight text-center">Total Compras</div>
+                <div className="mt-1 text-lg font-extrabold leading-none text-blue-600 text-center">
                 {formatCurrency(kpis.total_compras)}
-              </p>
+                </div>
             </CardContent>
-          </Card>
+            </Card>
 
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle>Total Pagado</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-extrabold text-green-600 tracking-tight">
+            <Card className="min-h-[74px]">
+            <CardContent className="p-3 flex flex-col justify-center">
+                <div className="text-m font-bold text-black-600 tracking-tight text-center">Total Pagado</div>
+                <div className="mt-1 text-lg font-extrabold leading-none text-green-600 text-center">
                 {formatCurrency(kpis.total_pagado)}
-              </p>
+                </div>
             </CardContent>
-          </Card>
+            </Card>
 
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle>Total Pendiente</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-extrabold text-red-600 tracking-tight">
+            <Card className="min-h-[74px]">
+            <CardContent className="p-3 flex flex-col justify-center">
+                <div className="text-m font-bold text-black-600 tracking-tight text-center">Total Pendiente</div>
+                <div className="mt-1 text-lg font-extrabold leading-none text-red-600 text-center">
                 {formatCurrency(kpis.total_saldo)}
-              </p>
+                </div>
             </CardContent>
-          </Card>
+            </Card>
 
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle># Facturas</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-extrabold text-blue-600">{kpis.total_facturas}</p>
+            <Card className="min-h-[74px]">
+            <CardContent className="p-3 flex flex-col justify-center">
+                <div className="text-m font-bold text-black-600 tracking-tight text-center"># Facturas</div>
+                <div className="mt-1 text-lg font-extrabold leading-none text-blue-600 text-center">
+                {kpis.total_facturas.toLocaleString("es-CO")}
+                </div>
             </CardContent>
-          </Card>
+            </Card>
 
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle>Pagadas</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-extrabold text-green-600">{kpis.facturas_pagadas}</p>
+            <Card className="min-h-[74px]">
+            <CardContent className="p-3 flex flex-col justify-center">
+                <div className="text-m font-bold text-black-600 tracking-tight text-center">Pagadas</div>
+                <div className="mt-1 text-lg font-extrabold leading-none text-green-600 text-center">
+                {kpis.facturas_pagadas.toLocaleString("es-CO")}
+                </div>
             </CardContent>
-          </Card>
+            </Card>
 
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle>Pendientes</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-extrabold text-red-600">{kpis.facturas_pendientes}</p>
+            <Card className="min-h-[74px]">
+            <CardContent className="p-3 flex flex-col justify-center">
+                <div className="text-m font-bold text-black-600 tracking-tight text-center">Pendientes</div>
+                <div className="mt-1 text-lg font-extrabold leading-none text-red-600 text-center">
+                {kpis.facturas_pendientes.toLocaleString("es-CO")}
+                </div>
             </CardContent>
-          </Card>
+            </Card>
         </div>
-      )}
+     )}
+
 
       {/* Evolución mensual */}
       <Card className="shadow-sm">
@@ -318,7 +314,7 @@ export default function ReporteFinancieroComprasGastosPage() {
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={evolucion} margin={{ top: 30, bottom: 40, left: 40, right: 20 }}>
+            <BarChart data={evolucionSegura} margin={{ top: 10, bottom: 40, left: 40, right: 20 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis
                 dataKey="mes"
@@ -327,7 +323,7 @@ export default function ReporteFinancieroComprasGastosPage() {
                 textAnchor="end"
                 height={60}
               />
-              <YAxis tickFormatter={(v) => formatCurrency(v)} />
+              <YAxis tickFormatter={(v) => formatCurrency(v)} fontSize={11}/>
               <Tooltip
                 formatter={(value: number, name: string) => [formatCurrency(Number(value)), name]}
                 labelFormatter={(label) =>
@@ -339,6 +335,7 @@ export default function ReporteFinancieroComprasGastosPage() {
                     }
                   })()
                 }
+                
               />
               <Legend />
 
@@ -349,7 +346,7 @@ export default function ReporteFinancieroComprasGastosPage() {
                 fill="#2563eb"
                 radius={[6, 6, 0, 0]}
                 onClick={(_, idx) => {
-                  const item = evolucion[idx];
+                  const item = evolucionSegura[idx];
                   if (item) handleBarClick("total", item);
                 }}
               >
@@ -357,6 +354,7 @@ export default function ReporteFinancieroComprasGastosPage() {
                   dataKey="total_compras"
                   position="top"
                   formatter={(v: any) => abreviar(Number(v))}
+                  style={{ fontSize: 10, fontWeight: 500 }}
                 />
               </Bar>
 
@@ -367,7 +365,7 @@ export default function ReporteFinancieroComprasGastosPage() {
                 fill="#22c55e"
                 radius={[6, 6, 0, 0]}
                 onClick={(_, idx) => {
-                  const item = evolucion[idx];
+                  const item = evolucionSegura[idx];
                   if (item) handleBarClick("pagadas", item);
                 }}
               >
@@ -375,6 +373,7 @@ export default function ReporteFinancieroComprasGastosPage() {
                   dataKey="total_pagadas"
                   position="top"
                   formatter={(v: any) => abreviar(Number(v))}
+                  style={{ fontSize: 10, fontWeight: 500 }}
                 />
               </Bar>
 
@@ -385,7 +384,7 @@ export default function ReporteFinancieroComprasGastosPage() {
                 fill="#ef4444"
                 radius={[6, 6, 0, 0]}
                 onClick={(_, idx) => {
-                  const item = evolucion[idx];
+                  const item = evolucionSegura[idx];
                   if (item) handleBarClick("pendiente", item);
                 }}
               >
@@ -393,10 +392,12 @@ export default function ReporteFinancieroComprasGastosPage() {
                   dataKey="total_pendientes"
                   position="top"
                   formatter={(v: any) => abreviar(Number(v))}
+                  style={{ fontSize: 10, fontWeight: 500 }}
                 />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+          <div className="text-s text-black-600 tracking-tight text-right">* Haga click sobre una barra de interés para mayor información</div>
         </CardContent>
       </Card>
 
@@ -430,7 +431,7 @@ export default function ReporteFinancieroComprasGastosPage() {
 
         <CardContent>
         {topView === "valor" ? (
-            <div className="w-full h-[380px]">
+            <div className="w-full h-[420px]">
             <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                 layout="vertical"
@@ -455,13 +456,14 @@ export default function ReporteFinancieroComprasGastosPage() {
                     dataKey="valor"
                     position="right"
                     formatter={(v: any) => abreviar(Number(v))}
+                    style={{ fontSize: 10, fontWeight: 500 }}
                     />
                 </Bar>
                 </BarChart>
             </ResponsiveContainer>
             </div>
         ) : (
-            <div className="w-full h-[560px]">
+            <div className="w-full h-[420px]">
             <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                 layout="vertical"
@@ -492,6 +494,7 @@ export default function ReporteFinancieroComprasGastosPage() {
             </ResponsiveContainer>
             </div>
         )}
+        <div className="text-s text-black-600 tracking-tight text-right">* Haga click sobre una barra de interés para mayor información</div>
         </CardContent>
 
       </Card>
@@ -525,34 +528,49 @@ export default function ReporteFinancieroComprasGastosPage() {
                 <table className="min-w-full text-sm border-collapse">
                   <thead className="sticky top-0 bg-gray-50">
                     <tr className="border-b">
-                      <th className="p-2 text-left">Proveedor</th>
-                      <th className="p-2 text-left">Factura</th>
-                      <th className="p-2 text-left">Fecha</th>
-                      <th className="p-2 text-left">Vencimiento</th>
-                      <th className="p-2 text-left">Estado</th>
-                      <th className="p-2 text-right">Total</th>
-                      <th className="p-2 text-right">Saldo</th>
+                      {[
+                        "Proveedor",
+                        "Factura",
+                        "Fecha",
+                        "Vencimiento",
+                        "Estado",
+                        "Centro de Costo",
+                        "Total",
+                        "Saldo",
+                      ].map((h, idx) => (
+                        <th
+                          key={idx}
+                          className={`p-2 ${idx < 6 ? "text-left" : "text-right"}`}
+                        >
+                          {h}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
+
                   <tbody>
                     {modalRows.map((r, i) => {
-                      const esPendiente = r.estado === "No Pagada";
+                      const esPendiente = r.estado === "pendiente";  // ✅ directo de la BD
                       return (
                         <tr
                           key={`${r.factura}-${i}`}
-                          className={`border-b ${esPendiente ? "text-red-600" : ""}`}
+                          className={`border-b${esPendiente ? " text-red-600" : ""}`}
                         >
                           <td className="p-2">{r.proveedor_nombre}</td>
                           <td className="p-2">{r.factura}</td>
                           <td className="p-2">{format(new Date(r.fecha), "dd-MM-yyyy")}</td>
                           <td className="p-2">{format(new Date(r.vencimiento), "dd-MM-yyyy")}</td>
-                          <td className="p-2">{r.estado}</td>
+                          <td className="p-2">
+                            {r.estado === "pagado" ? "Pagada" : "Pendiente"} {/* ✅ legible para usuario */}
+                          </td>
+                          <td className="p-2">{r.centro_costo_nombre || "—"}</td>
                           <td className="p-2 text-right">{formatCurrency(r.total)}</td>
                           <td className="p-2 text-right">{formatCurrency(r.saldo)}</td>
                         </tr>
                       );
                     })}
                   </tbody>
+
                 </table>
               )}
             </div>

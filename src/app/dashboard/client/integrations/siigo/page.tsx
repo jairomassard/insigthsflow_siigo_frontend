@@ -714,8 +714,9 @@ export default function SiigoIntegrationPage() {
               Última ejecución:{" "}
               <span className="font-medium">
                 {status.ultimo_ejec
-                  ? new Date(status.ultimo_ejec).toLocaleString()
+                  ? new Date(status.ultimo_ejec).toLocaleString("es-CO", { timeZone: "America/Bogota" })
                   : "—"}
+
               </span>{" "}
               –{" "}
               <span

@@ -9,6 +9,11 @@ import CargarDocumentosSoporte from "../../../../../components/CargarDocumentosS
 
 import CargarNomina from "../../../../../components/CargarNomina";
 
+import { getToken } from "@/lib/api";
+import { jwtDecode } from "jwt-decode";
+import { API } from "@/lib/api";
+
+
 
 
 /** --------------------------
@@ -17,6 +22,24 @@ import CargarNomina from "../../../../../components/CargarNomina";
  *  Usa authFetch (lleva el JWT) para consultar tu endpoint /siigo/debug-invoice
  *  Puedes consultar por name (FV-...) o por uuid (Siigo).
  */
+
+
+  const fetchWithIdCliente = async (url: string, options: RequestInit = {}) => {
+    const token = getToken();
+    const decoded: any = jwtDecode(token || "");
+    const idcliente = decoded?.idcliente;
+
+    const headers = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      "X-ID-CLIENTE": String(idcliente),
+      ...(options.headers || {}),
+    };
+
+    return fetch(`${API}${url}`, { ...options, headers });
+  };
+
+
 function DebugFacturaPanel() {
   const [name, setName] = useState("");
   const [uuid, setUuid] = useState("");
@@ -39,9 +62,11 @@ function DebugFacturaPanel() {
         setLoading(false);
         return;
       }
-      const res = await authFetch(`/siigo/debug-invoice${qs}`);
-      if (res?.error) setErr(String(res.error));
-      else setOut(res);
+
+      const res = await fetchWithIdCliente(`/siigo/debug-invoice${qs}`);
+      const data = await res.json();
+      if (res.ok) setOut(data);
+      else setErr(data?.error || "Error inesperado");
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -123,19 +148,22 @@ function DebugNotaCreditoPanel() {
         ? `?uuid=${encodeURIComponent(uuid)}`
         : "";
       if (!qs) {
-        setErr("Ingresa name (NC-...) o UUID de la nota crédito");
+        setErr("Ingresa name (NC-...) o UUID");
         setLoading(false);
         return;
       }
-      const res = await authFetch(`/siigo/debug-nota-credito${qs}`);
-      if (res?.error) setErr(String(res.error));
-      else setOut(res);
+
+      const res = await fetchWithIdCliente(`/siigo/debug-nota-credito${qs}`);
+      const data = await res.json();
+      if (res.ok) setOut(data);
+      else setErr(data?.error || "Error inesperado");
     } catch (e: any) {
       setErr(e.message);
     } finally {
       setLoading(false);
     }
   };
+
 
   return (
     <div className="rounded border p-3 space-y-3">
@@ -215,15 +243,18 @@ function DebugCompraPanel() {
         setLoading(false);
         return;
       }
-      const res = await authFetch(`/siigo/debug-compra${qs}`);
-      if (res?.error) setErr(String(res.error));
-      else setOut(res);
+
+      const res = await fetchWithIdCliente(`/siigo/debug-compra${qs}`);
+      const data = await res.json();
+      if (res.ok) setOut(data);
+      else setErr(data?.error || "Error inesperado");
     } catch (e: any) {
       setErr(e.message);
     } finally {
       setLoading(false);
     }
   };
+
 
   return (
     <div className="rounded border p-3 space-y-3">
@@ -282,9 +313,6 @@ function DebugCompraPanel() {
 
 
 
-
-
-
 export default function SiigoIntegrationPage() {
   useAuthGuard();
 
@@ -312,6 +340,10 @@ export default function SiigoIntegrationPage() {
   const [err, setErr] = useState("");
   const [ok, setOk] = useState("");
   const [syncMsgFacturas, setSyncMsgFacturas] = useState("");
+  const [syncLogCompleto, setSyncLogCompleto] = useState(""); // 👈 nuevo
+  const [syncMsgAuto, setSyncMsgAuto] = useState<string>(""); // Mensaje exclusivo para sync automática
+
+
   const [syncMsgNotasCredito, setSyncMsgNotasCredito] = useState("");
 
   const [syncMsgPagosEgresos, setSyncMsgPagosEgresos] = useState("");
@@ -373,6 +405,14 @@ export default function SiigoIntegrationPage() {
     load();
   }, []);
 
+  const [status, setStatus] = useState<any>(null);
+  const [saveMsg, setSaveMsg] = useState<string>("");   // ← agregado
+  const [savingConfig, setSavingConfig] = useState<boolean>(false); // para deshabilitar botón
+
+  useEffect(() => {
+    authFetch("/config/siigo-sync-status").then(setStatus); // debes exponer esto en backend
+  }, []);
+
   // Guardar configuración
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -401,6 +441,10 @@ export default function SiigoIntegrationPage() {
       setSaving(false);
     }
   };
+
+
+    
+
 
   // Probar conexión contra Siigo
   const testConnection = async () => {
@@ -434,14 +478,16 @@ export default function SiigoIntegrationPage() {
     setSyncMsgFacturas("");
     try {
       const url = `/siigo/sync-facturas${deep ? "?deep=1" : ""}`;
-      const res = await authFetch(url, {
+      const res = await fetchWithIdCliente(url, {
         method: "POST",
         body: JSON.stringify({}),
       });
-      if (res?.mensaje) setSyncMsgFacturas(res.mensaje);
-
-      else if (res?.error) setSyncMsgFacturas("Error: " + res.error);
-      else setSyncMsgFacturas("Error inesperado durante sincronización.");
+      const data = await res.json();
+      if (res.ok) {
+        setSyncMsgFacturas(data?.mensaje || "");
+      } else {
+        setSyncMsgFacturas("Error: " + (data?.error || `HTTP ${res.status}`));
+      }
     } catch (e: any) {
       setSyncMsgFacturas("Error: " + e.message);
     } finally {
@@ -449,15 +495,17 @@ export default function SiigoIntegrationPage() {
     }
   };
 
+
   const syncNotasCredito = async () => {
     setSyncingFacturas(true);
     setSyncMsgNotasCredito("");
     try {
-      const res = await authFetch("/siigo/sync-notas-credito", {
+      const res = await fetchWithIdCliente("/siigo/sync-notas-credito", {
         method: "POST",
         body: JSON.stringify({}),
       });
-      setSyncMsgNotasCredito(res?.mensaje || res?.error || "Sincronización completa");
+      const data = await res.json();
+      setSyncMsgNotasCredito(data?.mensaje || data?.error || "Sincronización completa");
     } catch (e: any) {
       setSyncMsgNotasCredito("Error: " + e.message);
     } finally {
@@ -465,10 +513,17 @@ export default function SiigoIntegrationPage() {
     }
   };
 
+
+
   return (
     <div>
-      <h2 className="mb-4 text-xl font-semibold">Panel de integración con Siigo</h2>
-
+      <div className="space-y-1">
+        <h1 className="mb-4 text-2xl font-bold">🔌 Panel de integración con Siigo</h1>
+          <p className="text-muted-foreground text-sm max-w-2xl">
+            Configura tus credenciales API y realiza la sincronización de la data que hay en tu sistema al de InsightsFlow.
+          </p>
+          <hr className="border-gray-900 mt-1" />
+      </div>
       {/*
       {pendientes !== null && pendientes > 0 && (
         <div className="mb-4 rounded border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-800">
@@ -484,7 +539,7 @@ export default function SiigoIntegrationPage() {
         </div>
       )} */}
 
-
+    <div className="mt-6">
       {/* Nota de uso */}
       <div className="mb-4 rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
         <p className="font-medium">Instrucciones:</p>
@@ -509,6 +564,8 @@ export default function SiigoIntegrationPage() {
 
         </ul>
       </div>
+
+    </div>
 
       {err && (
         <div className="mb-3 rounded bg-red-50 p-3 text-sm text-red-600">{err}</div>
@@ -625,10 +682,201 @@ export default function SiigoIntegrationPage() {
         </form>
       )}
 
-      {/* Sección de sincronizaciones */}
+      {/* Sección de sincronización automatizada con configuración */}
+      <div className="mt-8 border-t pt-4">
+        <h3 className="mb-3 text-lg font-medium">
+          ⏱️ Sincronización Automatizada / Manual
+        </h3>
+
+        {status && (
+          <>
+            <p className="text-sm text-gray-600">
+              Última ejecución:{" "}
+              <span className="font-medium">
+                {status.ultimo_ejec
+                  ? new Date(status.ultimo_ejec).toLocaleString()
+                  : "—"}
+              </span>{" "}
+              –{" "}
+              <span
+                className={
+                  status.resultado === "OK"
+                    ? "text-green-600 font-medium"
+                    : "text-red-600 font-medium"
+                }
+              >
+                {status.resultado}
+              </span>
+            </p>
+
+            <p className="text-sm mt-2">
+              <strong>🛠️ Actualmente configurados:</strong>{" "}
+              <strong>⏰ Hora programada:</strong>{" "}
+              {status.hora_ejecucion || "—"} &nbsp;|&nbsp;
+              <strong>📆 Frecuencia:</strong>{" "}
+              cada {status.frecuencia_dias || 1} día(s)
+            </p>
+          </>
+        )}
+
+        {/* Formulario para configurar */}
+        <form
+          className="mt-3 space-y-2"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setSaveMsg("");
+            setSavingConfig(true);
+
+            try {
+              const hora = (e.target as any).hora.value;
+              const frecuencia = (e.target as any).frecuencia.value;
+              const activo = (e.target as any).activo.checked;
+
+              await authFetch("/config/sync", {
+                method: "POST",
+                body: JSON.stringify({
+                  hora_ejecucion: hora,
+                  frecuencia_dias: Number(frecuencia),
+                  activo,
+                }),
+              });
+
+              setSaveMsg("✅ Configuración guardada correctamente");
+
+              // Refrescar
+              const nuevo = await authFetch("/config/siigo-sync-status");
+              setStatus(nuevo);
+            } catch (err: any) {
+              setSaveMsg("❌ Error al guardar configuración: " + err.message);
+            } finally {
+              setSavingConfig(false);
+            }
+          }}
+        >
+          <div className="flex items-center gap-4">
+            <label className="flex flex-col">
+              Hora ejecución
+              <input
+                type="time"
+                name="hora"
+                defaultValue={status?.hora_ejecucion || "02:00"}
+                className="border rounded p-1"
+              />
+            </label>
+            <label className="flex flex-col">
+              Frecuencia (días)
+              <input
+                type="number"
+                min={1}
+                name="frecuencia"
+                defaultValue={status?.frecuencia_dias || 1}
+                className="border rounded p-1 w-20"
+              />
+            </label>
+            <label className="flex items-center gap-2 mt-5">
+              <input
+                type="checkbox"
+                name="activo"
+                defaultChecked={status?.activo !== false}
+              />
+              Activo
+            </label>
+          </div>
+
+          <button
+            type="submit"
+            disabled={savingConfig}
+            className={`bg-blue-600 hover:bg-blue-700 text-white rounded px-3 py-1 mt-3 ${
+              savingConfig ? "opacity-50 cursor-not-allowed" : ""
+            }`}
+          >
+            {savingConfig ? "Guardando…" : "Guardar configuración"}
+          </button>
+
+          {saveMsg && <div className="mt-2 text-sm">{saveMsg}</div>}
+        </form>
+
+        {/* Botón para ejecutar sync-all */}
+        <div className="flex items-center justify-between mt-6">
+          <span>Ejecutar sincronización completa de Siigo (todos los pasos)</span>
+          <button
+            onClick={async () => {
+              setSyncingFacturas(true);
+              setSyncMsgAuto("");      // 👈 usamos el estado nuevo
+              setSyncLogCompleto("");  // limpiar log completo antes de empezar
+
+              try {
+                const token = getToken();
+                const decoded: any = jwtDecode(token || "");
+                const idcliente = decoded?.idcliente;
+
+                const res = await fetch(`${API}/siigo/sync-all`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                    "X-ID-CLIENTE": String(idcliente),
+                  },
+                  body: JSON.stringify({ origen: "manual" }),
+                });
+
+                const data = await res.json();
+                if (!res.ok) throw new Error(data?.error || "Fallo la sincronización");
+
+                const fullLog = data.detalle || "";
+
+                // 📝 Generar resumen amigable
+                const lines: string[] = fullLog.split("\n").filter((l: string) => l.trim().length > 0);
+                const totalPasos = lines.length;
+                const exitos = lines.filter((l: string) => l.includes("→ 200")).length;
+                const errores = lines.filter(
+                  (l: string) => l.includes("→ 500") || l.includes("ERROR") || l.includes("excepción")
+                ).length;
+
+                const resumen = `📊 Sincronización completada: ${totalPasos} pasos ejecutados → ✅ ${exitos} correctos, ❌ ${errores} con error.`;
+
+                setSyncMsgAuto(resumen);     // 👈 mensaje corto para el usuario
+                setSyncLogCompleto(fullLog); // 👈 log técnico aparte
+
+                await authFetch("/config/siigo-sync-status").then(setStatus);
+              } catch (e: any) {
+                setSyncMsgAuto("Error: " + e.message);
+              } finally {
+                setSyncingFacturas(false);
+              }
+            }}
+            disabled={syncingFacturas}
+            className={`rounded px-4 py-2 text-white ${
+              syncingFacturas ? "bg-gray-400" : "bg-gray-800 hover:bg-gray-900"
+            }`}
+            title="Ejecuta sincronización completa automáticamente"
+          >
+            {syncingFacturas ? "Sincronizando…" : "🔁 Ejecutar sync-all"}
+          </button>
+        </div>
+
+        {/* Bloque de resultados */}
+        {syncMsgAuto && (
+          <div className="mt-2 rounded border border-green-100 bg-green-50 p-2 text-sm text-green-800">
+            {syncMsgAuto}
+          </div>
+        )}
+
+        {syncLogCompleto && (
+          <details className="mt-2 rounded border bg-gray-50 p-2 text-sm text-gray-800">
+            <summary className="cursor-pointer font-medium">
+              Ver log completo (técnico)
+            </summary>
+            <pre className="overflow-auto text-xs p-2">{syncLogCompleto}</pre>
+          </details>
+        )}
+      </div>
+
+
+      {/* Sección de sincronizaciones Manuales */}
 
       <div className="mt-8 border-t pt-4">
-        <h2 className="mb-3 text-lg font-medium">Sincronizaciones</h2>
+        <h2 className="mb-3 text-lg font-medium">Sincronizaciones Manuales</h2>
 
         {/* Sincronización de Catálogos Siigo */}
         <div className="flex items-center justify-between border-b py-2">
@@ -638,11 +886,25 @@ export default function SiigoIntegrationPage() {
               setSyncingFacturas(true);
               setSyncMsgFacturas("");
               try {
-                const res = await authFetch("/siigo/sync-catalogos", {
+                const token = getToken();
+                const decoded: any = jwtDecode(token || "");
+                const idcliente = decoded?.idcliente;
+
+                const res = await fetch(`${API}/siigo/sync-catalogos`, {
                   method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                    "X-ID-CLIENTE": String(idcliente),
+                  },
                   body: JSON.stringify({}),
                 });
-                setSyncMsgFacturas(res.mensaje || res.error || "Listo");
+                const data = await res.json();
+                if (res.ok) {
+                  setSyncMsgFacturas(data.mensaje || "");
+                } else {
+                  setSyncMsgFacturas("Error: " + (data.error || res.status));
+                }
               } catch (e: any) {
                 setSyncMsgFacturas("Error: " + e.message);
               } finally {
@@ -667,11 +929,25 @@ export default function SiigoIntegrationPage() {
               setSyncingFacturas(true);
               setSyncMsgFacturas("");
               try {
-                const res = await authFetch("/siigo/sync-customers", {
+                const token = getToken();
+                const decoded: any = jwtDecode(token || "");
+                const idcliente = decoded?.idcliente;
+
+                const res = await fetch(`${API}/siigo/sync-customers`, {
                   method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                    "X-ID-CLIENTE": String(idcliente),
+                  },
                   body: JSON.stringify({}),
                 });
-                setSyncMsgFacturas(res.mensaje || res.error || "Listo");
+                const data = await res.json();
+                if (res.ok) {
+                  setSyncMsgFacturas(data.mensaje || "");
+                } else {
+                  setSyncMsgFacturas("Error: " + (data.error || res.status));
+                }
               } catch (e: any) {
                 setSyncMsgFacturas("Error: " + e.message);
               } finally {
@@ -706,11 +982,12 @@ export default function SiigoIntegrationPage() {
               setSyncingProveedores(true);
               setSyncMsgProveedores("");
               try {
-                const res = await authFetch("/siigo/sync-proveedores", {
+                const res = await fetchWithIdCliente("/siigo/sync-proveedores", {
                   method: "POST",
                   body: JSON.stringify({}),
                 });
-                setSyncMsgProveedores(res.mensaje || res.error || "Sincronización de proveedores completa");
+                const data = await res.json();
+                setSyncMsgProveedores(data?.mensaje || data?.error || "Sincronización de proveedores completa");
               } catch (e: any) {
                 setSyncMsgProveedores("Error: " + e.message);
               } finally {
@@ -743,11 +1020,12 @@ export default function SiigoIntegrationPage() {
               setSyncingProductos(true);
               setSyncMsgProductos("");
               try {
-                const res = await authFetch("/siigo/sync-productos", {
+                const res = await fetchWithIdCliente("/siigo/sync-productos", {
                   method: "POST",
                   body: JSON.stringify({}),
                 });
-                setSyncMsgProductos(res.mensaje || res.error || "Sincronización de productos completa");
+                const data = await res.json();
+                setSyncMsgProductos(data?.mensaje || data?.error || "Sincronización de productos completa");
               } catch (e: any) {
                 setSyncMsgProductos("Error: " + e.message);
               } finally {
@@ -792,12 +1070,12 @@ export default function SiigoIntegrationPage() {
                 setSyncingFacturas(true);
                 setSyncMsgFacturas("");
                 try {
-                  // 100 por lote, solo faltantes
-                  const res = await authFetch(
-                    "/siigo/sync-facturas?deep=1&batch=100&only_missing=1",
-                    { method: "POST", body: JSON.stringify({}) }
-                  );
-                  setSyncMsgFacturas(res.mensaje || res.error || "Listo");
+                  const res = await fetchWithIdCliente("/siigo/sync-facturas?deep=1&batch=100&only_missing=1", {
+                    method: "POST",
+                    body: JSON.stringify({}),
+                  });
+                  const data = await res.json();
+                  setSyncMsgFacturas(data?.mensaje || data?.error || "Listo");
                 } catch (e: any) {
                   setSyncMsgFacturas("Error: " + e.message);
                 } finally {
@@ -812,6 +1090,8 @@ export default function SiigoIntegrationPage() {
             >
               {syncingFacturas ? "En Proceso…" : "2️⃣ Sincronizar (detallado – lote 100)"}
             </button>
+
+
           </div>
         </div>
 
@@ -855,11 +1135,12 @@ export default function SiigoIntegrationPage() {
               setSyncingFacturas(true);
               setSyncMsgCompras("");
               try {
-                const res = await authFetch("/siigo/sync-compras", {
+                const res = await fetchWithIdCliente("/siigo/sync-compras", {
                   method: "POST",
                   body: JSON.stringify({}),
                 });
-                setSyncMsgCompras(res.mensaje || res.error || "Sincronización completa");
+                const data = await res.json();
+                setSyncMsgCompras(data?.mensaje || data?.error || "Sincronización completa");
               } catch (e: any) {
                 setSyncMsgCompras("Error: " + e.message);
               } finally {
@@ -875,34 +1156,6 @@ export default function SiigoIntegrationPage() {
             {syncingFacturas ? "Sincronizando compras…" : "1️⃣Sincronizar compras (ligero)"}
           </button>
 
-          {/*
-          <button
-            onClick={async () => {
-              setSyncingFacturas(true);
-              setSyncMsgCompras("");
-              try {
-                const res = await authFetch(
-                  "/siigo/sync-compras?deep=1&batch=100&only_missing=1",
-                  {
-                    method: "POST",
-                    body: JSON.stringify({}),
-                  }
-                );
-                setSyncMsgCompras(res.mensaje || res.error || "Sincronización detallada completa");
-              } catch (e: any) {
-                setSyncMsgCompras("Error: " + e.message);
-              } finally {
-                setSyncingFacturas(false);
-              }
-            }}
-            disabled={syncingFacturas}
-            className={`rounded px-4 py-2 text-white ${
-              syncingFacturas ? "bg-blue-400" : "bg-blue-600 hover:bg-blue-700"
-            }`}
-            title="Sincronizar compras detallado – lote 100"
-          >
-            {syncingFacturas ? "En proceso…" : "Sincronizar compras (detallado – lote 100)"}
-          </button> */}
         </div>
       </div>
 
@@ -925,87 +1178,6 @@ export default function SiigoIntegrationPage() {
 
 
 
-      {/* --- Sincronización de pagos Siigo + revisión de estado --- 
-      <div className="flex flex-col gap-2 border-b py-4">
-        <span className="text-base font-medium">Gestión de Pagos a Proveedores</span>
-
-        <div className="flex flex-wrap gap-2">
-          {/* Paso 1: Sincronizar pagos desde Siigo *
-          <button
-            onClick={async () => {
-              setSyncingFacturas(true);
-              setSyncMsgPagosEgresos("");
-              try {
-                const res = await authFetch("/siigo/sync-pagos-egresos?deep=1&batch=100&only_missing=1", {
-                  method: "POST",
-                  body: JSON.stringify({}),
-                });
-                setSyncMsgPagosEgresos(res.mensaje || res.error || "Pagos sincronizados.");
-              } catch (e: any) {
-                setSyncMsgPagosEgresos("Error: " + e.message);
-              } finally {
-                setSyncingFacturas(false);
-              }
-            }}
-            disabled={syncingFacturas}
-            className={`rounded px-4 py-2 text-white ${
-              syncingFacturas ? "bg-blue-400" : "bg-blue-600 hover:bg-blue-700"
-            }`}
-            title="Carga los pagos de Siigo a la base de datos local"
-          >
-            {syncingFacturas ? "Sincronizando pagos…" : "1️⃣ Sincronizar pagos de Siigo"}
-          </button>
-
-          {/* Paso 2: Cruzar pagos con facturas locales *
-          <button
-            onClick={async () => {
-              setSyncingFacturas(true);
-              setSyncMsgPagosEgresos("");
-              try {
-                const res = await authFetch("/siigo/actualizar-estado-pagos", {
-                  method: "POST",
-                  body: JSON.stringify({}),
-                });
-                const resumen = res || {};
-                const estados = resumen.resumen_estados || {};
-
-                const msg = `
-                🧾 Revisión completada:
-                ✔️ Pagos revisados: ${resumen.pagos_actualizados ?? "?"}
-                📄 Facturas evaluadas: ${resumen.facturas_actualizadas ?? "?"}
-
-                📊 Estado de los pagos:
-                ✅ SI: ${estados.SI ?? 0}
-                ❌ NO: ${estados.NO ?? 0}
-                ⚠️ PARCIAL: ${estados.PARCIAL ?? 0}
-                🔍 Sin estado: ${estados.NULL ?? 0}
-                `;
-
-                setSyncMsgPagosEgresos(msg);
-              } catch (e: any) {
-                setSyncMsgPagosEgresos("Error: " + e.message);
-              } finally {
-                setSyncingFacturas(false);
-              }
-            }}
-            disabled={syncingFacturas}
-            className={`rounded px-4 py-2 text-white ${
-              syncingFacturas ? "bg-green-400" : "bg-green-600 hover:bg-green-700"
-            }`}
-            title="Cruza pagos con facturas para determinar si están pagadas"
-          >
-            {syncingFacturas ? "Revisando pagos…" : "2️⃣ Revisar estado de pago"}
-          </button>
-        </div>
-
-        {syncMsgPagosEgresos && (
-          <div className="mt-2 whitespace-pre-line rounded border border-blue-100 bg-blue-50 p-2 text-sm text-blue-800">
-            {syncMsgPagosEgresos}
-          </div>
-        )}
-      </div>  */}
-
-
       {/* --- Gestión de Cuentas por Pagar --- */}
       <div className="flex items-center justify-between border-b py-2">
         <span>Gestión de Cuentas por Pagar</span>
@@ -1017,8 +1189,12 @@ export default function SiigoIntegrationPage() {
               setSyncingFacturas(true);
               setSyncMsgPagosEgresos("");
               try {
-                const res = await authFetch("/siigo/sync-accounts-payable", { method: "POST" });
-                setSyncMsgPagosEgresos(res.mensaje || "Sincronización completa");
+                const res = await fetchWithIdCliente("/siigo/sync-accounts-payable", {
+                  method: "POST",
+                  body: JSON.stringify({}),
+                });
+                const data = await res.json();
+                setSyncMsgPagosEgresos(data?.mensaje || data?.error || "Sincronización completa");
               } catch (e: any) {
                 setSyncMsgPagosEgresos("Error: " + e.message);
               } finally {
@@ -1039,8 +1215,12 @@ export default function SiigoIntegrationPage() {
               setSyncingFacturas(true);
               setSyncMsgPagosEgresos("");
               try {
-                const res = await authFetch("/siigo/cross-accounts-payable", { method: "POST" });
-                setSyncMsgPagosEgresos(res.mensaje || "Cruce completo");
+                const res = await fetchWithIdCliente("/siigo/cross-accounts-payable", {
+                  method: "POST",
+                  body: JSON.stringify({}),
+                });
+                const data = await res.json();
+                setSyncMsgPagosEgresos(data?.mensaje || data?.error || "Cruce completo");
               } catch (e: any) {
                 setSyncMsgPagosEgresos("Error: " + e.message);
               } finally {
@@ -1074,7 +1254,7 @@ export default function SiigoIntegrationPage() {
       </div>
 
  
-    {/* 🔒 Sección de Debug (oculta temporalmente)
+    {/* 🔒 Sección de Debug (oculta temporalmente)  */}
     <div className="mt-8 border-t pt-4">
       <h3 className="mb-3 text-lg font-medium">Debug de factura (Siigo vs BD)</h3>
       <DebugFacturaPanel />
@@ -1089,7 +1269,7 @@ export default function SiigoIntegrationPage() {
       <h3 className="mb-3 text-lg font-medium">Debug de compra (Siigo vs BD)</h3>
       <DebugCompraPanel />
     </div>
-    */}
+  
 
 
 

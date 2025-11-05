@@ -410,8 +410,28 @@ export default function SiigoIntegrationPage() {
   const [savingConfig, setSavingConfig] = useState<boolean>(false); // para deshabilitar botón
 
   useEffect(() => {
-    authFetch("/config/siigo-sync-status").then(setStatus); // debes exponer esto en backend
+    authFetch("/config/siigo-sync-status")
+      .then(async (res) => {
+        // Si authFetch devuelve un Response estándar
+        const data = res.json ? await res.json() : res;
+        console.log("🟢 Valor crudo recibido del backend:", data);
+
+        if (data?.ultimo_ejec) {
+          console.log("🕒 Valor crudo de 'ultimo_ejec':", data.ultimo_ejec);
+          console.log("📆 Interpretado con new Date():", new Date(data.ultimo_ejec));
+          console.log(
+            "🇨🇴 En hora local Bogotá:",
+            new Date(data.ultimo_ejec).toLocaleString("es-CO", { timeZone: "America/Bogota" })
+          );
+        }
+
+        setStatus(data);
+      })
+      .catch((err) => {
+        console.error("❌ Error al consultar /config/siigo-sync-status:", err);
+      });
   }, []);
+
 
   // Guardar configuración
   const save = async (e: React.FormEvent) => {

@@ -714,9 +714,18 @@ export default function SiigoIntegrationPage() {
               Última ejecución:{" "}
               <span className="font-medium">
                 {status.ultimo_ejec
-                  ? new Date(status.ultimo_ejec).toLocaleString("es-CO", { timeZone: status.timezone || "America/Bogota" })
+                  ? (() => {
+                      try {
+                        // Convertimos la cadena ISO y la mostramos con la zona que viene del backend
+                        const tz = status.timezone || "America/Bogota";
+                        const fecha = new Date(status.ultimo_ejec);
+                        return fecha.toLocaleString("es-CO", { timeZone: tz });
+                      } catch (err) {
+                        console.error("Error mostrando fecha local:", err);
+                        return status.ultimo_ejec; // fallback
+                      }
+                    })()
                   : "—"}
-
 
               </span>{" "}
               –{" "}

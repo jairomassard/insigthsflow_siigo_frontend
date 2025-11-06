@@ -414,16 +414,16 @@ export default function SiigoIntegrationPage() {
       .then(async (res) => {
         // Si authFetch devuelve un Response estándar
         const data = res.json ? await res.json() : res;
-        console.log("🟢 Valor crudo recibido del backend:", data);
+        //console.log("🟢 Valor crudo recibido del backend:", data);
 
-        if (data?.ultimo_ejec) {
-          console.log("🕒 Valor crudo de 'ultimo_ejec':", data.ultimo_ejec);
-          console.log("📆 Interpretado con new Date():", new Date(data.ultimo_ejec));
-          console.log(
-            "🇨🇴 En hora local Bogotá:",
-            new Date(data.ultimo_ejec).toLocaleString("es-CO", { timeZone: "America/Bogota" })
-          );
-        }
+        //if (data?.ultimo_ejec) {
+          //console.log("🕒 Valor crudo de 'ultimo_ejec':", data.ultimo_ejec);
+         // console.log("📆 Interpretado con new Date():", new Date(data.ultimo_ejec));
+          //console.log(
+            //"🇨🇴 En hora local Bogotá:",
+            //new Date(data.ultimo_ejec).toLocaleString("es-CO", { timeZone: "America/Bogota" })
+          //);
+        //}
 
         setStatus(data);
       })

@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getWhoAmI } from "@/lib/authInfo";
 import { usePermisos } from "@/hooks/usePermisos";
-import { authFetch } from "@/lib/api"; // ✅ Requerido para backend
+import { authFetch } from "@/lib/api";
 
 export default function ClientHome() {
   const router = useRouter();
@@ -14,7 +14,7 @@ export default function ClientHome() {
   const { permisos, loading: loadingPermisos } = usePermisos();
   const [notif, setNotif] = useState<any>(null);
 
-  // 🧩 Cargar sesión
+  // 🧩 1. Cargar sesión
   useEffect(() => {
     (async () => {
       const me = await getWhoAmI();
@@ -24,13 +24,21 @@ export default function ClientHome() {
     })();
   }, [router]);
 
-  // 🧩 Cargar notificación (solo para admins o superadmins)
+  // 🧩 2. Cargar notificación (solo no leídas)
   useEffect(() => {
     async function fetchNotif() {
       try {
         const res = await authFetch("/api/notificaciones");
         const data = await res.json();
-        if (data && data.length > 0) setNotif(data[0]);
+
+        // 🧠 Revisar si hay una notificación y no ha sido cerrada en localStorage
+        if (data && data.length > 0) {
+          const latest = data[0];
+          const lastClosedId = localStorage.getItem("lastClosedNotifId");
+          if (latest.id.toString() !== lastClosedId) {
+            setNotif(latest);
+          }
+        }
       } catch (e) {
         console.error("Error al cargar notificaciones", e);
       }
@@ -38,10 +46,11 @@ export default function ClientHome() {
     fetchNotif();
   }, []);
 
-  // 🟢 Marcar notificación como leída y ocultar
+  // 🧩 3. Marcar notificación como leída
   async function cerrarNotif() {
     try {
       if (notif?.id) {
+        localStorage.setItem("lastClosedNotifId", notif.id.toString());
         await authFetch(`/api/notificaciones/marcar-leida/${notif.id}`, {
           method: "POST",
         });
@@ -57,7 +66,7 @@ export default function ClientHome() {
 
   return (
     <div className="space-y-6">
-      {/* 🔔 Banner de notificación de sincronización */}
+      {/* 🔔 Banner de notificación */}
       {notif && (
         <div
           className={`relative rounded-lg p-3 mb-2 ${
@@ -68,7 +77,7 @@ export default function ClientHome() {
         >
           <button
             onClick={cerrarNotif}
-            className="absolute top-2 right-2 text-sm font-bold hover:opacity-70"
+            className="absolute top-2 right-3 text-sm font-bold hover:opacity-70"
           >
             ❌
           </button>
@@ -119,7 +128,7 @@ export default function ClientHome() {
         </section>
       )}
 
-      {/* 📈 Secciones de reportes */}
+      {/* 📊 Secciones de reportes */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {(tiene("ver_reporte_ventas") ||
           tiene("ver_reporte_vendedores") ||

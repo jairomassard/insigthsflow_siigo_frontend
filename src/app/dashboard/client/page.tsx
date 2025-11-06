@@ -28,8 +28,7 @@ export default function ClientHome() {
   useEffect(() => {
     async function fetchNotif() {
       try {
-        const res = await authFetch("/api/notificaciones");
-        const data = await res.json();
+        const data = await authFetch("/api/notificaciones"); // ✅ sin .json()
 
         // 🧠 Revisar si hay una notificación y no ha sido cerrada en localStorage
         if (data && data.length > 0) {

@@ -116,7 +116,7 @@ export default function ReporteCxCPage() {
     return "Vencido 91+";
   };
 
-  const [mostrarTabla, setMostrarTabla] = useState(false);
+
 
   return (
     <div className="space-y-6">
@@ -243,94 +243,6 @@ export default function ReporteCxCPage() {
 
             </BarChart>
             </ResponsiveContainer>
-
-              
-            {/* Toggle tabla debajo del gráfico */}
-            <div className="mt-6 mb-4">
-              <div className="text-right">
-                <button
-                  onClick={() => setMostrarTabla((prev) => !prev)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm transition"
-                >
-                  {mostrarTabla ? "Ocultar tabla de aging" : "Mostrar tabla de aging"}
-                </button>
-              </div>
-
-              {mostrarTabla && (
-                <div className="mt-4 overflow-x-auto">
-                  <table className="min-w-[850px] w-full text-sm border border-gray-300 rounded-lg shadow-sm">
-                    <thead className="bg-gray-100 text-gray-700 sticky top-0">
-                      <tr>
-                        <th className="p-2 text-left">Cliente</th>
-                        <th className="p-2 text-right">Por vencer</th>
-                        <th className="p-2 text-right">1-30</th>
-                        <th className="p-2 text-right">31-60</th>
-                        <th className="p-2 text-right">61-90</th>
-                        <th className="p-2 text-right">91+</th>
-                        <th className="p-2 text-right">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {clientes.map((c, i) => (
-                        <tr
-                          key={i}
-                          className={`border-b hover:bg-gray-50 ${
-                            c.total === 0 ? "text-gray-400" : ""
-                          }`}
-                        >
-                          <td className="p-2 whitespace-nowrap">{c.cliente_nombre}</td>
-                          <td className="p-2 text-right text-green-600">
-                            {fmt(c.aging.por_vencer)}
-                          </td>
-                          <td className="p-2 text-right text-orange-500">
-                            {fmt(c.aging["1_30"])}
-                          </td>
-                          <td className="p-2 text-right text-orange-600">
-                            {fmt(c.aging["31_60"])}
-                          </td>
-                          <td className="p-2 text-right text-red-600">
-                            {fmt(c.aging["61_90"])}
-                          </td>
-                          <td className="p-2 text-right text-red-800">
-                            {fmt(c.aging["91_mas"])}
-                          </td>
-                          <td className="p-2 text-right font-semibold">
-                            {fmt(c.total)}
-                          </td>
-                        </tr>
-                      ))}
-
-                      {/* Fila de totales generales */}
-                      <tr className="bg-gray-100 font-semibold border-t-2 border-gray-300">
-                        <td className="p-2 text-left">Totales</td>
-                        <td className="p-2 text-right text-green-600">
-                          {fmt(clientes.reduce((acc, c) => acc + c.aging.por_vencer, 0))}
-                        </td>
-                        <td className="p-2 text-right text-orange-500">
-                          {fmt(clientes.reduce((acc, c) => acc + c.aging["1_30"], 0))}
-                        </td>
-                        <td className="p-2 text-right text-orange-600">
-                          {fmt(clientes.reduce((acc, c) => acc + c.aging["31_60"], 0))}
-                        </td>
-                        <td className="p-2 text-right text-red-600">
-                          {fmt(clientes.reduce((acc, c) => acc + c.aging["61_90"], 0))}
-                        </td>
-                        <td className="p-2 text-right text-red-800">
-                          {fmt(clientes.reduce((acc, c) => acc + c.aging["91_mas"], 0))}
-                        </td>
-                        <td className="p-2 text-right font-bold">
-                          {fmt(clientes.reduce((acc, c) => acc + c.total, 0))}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-
-
-
 
 
               {/* Panel fijo de facturas */}

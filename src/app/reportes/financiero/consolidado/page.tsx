@@ -266,7 +266,7 @@ export default function ReporteFinancieroConsolidadoPage() {
 
       {/* KPIs */}
       {kpis && (
-        <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7">
           {[
             { label: "Ingresos Netos", value: formatCurrency(kpis.ingresos_netos), color: "text-emerald-600" },
             { label: "Ingresos", value: formatCurrency(kpis.ingresos), color: "text-green-600" },
@@ -276,7 +276,7 @@ export default function ReporteFinancieroConsolidadoPage() {
             { label: "# Fact. Venta", value: kpis.facturas_venta, color: "text-green-600" },
             { label: "# Fact. Compra", value: kpis.facturas_compra, color: "text-red-600" },
           ].map((item, i) => (
-            <Card key={i} className="shadow-sm h-[95px]">
+            <Card key={i} className="shadow-sm h-[85px] min-w-[130px]">
               <CardContent className="p-0 flex flex-col items-center justify-center">
                 <div className="text-m font-bold text-black-600 tracking-tight text-center">
                   {item.label}

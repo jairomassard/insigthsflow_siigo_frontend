@@ -35,7 +35,6 @@ interface EvolucionMes {
 
 interface KPIs {
   ingresos: number;
-  ingresos_netos: number;
   egresos: number;
   utilidad: number;
   margen: number;
@@ -268,7 +267,6 @@ export default function ReporteFinancieroConsolidadoPage() {
       {kpis && (
         <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
           {[
-            { label: "Ingresos Netos", value: formatCurrency(kpis.ingresos_netos), color: "text-emerald-600" },
             { label: "Ingresos", value: formatCurrency(kpis.ingresos), color: "text-green-600" },
             { label: "Egresos", value: formatCurrency(kpis.egresos), color: "text-red-600" },
             { label: "Utilidad Acumulada", value: formatCurrency(kpis.utilidad), color: "text-purple-600" },

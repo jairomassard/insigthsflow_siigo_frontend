@@ -174,7 +174,8 @@ export default function ReporteFinancieroConsolidadoPage() {
       try {
         if (tipo === "ingresos") {
           const qs = new URLSearchParams({ desde: desdeMes, hasta: hastaMes });
-          if (centroCostos) qs.set("cost_center", String(centroCostos));
+          if (centroCostos) qs.set("centro_costos", String(centroCostos));
+
           const result = await authFetch(`/reportes/facturas_cliente?${qs.toString()}`);
           setDetalleFacturas(result.rows || []);
         } else {

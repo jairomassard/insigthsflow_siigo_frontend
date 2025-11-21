@@ -200,7 +200,9 @@ export default function ReporteFinancieroConsolidadoPage() {
         const qs = new URLSearchParams();
         if (fechaDesde) qs.set("desde", fechaDesde);
         if (fechaHasta) qs.set("hasta", fechaHasta);
-        if (centroCostos) qs.set("cost_center", centroCostos);
+        // 👈 IMPORTANTE: este parámetro debe llamarse centro_costos porque el backend lo espera así
+        if (centroCostos) qs.set("centro_costos", centroCostos);
+
         qs.set("cliente", nombre);
 
         try {

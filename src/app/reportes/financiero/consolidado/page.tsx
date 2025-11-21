@@ -175,14 +175,14 @@ export default function ReporteFinancieroConsolidadoPage() {
         if (tipo === "ingresos") {
           const qs = new URLSearchParams({ desde: desdeMes, hasta: hastaMes });
           //if (centroCostos) qs.set("centro_costos", String(centroCostos));
-          if (centroCostos) qs.set("cost_center", String(centroCostos));
+          if (centroCostos) qs.set("centro_costos", String(centroCostos));
 
           const result = await authFetch(`/reportes/facturas_cliente?${qs.toString()}`);
           setDetalleFacturas(result.rows || []);
         } else {
           const qs = new URLSearchParams({ desde: desdeMes, hasta: hastaMes });
           //if (centroCostos) qs.set("centro_costos", String(centroCostos));
-          if (centroCostos) qs.set("cost_center", String(centroCostos));
+          if (centroCostos) qs.set("centro_costos", String(centroCostos));
 
           const result = await authFetch(`/reportes/facturas_proveedor?${qs.toString()}`);
           setDetalleFacturas(result.rows || []);
@@ -205,7 +205,7 @@ export default function ReporteFinancieroConsolidadoPage() {
         if (fechaHasta) qs.set("hasta", fechaHasta);
         //if (centroCostos) qs.set("centro_costos", centroCostos); 
         // 👈 IMPORTANTE: este parámetro debe llamarse centro_costos porque el backend lo espera así
-        if (centroCostos) qs.set("cost_center", centroCostos);
+        if (centroCostos) qs.set("centro_costos", centroCostos);
 
 
         qs.set("cliente", nombre);
@@ -227,7 +227,7 @@ export default function ReporteFinancieroConsolidadoPage() {
         if (fechaDesde) qs.set("desde", fechaDesde);
         if (fechaHasta) qs.set("hasta", fechaHasta);
         //if (centroCostos) qs.set("centro_costos", centroCostos); 
-        if (centroCostos) qs.set("cost_center", centroCostos);
+        if (centroCostos) qs.set("centro_costos", centroCostos);
 
         qs.set("proveedor", nombre);
 

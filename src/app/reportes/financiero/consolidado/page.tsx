@@ -225,8 +225,8 @@ export default function ReporteFinancieroConsolidadoPage() {
         const qs = new URLSearchParams();
         if (fechaDesde) qs.set("desde", fechaDesde);
         if (fechaHasta) qs.set("hasta", fechaHasta);
-        //if (centroCostos) qs.set("centro_costos", centroCostos);   asi estaba
-        if (centroCostos) qs.set("cost_center", centroCostos);
+        if (centroCostos) qs.set("centro_costos", centroCostos); 
+        //if (centroCostos) qs.set("cost_center", centroCostos); prueba qeu no funciono filtro en proveedores
 
         qs.set("proveedor", nombre);
 

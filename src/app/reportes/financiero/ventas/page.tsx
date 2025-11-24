@@ -21,6 +21,21 @@ type Vendedor = { id: number; nombre: string };
 type CentroCosto = { id: number; nombre: string; codigo?: string };
 type Cliente = { id: string; nombre: string };
 
+type Factura = {
+  idfactura: string;
+  fecha: string;
+  cliente_nombre: string;
+  vendedor_nombre?: string;
+  centro_costo_nombre?: string;
+  subtotal: number;
+  impuestos: number;
+  total: number;
+  pagado?: number;
+  saldo: number;
+  public_url?: string;
+};
+
+
 const fmtCOP = (n: number) =>
   n.toLocaleString("es-CO", {
     style: "currency",
@@ -236,6 +251,32 @@ export default function DashboardFinanciero() {
   };
 
 
+  function calcularPagadoPendiente(f: Factura) {
+    const total = Number(f.total || 0);
+    const saldo = Number(f.saldo || 0);
+
+    // Si pagado viene en la BD, úsalo; sino lo calculamos
+    let pagado = f.pagado !== undefined ? Number(f.pagado) : total - saldo;
+    let pendiente = saldo;
+
+    // Si está completamente pendiente
+    if (saldo === total) {
+      pagado = 0;
+    }
+
+    // Si está completamente pagada
+    if (saldo === 0) {
+      pagado = total;
+      pendiente = 0;
+    }
+
+    return { pagado, pendiente };
+  };
+
+
+
+
+
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -318,8 +359,15 @@ export default function DashboardFinanciero() {
                     <td className="border p-2">{fmtCOP(Number(f.subtotal))}</td>
                     <td className="border p-2">{fmtCOP(Number(f.impuestos))}</td>
                     <td className="border p-2">{fmtCOP(Number(f.total))}</td>
-                    <td className="border p-2">{fmtCOP(Number(f.pagado))}</td>
-                    <td className="border p-2">{fmtCOP(Number(f.saldo))}</td>
+                    {(() => {
+                      const { pagado, pendiente } = calcularPagadoPendiente(f);
+                      return (
+                        <>
+                          <td className="border p-2">{fmtCOP(pagado)}</td>
+                          <td className="border p-2">{fmtCOP(pendiente)}</td>
+                        </>
+                      );
+                    })()}
 
                     <td className="border p-2">
                       <a className="text-blue-600 underline" target="_blank" href={f.public_url}>
@@ -369,7 +417,8 @@ export default function DashboardFinanciero() {
 
               <tbody>
                 {facturasCliente.map((f:any, i:number) => (
-                  <tr key={i} className="hover:bg-gray-50">
+                  <tr key={i} className={`hover:bg-gray-50 ${Number(f.saldo) > 0 ? "text-red-600 font-semibold" : ""}`}>
+
                     <td className="border p-2">{f.idfactura}</td>
                     <td className="border p-2">{new Date(f.fecha).toLocaleDateString()}</td>
                     <td className="border p-2">{f.centro_costo_nombre || "—"}</td>
@@ -377,8 +426,15 @@ export default function DashboardFinanciero() {
                     <td className="border p-2">{fmtCOP(Number(f.subtotal))}</td>
                     <td className="border p-2">{fmtCOP(Number(f.impuestos))}</td>
                     <td className="border p-2">{fmtCOP(Number(f.total))}</td>
-                    <td className="border p-2">{fmtCOP(Number(f.pagado))}</td>
-                    <td className="border p-2">{fmtCOP(Number(f.saldo))}</td>
+                    {(() => {
+                      const { pagado, pendiente } = calcularPagadoPendiente(f);
+                      return (
+                        <>
+                          <td className="border p-2">{fmtCOP(pagado)}</td>
+                          <td className="border p-2">{fmtCOP(pendiente)}</td>
+                        </>
+                      );
+                    })()}
                     <td className="border p-2">
                       <a className="text-blue-600 underline" target="_blank" href={f.public_url}>Ver</a>
                     </td>
@@ -427,7 +483,13 @@ export default function DashboardFinanciero() {
 
               <tbody>
                 {facturasEstado.map((f:any, i:number) => (
-                  <tr key={i} className="hover:bg-gray-50">
+                  <tr
+                    key={i}
+                    className={`hover:bg-gray-50 ${
+                      Number(f.saldo) > 0 ? "text-red-600 font-semibold" : ""
+                    }`}
+                  >
+
                     <td className="border p-2">{f.idfactura}</td>
                     <td className="border p-2">{new Date(f.fecha).toLocaleDateString()}</td>
                     <td className="border p-2">{f.cliente_nombre}</td>
@@ -436,8 +498,15 @@ export default function DashboardFinanciero() {
                     <td className="border p-2">{fmtCOP(Number(f.subtotal))}</td>
                     <td className="border p-2">{fmtCOP(Number(f.impuestos))}</td>
                     <td className="border p-2">{fmtCOP(Number(f.total))}</td>
-                    <td className="border p-2">{fmtCOP(Number(f.pagado))}</td>
-                    <td className="border p-2">{fmtCOP(Number(f.saldo))}</td>
+                    {(() => {
+                      const { pagado, pendiente } = calcularPagadoPendiente(f);
+                      return (
+                        <>
+                          <td className="border p-2">{fmtCOP(pagado)}</td>
+                          <td className="border p-2">{fmtCOP(pendiente)}</td>
+                        </>
+                      );
+                    })()}
                     <td className="border p-2">
                       <a className="text-blue-600 underline" target="_blank" href={f.public_url}>Ver</a>
                     </td>

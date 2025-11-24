@@ -335,6 +335,122 @@ export default function DashboardFinanciero() {
         </div>
       )}
 
+      {/* === MODAL FACTURAS POR CLIENTE === */}
+      {modalClienteOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white max-w-6xl w-full max-h-[85vh] overflow-y-auto p-6 rounded-lg shadow-lg relative">
+
+            <button
+              className="absolute top-2 right-2 text-red-600 text-xl"
+              onClick={() => setModalClienteOpen(false)}
+            >
+              ✖
+            </button>
+
+            <h2 className="text-xl font-bold mb-4">
+              Facturas del cliente: {clienteEnModal}
+            </h2>
+
+            <table className="w-full text-sm border-collapse border">
+              <thead className="bg-gray-100">
+                <tr>
+                  <th className="border p-2">Factura</th>
+                  <th className="border p-2">Fecha</th>
+                  <th className="border p-2">Centro Costo</th>
+                  <th className="border p-2">Vendedor</th>
+                  <th className="border p-2">Subtotal</th>
+                  <th className="border p-2">Impuestos</th>
+                  <th className="border p-2">Total</th>
+                  <th className="border p-2">Pagado</th>
+                  <th className="border p-2">Pendiente</th>
+                  <th className="border p-2">Link</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {facturasCliente.map((f:any, i:number) => (
+                  <tr key={i} className="hover:bg-gray-50">
+                    <td className="border p-2">{f.idfactura}</td>
+                    <td className="border p-2">{new Date(f.fecha).toLocaleDateString()}</td>
+                    <td className="border p-2">{f.centro_costo_nombre || "—"}</td>
+                    <td className="border p-2">{f.vendedor_nombre || "—"}</td>
+                    <td className="border p-2">{fmtCOP(Number(f.subtotal))}</td>
+                    <td className="border p-2">{fmtCOP(Number(f.impuestos))}</td>
+                    <td className="border p-2">{fmtCOP(Number(f.total))}</td>
+                    <td className="border p-2">{fmtCOP(Number(f.pagado))}</td>
+                    <td className="border p-2">{fmtCOP(Number(f.saldo))}</td>
+                    <td className="border p-2">
+                      <a className="text-blue-600 underline" target="_blank" href={f.public_url}>Ver</a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+          </div>
+        </div>
+      )}
+
+
+      {/* === MODAL FACTURAS POR ESTADO === */}
+      {modalEstadoOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white max-w-6xl w-full max-h-[85vh] overflow-y-auto p-6 rounded-lg shadow-lg relative">
+
+            <button
+              className="absolute top-2 right-2 text-red-600 text-xl"
+              onClick={() => setModalEstadoOpen(false)}
+            >
+              ✖
+            </button>
+
+            <h2 className="text-xl font-bold mb-4">
+              Facturas en estado: {estadoEnModal}
+            </h2>
+
+            <table className="w-full text-sm border-collapse border">
+              <thead className="bg-gray-100">
+                <tr>
+                  <th className="border p-2">Factura</th>
+                  <th className="border p-2">Fecha</th>
+                  <th className="border p-2">Cliente</th>
+                  <th className="border p-2">Centro Costo</th>
+                  <th className="border p-2">Vendedor</th>
+                  <th className="border p-2">Subtotal</th>
+                  <th className="border p-2">Impuestos</th>
+                  <th className="border p-2">Total</th>
+                  <th className="border p-2">Pagado</th>
+                  <th className="border p-2">Pendiente</th>
+                  <th className="border p-2">Link</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {facturasEstado.map((f:any, i:number) => (
+                  <tr key={i} className="hover:bg-gray-50">
+                    <td className="border p-2">{f.idfactura}</td>
+                    <td className="border p-2">{new Date(f.fecha).toLocaleDateString()}</td>
+                    <td className="border p-2">{f.cliente_nombre}</td>
+                    <td className="border p-2">{f.centro_costo_nombre || "—"}</td>
+                    <td className="border p-2">{f.vendedor_nombre || "—"}</td>
+                    <td className="border p-2">{fmtCOP(Number(f.subtotal))}</td>
+                    <td className="border p-2">{fmtCOP(Number(f.impuestos))}</td>
+                    <td className="border p-2">{fmtCOP(Number(f.total))}</td>
+                    <td className="border p-2">{fmtCOP(Number(f.pagado))}</td>
+                    <td className="border p-2">{fmtCOP(Number(f.saldo))}</td>
+                    <td className="border p-2">
+                      <a className="text-blue-600 underline" target="_blank" href={f.public_url}>Ver</a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+          </div>
+        </div>
+      )}
+
+
 
       <h2 className="text-2xl font-bold">📊 Dashboard Financiero</h2>
 

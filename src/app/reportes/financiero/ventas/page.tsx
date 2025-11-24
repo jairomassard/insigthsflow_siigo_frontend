@@ -71,7 +71,7 @@ export default function DashboardFinanciero() {
   const [sellerId, setSellerId] = useState("");
   const [costCenter, setCostCenter] = useState("");
   const [clienteSel, setClienteSel] = useState("");
-  const [agrupacion, setAgrupacion] = useState<"mes" | "trimestre" | "anio">("mes");
+
 
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [centros, setCentros] = useState<CentroCosto[]>([]);
@@ -127,7 +127,7 @@ export default function DashboardFinanciero() {
       if (sellerId) qs.append("seller_id", sellerId);
       if (costCenter) qs.append("cost_center", costCenter);
       if (clienteSel) qs.append("cliente", clienteSel);
-      if (agrupacion) qs.append("agrupacion", agrupacion);
+      
 
       const url = `/reportes/facturas_enriquecidas?${qs.toString()}`;
       const res = await authFetch(url);
@@ -193,7 +193,7 @@ export default function DashboardFinanciero() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [desde, hasta, sellerId, costCenter, clienteSel]);
 
   // Serie temporal
   const monthly = series.map((s: any) => ({
@@ -260,7 +260,10 @@ export default function DashboardFinanciero() {
               </thead>
               <tbody>
                 {detalleFacturas.map((f, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50">
+                    <tr
+                      key={idx}
+                      className={`hover:bg-gray-50 ${Number(f.saldo) > 0 ? "text-red-600 font-semibold" : ""}`}
+                    >
                     <td className="border p-2">{f.idfactura}</td>
                     <td className="border p-2">{new Date(f.fecha).toLocaleDateString()}</td>
                     <td className="border p-2">{f.cliente_nombre}</td>
@@ -353,28 +356,8 @@ export default function DashboardFinanciero() {
             ))}
           </select>
         </div>
-        <div>
-          <label className="block text-sm">Agrupar por</label>
-          <select
-            value={agrupacion}
-            onChange={(e) => setAgrupacion(e.target.value as any)}
-            className="border rounded p-1"
-          >
-            <option value="mes">Mes</option>
-            <option value="trimestre" disabled>
-              Trimestre
-            </option>
-            <option value="anio" disabled>
-              Año
-            </option>
-          </select>
-        </div>
-        <button
-          onClick={load}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-        >
-          Aplicar filtros
-        </button>
+       
+
       </div>
 
       {loading && <p>Cargando datos...</p>}

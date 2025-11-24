@@ -230,7 +230,7 @@ export default function ClientHome() {
                 icon="📊"
                 title="Cruce IVAs"
                 href="/reportes/cruceivas"
-                description="Muestra los cruce de IVAs mes a mes y valores a pagar por periodos."
+                description="Muestra los cruce de IVAs mes a mes, sin considerar retenciones y muestra valores tentativos a pagar por cruce por periodos."
               />
             )}
             {tiene("ver_reporte_balance") && (

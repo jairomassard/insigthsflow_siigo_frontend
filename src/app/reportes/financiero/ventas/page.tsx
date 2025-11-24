@@ -93,6 +93,52 @@ export default function DashboardFinanciero() {
   const [detalleFacturas, setDetalleFacturas] = useState<any[]>([]);
 
 
+  // --- Modal Cliente detalle ---
+  const [modalClienteOpen, setModalClienteOpen] = useState(false);
+  const [clienteEnModal, setClienteEnModal] = useState("");
+  const [facturasCliente, setFacturasCliente] = useState([]);
+
+  const handleTopClienteClick = async (entry: any) => {
+    if (!entry?.cliente) return;
+
+    setClienteEnModal(entry.cliente);
+    setModalClienteOpen(true);
+
+    const qs = new URLSearchParams();
+    if (desde) qs.set("desde", desde);
+    if (hasta) qs.set("hasta", hasta);
+    if (sellerId) qs.set("seller_id", sellerId);
+    if (costCenter) qs.set("cost_center", costCenter);
+    qs.set("cliente", entry.cliente);
+
+    const res = await authFetch(`/reportes/facturas_por_cliente?${qs.toString()}`);
+    setFacturasCliente(res.rows || []);
+  };
+
+
+  // --- Modal Estado detalle ---
+  const [modalEstadoOpen, setModalEstadoOpen] = useState(false);
+  const [estadoEnModal, setEstadoEnModal] = useState("");
+  const [facturasEstado, setFacturasEstado] = useState([]);
+
+  const handleEstadoClick = async (entry: any) => {
+    if (!entry?.estado) return;
+
+    setEstadoEnModal(entry.estado);
+    setModalEstadoOpen(true);
+
+    const qs = new URLSearchParams();
+    if (desde) qs.set("desde", desde);
+    if (hasta) qs.set("hasta", hasta);
+    if (sellerId) qs.set("seller_id", sellerId);
+    if (costCenter) qs.set("cost_center", costCenter);
+    qs.set("estado", entry.estado);
+
+    const res = await authFetch(`/reportes/facturas_por_estado?${qs.toString()}`);
+    setFacturasEstado(res.rows || []);
+  };
+
+
   // cargar catálogos
   useEffect(() => {
     const loadCatalogos = async () => {
@@ -490,7 +536,8 @@ export default function DashboardFinanciero() {
                     <Bar 
                       dataKey="total" 
                       fill="#2563eb" 
-                      name="Ventas" 
+                      name="Ventas"
+                      onClick={(data) => handleTopClienteClick(data)} 
                       >
                       <LabelList 
                         dataKey="total" 
@@ -517,6 +564,7 @@ export default function DashboardFinanciero() {
                     nameKey="estado"
                     outerRadius={120}
                     label={pieLabel}
+                    onClick={(data) => handleEstadoClick(data)}
                   >
                     {estadosData.map((entry: any, index: number) => {
                       let color = "#3b82f6"; // azul

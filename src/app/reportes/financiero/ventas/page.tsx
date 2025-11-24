@@ -269,11 +269,12 @@ export default function DashboardFinanciero() {
                     <td className="border p-2">{f.cliente_nombre}</td>
                     <td className="border p-2">{f.vendedor_nombre || "—"}</td>
                     <td className="border p-2">{f.centro_costo_nombre || "—"}</td>
-                    <td className="border p-2">{fmtCOP(f.subtotal)}</td>
-                    <td className="border p-2">{fmtCOP(f.impuestos)}</td>
-                    <td className="border p-2">{fmtCOP(f.total)}</td>
-                    <td className="border p-2">{fmtCOP(f.pagado)}</td>
-                    <td className="border p-2">{fmtCOP(f.saldo)}</td>
+                    <td className="border p-2">{fmtCOP(Number(f.subtotal))}</td>
+                    <td className="border p-2">{fmtCOP(Number(f.impuestos))}</td>
+                    <td className="border p-2">{fmtCOP(Number(f.total))}</td>
+                    <td className="border p-2">{fmtCOP(Number(f.pagado))}</td>
+                    <td className="border p-2">{fmtCOP(Number(f.saldo))}</td>
+
                     <td className="border p-2">
                       <a className="text-blue-600 underline" target="_blank" href={f.public_url}>
                         Ver

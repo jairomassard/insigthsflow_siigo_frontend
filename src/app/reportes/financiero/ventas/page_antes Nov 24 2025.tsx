@@ -87,10 +87,6 @@ export default function DashboardFinanciero() {
   const totalPagado = toNum(kpis.pagado);
   const totalPendiente = toNum(kpis.pendiente);
 
-  // --- Modal detalle ---
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalMes, setModalMes] = useState("");
-  const [detalleFacturas, setDetalleFacturas] = useState<any[]>([]);
 
 
   // cargar catálogos
@@ -148,47 +144,6 @@ export default function DashboardFinanciero() {
     }
   };
 
-  const handleBarClick = async (entry: any) => {
-    try {
-      const periodo = entry?.periodo;
-      if (!periodo) return;
-
-      // Convertir “Jan 2025” → rango del mes
-      const dateObj = new Date(periodo);
-      if (isNaN(dateObj.getTime())) {
-        console.error("Fecha inválida:", periodo);
-        return;
-      }
-
-      const year = dateObj.getUTCFullYear();
-      const month = dateObj.getUTCMonth(); // 0-based
-
-      const desdeMes = `${year}-${String(month + 1).padStart(2, "0")}-01`;
-
-      const hastaMesDate = new Date(Date.UTC(year, month + 1, 0));
-      const hastaMes = `${year}-${String(hastaMesDate.getUTCDate()).padStart(2, "0")}-${String(hastaMesDate.getUTCDate()).padStart(2, "0")}`;
-
-      // Abrir modal mostrando el mes formateado
-      setModalMes(periodo);
-      setModalOpen(true);
-
-      const qs = new URLSearchParams();
-      qs.set("desde", desdeMes);
-      qs.set("hasta", hastaMes);
-
-      if (sellerId) qs.set("seller_id", sellerId);
-      if (costCenter) qs.set("cost_center", costCenter);
-      if (clienteSel) qs.set("cliente", clienteSel);
-
-      const res = await authFetch(`/reportes/facturas_detalle_mes?${qs.toString()}`);
-      setDetalleFacturas(res.rows || []);
-    } catch (err) {
-      console.error("Error cargando detalle por mes", err);
-      setDetalleFacturas([]);
-    }
-  };
-
-
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -218,73 +173,8 @@ export default function DashboardFinanciero() {
     return `${name}: ${(percent * 100).toFixed(1)}%`;
   };
 
-
-  
-
-
   return (
     <div className="space-y-6">
-
-      {/* === MODAL DETALLE FACTURAS === */}
-      {modalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white max-w-6xl w-full max-h-[85vh] overflow-y-auto p-6 rounded-lg shadow-lg relative">
-
-            <button
-              className="absolute top-2 right-2 text-red-600 text-xl"
-              onClick={() => setModalOpen(false)}
-            >
-              ✖
-            </button>
-
-            <h2 className="text-xl font-bold mb-4">
-              Facturas del mes: {modalMes}
-            </h2>
-
-            <table className="w-full text-sm border-collapse border">
-              <thead className="bg-gray-100">
-                <tr>
-                  <th className="border p-2">Factura</th>
-                  <th className="border p-2">Fecha</th>
-                  <th className="border p-2">Cliente</th>
-                  <th className="border p-2">Vendedor</th>
-                  <th className="border p-2">Centro Costo</th>
-                  <th className="border p-2">Subtotal</th>
-                  <th className="border p-2">Impuestos</th>
-                  <th className="border p-2">Total</th>
-                  <th className="border p-2">Pagado</th>
-                  <th className="border p-2">Pendiente</th>
-                  <th className="border p-2">Link</th>
-                </tr>
-              </thead>
-              <tbody>
-                {detalleFacturas.map((f, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50">
-                    <td className="border p-2">{f.idfactura}</td>
-                    <td className="border p-2">{new Date(f.fecha).toLocaleDateString()}</td>
-                    <td className="border p-2">{f.cliente_nombre}</td>
-                    <td className="border p-2">{f.vendedor_nombre || "—"}</td>
-                    <td className="border p-2">{f.centro_costo_nombre || "—"}</td>
-                    <td className="border p-2">{fmtCOP(f.subtotal)}</td>
-                    <td className="border p-2">{fmtCOP(f.impuestos)}</td>
-                    <td className="border p-2">{fmtCOP(f.total)}</td>
-                    <td className="border p-2">{fmtCOP(f.pagado)}</td>
-                    <td className="border p-2">{fmtCOP(f.saldo)}</td>
-                    <td className="border p-2">
-                      <a className="text-blue-600 underline" target="_blank" href={f.public_url}>
-                        Ver
-                      </a>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-          </div>
-        </div>
-      )}
-
-
       <h2 className="text-2xl font-bold">📊 Dashboard Financiero</h2>
 
       {/* FILTROS */}
@@ -436,7 +326,6 @@ export default function DashboardFinanciero() {
                     dataKey="subtotal"
                     fill="#16a34a"
                     name="Ventas netas"
-                    onClick={(data) => handleBarClick(data)}
                     >
                     <LabelList 
                       dataKey="subtotal" 
@@ -448,8 +337,7 @@ export default function DashboardFinanciero() {
                   <Bar 
                     dataKey="total_facturado" 
                     fill="#10b981" 
-                    name="Total facturado"
-                    onClick={(data) => handleBarClick(data)} 
+                    name="Total facturado" 
                     >
                     <LabelList 
                       dataKey="total_facturado" 
@@ -461,8 +349,7 @@ export default function DashboardFinanciero() {
                   <Bar 
                     dataKey="pagado" 
                     fill="#3b82f6" 
-                    name="Pagado"
-                    onClick={(data) => handleBarClick(data)}
+                    name="Pagado" 
                     >
                     <LabelList 
                       dataKey="pagado" 
@@ -474,8 +361,7 @@ export default function DashboardFinanciero() {
                   <Bar 
                     dataKey="pendiente" 
                     fill="#dc2626" 
-                    name="Pendiente"
-                    onClick={(data) => handleBarClick(data)} 
+                    name="Pendiente" 
                     >
                     <LabelList 
                       dataKey="pendiente" 

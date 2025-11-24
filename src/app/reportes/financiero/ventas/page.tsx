@@ -166,7 +166,8 @@ export default function DashboardFinanciero() {
       const desdeMes = `${year}-${String(month + 1).padStart(2, "0")}-01`;
 
       const hastaMesDate = new Date(Date.UTC(year, month + 1, 0));
-      const hastaMes = `${year}-${String(hastaMesDate.getUTCDate()).padStart(2, "0")}-${String(hastaMesDate.getUTCDate()).padStart(2, "0")}`;
+      const hastaMes = `${year}-${String(month + 1).padStart(2, "0")}-${String(hastaMesDate.getUTCDate()).padStart(2, "0")}`;
+
 
       // Abrir modal mostrando el mes formateado
       setModalMes(periodo);

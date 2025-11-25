@@ -328,6 +328,9 @@ export default function DashboardFinanciero() {
             <h2 className="text-xl font-bold mb-4">
               Facturas del mes: {modalMes}
             </h2>
+            <p className="text-sm text-gray-600 mb-2">
+              Total de facturas: <span className="font-semibold">{detalleFacturas.length}</span>
+            </p>
 
             <table className="w-full text-sm border-collapse border">
               <thead className="bg-gray-100">
@@ -398,6 +401,9 @@ export default function DashboardFinanciero() {
             <h2 className="text-xl font-bold mb-4">
               Facturas del cliente: {clienteEnModal}
             </h2>
+            <p className="text-sm text-gray-600 mb-2">
+              Total de facturas: <span className="font-semibold">{facturasCliente.length}</span>
+            </p>
 
             <table className="w-full text-sm border-collapse border">
               <thead className="bg-gray-100">
@@ -463,6 +469,9 @@ export default function DashboardFinanciero() {
             <h2 className="text-xl font-bold mb-4">
               Facturas en estado: {estadoEnModal}
             </h2>
+            <p className="text-sm text-gray-600 mb-2">
+              Total de facturas: <span className="font-semibold">{facturasEstado.length}</span>
+            </p>
 
             <table className="w-full text-sm border-collapse border">
               <thead className="bg-gray-100">

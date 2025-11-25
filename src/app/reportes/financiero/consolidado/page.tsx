@@ -27,10 +27,12 @@ import { parseISO } from "date-fns";
 interface EvolucionMes {
   mes: string;
   ingresos: number;
+  ingresos_netos: number;     // 👈 obligatorio para evitar error TS
   egresos: number;
   utilidad: number;
   margen: number;
   utilidad_acumulada: number; // 👈 nuevo
+  nomina?: number;            // (opcional,
 }
 
 interface KPIs {
@@ -318,10 +320,35 @@ export default function ReporteFinancieroConsolidadoPage() {
               />
               <YAxis tickFormatter={(v: any) => abreviar(Number(v))}  // asi estaba: tickFormatter={(v) => formatCurrency(v)}
               />
-              <Tooltip
+              {/*<Tooltip
                 labelFormatter={(mes) => format(new Date(mes), "MM-yyyy")}
                 formatter={(v: number) => formatCurrency(v)}
-                />
+                /> "este es el viejo viejo tooltip"*/}
+              <Tooltip
+                labelFormatter={(mesRaw) => {
+                  const mes = mesRaw ?? "2000-01-01";  // ← evita error TS
+                  return format(new Date(mes), "MM-yyyy");
+                }}
+                formatter={(value: any, name: string, props: any) => {
+                  const p = props?.payload;
+
+                  return [
+                    formatCurrency(value),
+                    name === "Ingresos"
+                      ? "Ingresos"
+                      : name === "Ingresos Netos"
+                      ? "Ingresos Netos"
+                      : name === "Egresos"
+                      ? "Egresos"
+                      : name === "Utilidad Mensual"
+                      ? "Utilidad Mensual"
+                      : name === "Utilidad Acumulada"
+                      ? "Utilidad Acumulada"
+                      : name,
+                  ];
+                }}
+              />
+
               <Legend />
 
               <Bar

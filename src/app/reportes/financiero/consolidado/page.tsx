@@ -320,52 +320,65 @@ export default function ReporteFinancieroConsolidadoPage() {
               />
               <YAxis tickFormatter={(v: any) => abreviar(Number(v))}  // asi estaba: tickFormatter={(v) => formatCurrency(v)}
               />
-              <Tooltip
+              {/*<Tooltip
                 labelFormatter={(mes) => format(new Date(mes), "MM-yyyy")}
                 formatter={(v: number) => formatCurrency(v)}
-                />
-              {/*<Tooltip
+                />  "este es el viejo viejo tooltip"*/}
+
+              <Tooltip
                 content={({ payload }) => {
                   if (!payload || payload.length === 0) return null;
 
                   const row = payload[0].payload;
-                  const d = new Date(row.mes);
+
+                  // EXTRAER MES DIRECTO SIN new Date()
+                  // row.mes viene como: "2025-10-01T00:00:00Z"
+                  const raw = String(row.mes);
+                  const [year, month] = raw.split("-"); // ← evita desfase por zona horaria
+                  const fechaFormateada = `${month}-${year}`; // ejemplo: "10-2025"
 
                   return (
-                    <div style={{
-                      background: "white",
-                      padding: "10px",
-                      border: "1px solid #ccc",
-                      borderRadius: "8px"
-                    }}>
+                    <div
+                      style={{
+                        background: "white",
+                        padding: "10px",
+                        border: "1px solid #ccc",
+                        borderRadius: "8px"
+                      }}
+                    >
+                      {/* FECHA */}
                       <div style={{ fontWeight: "bold", marginBottom: "6px" }}>
-                        {format(d, "MM-yyyy")}
+                        {fechaFormateada}
                       </div>
 
+                      {/* INGRESOS NETOS */}
                       <div style={{ color: "#059669" }}>
                         <b>Ingresos Netos:</b> {formatCurrency(row.ingresos_netos)}
                       </div>
 
+                      {/* INGRESOS */}
                       <div style={{ color: "#16a34a" }}>
                         <b>Ingresos:</b> {formatCurrency(row.ingresos)}
                       </div>
 
+                      {/* EGRESOS */}
                       <div style={{ color: "#dc2626" }}>
                         <b>Egresos:</b> {formatCurrency(row.egresos)}
                       </div>
 
+                      {/* UTILIDAD MENSUAL */}
                       <div style={{ color: "#2563eb" }}>
                         <b>Utilidad Mensual:</b> {formatCurrency(row.utilidad)}
                       </div>
 
+                      {/* UTILIDAD ACUMULADA */}
                       <div style={{ color: "#9333ea" }}>
                         <b>Utilidad Acumulada:</b> {formatCurrency(row.utilidad_acumulada)}
                       </div>
                     </div>
                   );
                 }}
-              />  "este es el viejo viejo tooltip"*/}
-
+              />
 
               <Legend />
 

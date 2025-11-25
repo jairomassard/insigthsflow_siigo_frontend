@@ -27,6 +27,11 @@ interface CentroCosto {
   nombre: string;
 }
 
+interface Cliente {
+  id: string;
+  nombre: string;
+}
+
 interface KPIs {
   ventas_totales: number;
   facturas: number;
@@ -51,23 +56,24 @@ export default function ReporteVendedoresPage() {
   const [top5, setTop5] = useState<Vendedor[]>([]);
   const [ranking, setRanking] = useState<Vendedor[]>([]);
   const [centros, setCentros] = useState<CentroCosto[]>([]);
-  const [clientes, setClientes] = useState<string[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
 
   const [fechaDesde, setFechaDesde] = useState<string>("");
   const [fechaHasta, setFechaHasta] = useState<string>("");
   const [centroCostos, setCentroCostos] = useState<string>("");
-  const [cliente, setCliente] = useState<string>("");
+  const [clienteSel, setClienteSel] = useState<string>("");
 
+  /* ---------------- QUERY PARAMS ---------------- */
   const queryParams = useMemo(() => {
     const q: string[] = [];
     if (fechaDesde) q.push(`desde=${encodeURIComponent(fechaDesde)}`);
     if (fechaHasta) q.push(`hasta=${encodeURIComponent(fechaHasta)}`);
     if (centroCostos) q.push(`centro_costos=${encodeURIComponent(centroCostos)}`);
-    if (cliente) q.push(`cliente=${encodeURIComponent(cliente)}`);
+    if (clienteSel) q.push(`cliente=${encodeURIComponent(clienteSel)}`);
     return q.length ? `?${q.join("&")}` : "";
-  }, [fechaDesde, fechaHasta, centroCostos, cliente]);
+  }, [fechaDesde, fechaHasta, centroCostos, clienteSel]);
 
-  /* --- fetch data --- */
+  /* ---------------- LOAD DATA ---------------- */
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -82,7 +88,7 @@ export default function ReporteVendedoresPage() {
     fetchData();
   }, [queryParams]);
 
-  /* --- fetch centros --- */
+  /* ---------------- LOAD CENTROS ---------------- */
   useEffect(() => {
     const fetchCentros = async () => {
       try {
@@ -95,18 +101,23 @@ export default function ReporteVendedoresPage() {
     fetchCentros();
   }, []);
 
-  /* --- fetch clientes --- */
+  /* ---------------- LOAD CLIENTES ---------------- */
   useEffect(() => {
     const fetchClientes = async () => {
       try {
-        const data = await authFetch(`/catalogos/clientes`);
+        const qs: string[] = [];
+        if (fechaDesde) qs.push(`desde=${fechaDesde}`);
+        if (fechaHasta) qs.push(`hasta=${fechaHasta}`);
+
+        const data = await authFetch(`/catalogos/clientes-facturas?${qs.join("&")}`);
         setClientes(data || []);
-      } catch (e) {
-        console.error("Error cargando clientes", e);
+      } catch (err) {
+        console.error("Error cargando clientes", err);
       }
     };
+
     fetchClientes();
-  }, []);
+  }, [fechaDesde, fechaHasta]);
 
   return (
     <div className="space-y-6">
@@ -114,14 +125,23 @@ export default function ReporteVendedoresPage() {
 
       {/* Filtros */}
       <div className="grid gap-2 md:grid-cols-4">
+        
         <div className="flex flex-col">
           <label className="text-sm font-medium">Fecha desde</label>
-          <Input type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)} />
+          <Input
+            type="date"
+            value={fechaDesde}
+            onChange={(e) => setFechaDesde(e.target.value)}
+          />
         </div>
 
         <div className="flex flex-col">
           <label className="text-sm font-medium">Fecha hasta</label>
-          <Input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} />
+          <Input
+            type="date"
+            value={fechaHasta}
+            onChange={(e) => setFechaHasta(e.target.value)}
+          />
         </div>
 
         <div className="flex flex-col">
@@ -140,21 +160,23 @@ export default function ReporteVendedoresPage() {
           </select>
         </div>
 
+        {/* NUEVO: FILTRO CLIENTE */}
         <div className="flex flex-col">
           <label className="text-sm font-medium">Cliente</label>
           <select
-            value={cliente}
-            onChange={(e) => setCliente(e.target.value)}
+            value={clienteSel}
+            onChange={(e) => setClienteSel(e.target.value)}
             className="border rounded p-2"
           >
             <option value="">Todos</option>
-            {clientes.map((c, i) => (
-              <option key={i} value={c}>
-                {c}
+            {clientes.map((c) => (
+              <option key={c.id} value={c.nombre}>
+                {c.nombre}
               </option>
             ))}
           </select>
         </div>
+
       </div>
 
       {/* KPIs */}
@@ -187,9 +209,7 @@ export default function ReporteVendedoresPage() {
 
       {/* Gráfico Top 5 */}
       <Card>
-        <CardHeader>
-          <CardTitle>Top 5 Vendedores</CardTitle>
-        </CardHeader>
+        <CardHeader><CardTitle>Top 5 Vendedores</CardTitle></CardHeader>
         <CardContent className="h-[350px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
@@ -207,7 +227,11 @@ export default function ReporteVendedoresPage() {
               />
               <Tooltip formatter={(v: number) => formatCurrency(v)} />
               <Bar dataKey="total" fill="#22c55e" radius={[0, 6, 6, 0]}>
-                <LabelList dataKey="total" position="right" formatter={(v) => abreviar(Number(v))} />
+                <LabelList
+                  dataKey="total"
+                  position="right"
+                  formatter={(v: any) => abreviar(Number(v))}
+                />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -216,9 +240,7 @@ export default function ReporteVendedoresPage() {
 
       {/* Tabla ranking */}
       <Card>
-        <CardHeader>
-          <CardTitle>Ranking Completo</CardTitle>
-        </CardHeader>
+        <CardHeader><CardTitle>Ranking Completo</CardTitle></CardHeader>
         <CardContent className="overflow-x-auto max-h-[400px] overflow-y-auto">
           <table className="w-full border-collapse border text-sm">
             <thead>
@@ -233,15 +255,20 @@ export default function ReporteVendedoresPage() {
               {ranking.map((r, i) => (
                 <tr key={i} className="hover:bg-gray-50">
                   <td className="border p-2 text-center">{i + 1}</td>
-                  <td className="border p-2">{r.vendedor_nombre || "Sin asignar"}</td>
+                  <td className="border p-2">
+                    {r.vendedor_nombre || "Sin asignar"}
+                  </td>
                   <td className="border p-2 text-center">{r.facturas}</td>
-                  <td className="border p-2 text-center">{formatCurrency(r.total)}</td>
+                  <td className="border p-2 text-center">
+                    {formatCurrency(r.total)}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </CardContent>
       </Card>
+
     </div>
   );
 }

@@ -325,29 +325,47 @@ export default function ReporteFinancieroConsolidadoPage() {
                 formatter={(v: number) => formatCurrency(v)}
                 /> "este es el viejo viejo tooltip"*/}
               <Tooltip
-                labelFormatter={(mesRaw) => {
-                  const mes = mesRaw ?? "2000-01-01";  // ← evita error TS
-                  return format(new Date(mes), "MM-yyyy");
-                }}
-                formatter={(value: any, name: string, props: any) => {
-                  const p = props?.payload;
+                content={({ payload }) => {
+                  if (!payload || payload.length === 0) return null;
 
-                  return [
-                    formatCurrency(value),
-                    name === "Ingresos"
-                      ? "Ingresos"
-                      : name === "Ingresos Netos"
-                      ? "Ingresos Netos"
-                      : name === "Egresos"
-                      ? "Egresos"
-                      : name === "Utilidad Mensual"
-                      ? "Utilidad Mensual"
-                      : name === "Utilidad Acumulada"
-                      ? "Utilidad Acumulada"
-                      : name,
-                  ];
+                  const row = payload[0].payload;
+                  const d = new Date(row.mes);
+
+                  return (
+                    <div style={{
+                      background: "white",
+                      padding: "10px",
+                      border: "1px solid #ccc",
+                      borderRadius: "8px"
+                    }}>
+                      <div style={{ fontWeight: "bold", marginBottom: "6px" }}>
+                        {format(d, "MM-yyyy")}
+                      </div>
+
+                      <div style={{ color: "#059669" }}>
+                        <b>Ingresos Netos:</b> {formatCurrency(row.ingresos_netos)}
+                      </div>
+
+                      <div style={{ color: "#16a34a" }}>
+                        <b>Ingresos:</b> {formatCurrency(row.ingresos)}
+                      </div>
+
+                      <div style={{ color: "#dc2626" }}>
+                        <b>Egresos:</b> {formatCurrency(row.egresos)}
+                      </div>
+
+                      <div style={{ color: "#2563eb" }}>
+                        <b>Utilidad Mensual:</b> {formatCurrency(row.utilidad)}
+                      </div>
+
+                      <div style={{ color: "#9333ea" }}>
+                        <b>Utilidad Acumulada:</b> {formatCurrency(row.utilidad_acumulada)}
+                      </div>
+                    </div>
+                  );
                 }}
               />
+
 
               <Legend />
 

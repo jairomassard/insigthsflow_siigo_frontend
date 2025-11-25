@@ -320,11 +320,11 @@ export default function ReporteFinancieroConsolidadoPage() {
               />
               <YAxis tickFormatter={(v: any) => abreviar(Number(v))}  // asi estaba: tickFormatter={(v) => formatCurrency(v)}
               />
-              {/*<Tooltip
+              <Tooltip
                 labelFormatter={(mes) => format(new Date(mes), "MM-yyyy")}
                 formatter={(v: number) => formatCurrency(v)}
-                /> "este es el viejo viejo tooltip"*/}
-              <Tooltip
+                />
+              {/*<Tooltip
                 content={({ payload }) => {
                   if (!payload || payload.length === 0) return null;
 
@@ -364,7 +364,7 @@ export default function ReporteFinancieroConsolidadoPage() {
                     </div>
                   );
                 }}
-              />
+              />  "este es el viejo viejo tooltip"*/}
 
 
               <Legend />

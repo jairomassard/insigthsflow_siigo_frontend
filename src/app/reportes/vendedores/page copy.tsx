@@ -51,21 +51,18 @@ export default function ReporteVendedoresPage() {
   const [top5, setTop5] = useState<Vendedor[]>([]);
   const [ranking, setRanking] = useState<Vendedor[]>([]);
   const [centros, setCentros] = useState<CentroCosto[]>([]);
-  const [clientes, setClientes] = useState<string[]>([]);
 
   const [fechaDesde, setFechaDesde] = useState<string>("");
   const [fechaHasta, setFechaHasta] = useState<string>("");
   const [centroCostos, setCentroCostos] = useState<string>("");
-  const [cliente, setCliente] = useState<string>("");
 
   const queryParams = useMemo(() => {
     const q: string[] = [];
     if (fechaDesde) q.push(`desde=${encodeURIComponent(fechaDesde)}`);
     if (fechaHasta) q.push(`hasta=${encodeURIComponent(fechaHasta)}`);
     if (centroCostos) q.push(`centro_costos=${encodeURIComponent(centroCostos)}`);
-    if (cliente) q.push(`cliente=${encodeURIComponent(cliente)}`);
     return q.length ? `?${q.join("&")}` : "";
-  }, [fechaDesde, fechaHasta, centroCostos, cliente]);
+  }, [fechaDesde, fechaHasta, centroCostos]);
 
   /* --- fetch data --- */
   useEffect(() => {
@@ -95,35 +92,20 @@ export default function ReporteVendedoresPage() {
     fetchCentros();
   }, []);
 
-  /* --- fetch clientes --- */
-  useEffect(() => {
-    const fetchClientes = async () => {
-      try {
-        const data = await authFetch(`/catalogos/clientes`);
-        setClientes(data || []);
-      } catch (e) {
-        console.error("Error cargando clientes", e);
-      }
-    };
-    fetchClientes();
-  }, []);
-
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">📊 Reporte Ventas por Vendedores</h1>
 
       {/* Filtros */}
-      <div className="grid gap-2 md:grid-cols-4">
+      <div className="grid gap-2 md:grid-cols-3">
         <div className="flex flex-col">
           <label className="text-sm font-medium">Fecha desde</label>
           <Input type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)} />
         </div>
-
         <div className="flex flex-col">
           <label className="text-sm font-medium">Fecha hasta</label>
           <Input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} />
         </div>
-
         <div className="flex flex-col">
           <label className="text-sm font-medium">Centro de Costos</label>
           <select
@@ -135,22 +117,6 @@ export default function ReporteVendedoresPage() {
             {centros.map((cc) => (
               <option key={cc.id} value={cc.id}>
                 {cc.nombre}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex flex-col">
-          <label className="text-sm font-medium">Cliente</label>
-          <select
-            value={cliente}
-            onChange={(e) => setCliente(e.target.value)}
-            className="border rounded p-2"
-          >
-            <option value="">Todos</option>
-            {clientes.map((c, i) => (
-              <option key={i} value={c}>
-                {c}
               </option>
             ))}
           </select>
@@ -167,14 +133,12 @@ export default function ReporteVendedoresPage() {
             </div>
           </CardContent>
         </Card>
-
         <Card>
           <CardContent className="p-4 text-center">
             <div className="text-lg text-gray-500 font-bold">Facturas Emitidas</div>
             <div className="text-xl font-bold text-blue-600">{kpis?.facturas || 0}</div>
           </CardContent>
         </Card>
-
         <Card>
           <CardContent className="p-4 text-center">
             <div className="text-lg text-gray-500 font-bold">Ticket Promedio</div>
@@ -207,7 +171,11 @@ export default function ReporteVendedoresPage() {
               />
               <Tooltip formatter={(v: number) => formatCurrency(v)} />
               <Bar dataKey="total" fill="#22c55e" radius={[0, 6, 6, 0]}>
-                <LabelList dataKey="total" position="right" formatter={(v) => abreviar(Number(v))} />
+                <LabelList
+                  dataKey="total"
+                  position="right"
+                  formatter={(v: any) => abreviar(Number(v))}
+                />
               </Bar>
             </BarChart>
           </ResponsiveContainer>

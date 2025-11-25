@@ -379,9 +379,7 @@ export default function ReporteFinancieroConsolidadoPage() {
                   );
                 }}
               />
-
               <Legend />
-
               <Bar
                 dataKey="ingresos"
                 name="Ingresos"

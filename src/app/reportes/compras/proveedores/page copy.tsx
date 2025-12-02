@@ -54,10 +54,6 @@ function formatMiles(valor: number | string): string {
   return `$ ${n.toLocaleString("es-CO", { maximumFractionDigits: 0 })}`;
 }
 
-function formatCantidad(valor: number): string {
-  return valor.toLocaleString("es-CO");
-}
-
 export default function ReporteComprasProveedoresPage() {
   const [proveedores, setProveedores] = useState<ProveedorResumen[]>([]);
   const [detalle, setDetalle] = useState<FacturaDetalle[]>([]);
@@ -132,7 +128,7 @@ export default function ReporteComprasProveedoresPage() {
         <Card><CardHeader><CardTitle>Total Compras</CardTitle></CardHeader><CardContent className="text-xl font-bold text-blue-600">{formatMiles(totalCompras)}</CardContent></Card>
         <Card><CardHeader><CardTitle>Total Pagado</CardTitle></CardHeader><CardContent className="text-xl font-bold text-green-600">{formatMiles(totalPagado)}</CardContent></Card>
         <Card><CardHeader><CardTitle>Total Pendiente</CardTitle></CardHeader><CardContent className="text-xl font-bold text-red-600">{formatMiles(totalSaldo)}</CardContent></Card>
-        <Card><CardHeader><CardTitle># Compras</CardTitle></CardHeader><CardContent className="text-xl font-bold text-black-600">{formatCantidad(totalFacturas)}</CardContent></Card>
+        <Card><CardHeader><CardTitle># Compras</CardTitle></CardHeader><CardContent className="text-xl font-bold text-black-600">{formatMiles(totalFacturas)}</CardContent></Card>
       </div>
 
       {/* Filtros */}
@@ -277,7 +273,7 @@ export default function ReporteComprasProveedoresPage() {
                 <p>Total Compras: <b>{formatMiles(p.total_compras)}</b></p>
                 <p>Total Pagado: <span className="text-green-700">{formatMiles(p.total_pagado)}</span></p>
                 <p>Saldo Pendiente: <span className="text-red-600">{formatMiles(p.total_saldo)}</span></p>
-                <p># Compras: {formatCantidad(p.num_compras)}</p>
+                <p># Compras: {formatMiles(p.num_compras)}</p>
                 <p>Última compra: {format(new Date(p.ultima_fecha), "dd-MM-yyyy")}</p>
               </div>
               {proveedorSeleccionado === p.proveedor_identificacion &&

@@ -271,7 +271,7 @@ export default function BalanceDePruebaPage() {
         </CardHeader>
         <CardContent>
           <Button className="mb-4" onClick={cargarResumenClase}>
-            Ver Análisis Financiero 📊
+            Ver Clases Contables 📊
           </Button>
 
           {resumenClase.length > 0 && (
@@ -335,12 +335,12 @@ export default function BalanceDePruebaPage() {
         <CardHeader>
           <CardTitle>④ Comparativo & Análisis por Grupo Contable</CardTitle>
           <p className="text-sm text-gray-500 mt-1">
-            Visualiza los grupos con indicadores y conclusiones automáticas.
+            Visualiza la clasificación y totalizción de valores de grupos contables.
           </p>
         </CardHeader>
         <CardContent>
           <Button className="mb-4" onClick={cargarGrupos}>
-            Ver Análisis Completo 📊
+            Ver Variables Contables Completas 📊
           </Button>
 
           {resumenGrupos.length > 0 && (

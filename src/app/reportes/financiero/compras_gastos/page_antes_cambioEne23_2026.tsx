@@ -22,28 +22,24 @@ import { format } from "date-fns";
 interface EvolucionMes {
   mes: string; // ISO date string
   total_compras: number;
-  total_pagadas: number;     // ahora es contable (SUM(total - saldo))
-  total_pendientes: number;  // contable (SUM(saldo))
+  total_pagadas: number;
+  total_pendientes: number;
 }
 
 interface KPIs {
   total_compras: number;
-  total_pagado: number;      // contable (SUM(total - saldo))
-  total_saldo: number;       // contable (SUM(saldo))
+  total_pagado: number;
+  total_saldo: number;
   total_facturas: number;
+  facturas_pagadas: number;
+  facturas_pendientes: number;
 
-  facturas_pagadas: number;     // saldo=0
-  facturas_pendientes: number;  // saldo>=total
-  facturas_parciales: number;   // 0<saldo<total
-  saldo_parcial: number;        // SUM(saldo) solo parciales
-
+  // 👇 nuevos
   compras_x_factura: number;
   valor_compras_x_factura: number;
   compras_x_cta_cobro: number;
-  valor_compras_x_cta_cobro: number;
+  valor_compras_x_cta_cobro: number;  
 }
-
-type EstadoCalc = "pagado" | "pendiente" | "parcial";
 
 interface CentroCosto {
   id: string;
@@ -52,19 +48,13 @@ interface CentroCosto {
 
 interface FacturaDetalle {
   proveedor_nombre: string;
-  factura: string;
+  factura: string; // idcompra (alias en BE)
   fecha: string;
   vencimiento: string;
-
-  // NUEVOS desde BE (endpoint detalle por mes)
-  estado_calc?: EstadoCalc;   // ✅ el que manda la lógica contable
-  estado_raw?: string;        // informativo (siigo)
-
+  estado: "pagado" | "pendiente";   // 👈 corregido
   total: number;
   saldo: number;
-  pagado_calc?: number;       // (total - saldo)
-
-  centro_costo_nombre?: string;
+  centro_costo_nombre?: string; // 👈 nuevo
 }
 
 interface TopProveedorValor {
@@ -181,13 +171,7 @@ export default function ReporteFinancieroComprasGastosPage() {
       const mesYYYYMM = toYYYYMM(item.mes);
       const url = `/reportes/financiero/compras-gastos/detalle?mes=${mesYYYYMM}&estado=${estado}`;
       const rows: FacturaDetalle[] = await authFetch(url);
-      const titulo = `Facturas ${
-        estado === "total"
-          ? "Totales"
-          : estado === "pagado"
-          ? "Pagado (contable)"
-          : "Pendiente (contable)"
-      } • ${format(new Date(item.mes), "MMM yyyy")}`;
+      const titulo = `Facturas ${estado === "total" ? "Totales" : estado === "pagado" ? "Pagadas" : "Pendientes"} • ${format(new Date(item.mes), "MMM yyyy")}`;
       setModalTitle(titulo);
       setModalRows(rows || []);
       setModalOpen(true);
@@ -271,7 +255,7 @@ export default function ReporteFinancieroComprasGastosPage() {
       {/* KPIs */}
       {/* KPIs */}
       {kpis && (
-        <div className="grid grid-cols-2 md:grid-cols-6 lg:grid-cols-12 gap-2">
+        <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-10 gap-2">
             {/* Total Compras */}
             <Card className="min-h-[74px]">
             <CardContent className="p-3 flex flex-col justify-center">
@@ -301,27 +285,6 @@ export default function ReporteFinancieroComprasGastosPage() {
                 </div>
             </CardContent>
             </Card>
-
-            {/* Parciales */}
-            <Card className="min-h-[74px]">
-              <CardContent className="p-3 flex flex-col justify-center">
-                <div className="text-m font-bold text-black-600 tracking-tight text-center">Parciales</div>
-                <div className="mt-1 text-lg font-extrabold leading-none text-orange-600 text-center">
-                  {Number(kpis.facturas_parciales || 0).toLocaleString("es-CO")}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Saldo Parcial */}
-            <Card className="min-h-[74px]">
-              <CardContent className="p-3 flex flex-col justify-center">
-                <div className="text-m font-bold text-black-600 tracking-tight text-center">Saldo Parcial</div>
-                <div className="mt-1 text-lg font-extrabold leading-none text-orange-600 text-center">
-                  {formatCurrency(Number(kpis.saldo_parcial || 0))}
-                </div>
-              </CardContent>
-            </Card>
-
 
             {/* # Facturas */}
             <Card className="min-h-[74px]">
@@ -624,7 +587,6 @@ export default function ReporteFinancieroComprasGastosPage() {
                         "Estado",
                         "Centro de Costo",
                         "Total",
-                        "Pagado",
                         "Saldo",
                       ].map((h, idx) => (
                         <th
@@ -639,23 +601,21 @@ export default function ReporteFinancieroComprasGastosPage() {
 
                   <tbody>
                     {modalRows.map((r, i) => {
-                      const estado = (r.estado_calc || "pendiente") as EstadoCalc;
-                      const esRiesgo = estado === "pendiente" || estado === "parcial";
+                      const esPendiente = r.estado === "pendiente";  // ✅ directo de la BD
                       return (
                         <tr
                           key={`${r.factura}-${i}`}
-                          className={`border-b${esRiesgo ? " text-red-600" : ""}`}
+                          className={`border-b${esPendiente ? " text-red-600" : ""}`}
                         >
                           <td className="p-2">{r.proveedor_nombre}</td>
                           <td className="p-2">{r.factura}</td>
                           <td className="p-2">{format(new Date(r.fecha), "dd-MM-yyyy")}</td>
                           <td className="p-2">{format(new Date(r.vencimiento), "dd-MM-yyyy")}</td>
                           <td className="p-2">
-                            {estado === "pagado" ? "Pagada" : estado === "parcial" ? "Parcial" : "Pendiente"}
+                            {r.estado === "pagado" ? "Pagada" : "Pendiente"} {/* ✅ legible para usuario */}
                           </td>
                           <td className="p-2">{r.centro_costo_nombre || "—"}</td>
                           <td className="p-2 text-right">{formatCurrency(r.total)}</td>
-                          <td className="p-2 text-right">{formatCurrency(Number(r.pagado_calc || (Number(r.total) - Number(r.saldo)) || 0))}</td>
                           <td className="p-2 text-right">{formatCurrency(r.saldo)}</td>
                         </tr>
                       );

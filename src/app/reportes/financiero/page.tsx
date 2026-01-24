@@ -315,7 +315,9 @@ export default function DashboardFinanciero() {
                   <Bar dataKey="pagado" fill="#3b82f6" name="Pagado" />
                   <Bar dataKey="pendiente" fill="#dc2626" name="Pendiente" />
                 </BarChart>
+                
               </ResponsiveContainer>
+              
             )}
           </div>
 

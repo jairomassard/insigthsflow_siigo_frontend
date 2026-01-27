@@ -126,9 +126,6 @@ export default function ReporteFinancieroComprasGastosPage() {
 
   // Modal
   const [modalOpen, setModalOpen] = useState<boolean>(false);
-  const [modalMes, setModalMes] = useState<string>(""); // YYYY-MM
-  const [modalEstado, setModalEstado] = useState<"total" | "pagado" | "pendiente" | "parcial">("total");
-
   const [modalTitle, setModalTitle] = useState<string>("");
   const [modalRows, setModalRows] = useState<FacturaDetalle[]>([]);
   const [modalLoading, setModalLoading] = useState<boolean>(false);
@@ -179,72 +176,38 @@ export default function ReporteFinancieroComprasGastosPage() {
     fetchData();
   }, [queryParams]);
 
-    // Evita bug de zona horaria en el eje X (mes se corre 1 día)
-    const evolucionSegura = useMemo(() => {
-      return (evolucion || []).map((item) => {
-        const d = new Date(item.mes);
-        d.setUTCHours(12);
-        return { ...item, mes: d.toISOString() };
-      });
-    }, [evolucion]);
-
-      /* -------- handler del modal (click en barras) -------- */
-    async function handleBarClick(serie: "total" | "pagadas" | "pendiente", item: EvolucionMes) {
-      try {
-        setModalLoading(true);
-
-        const estado: "total" | "pagado" | "pendiente" =
-          serie === "total" ? "total" : serie === "pagadas" ? "pagado" : "pendiente";
-
-        const mesYYYYMM = toYYYYMM(item.mes);
-
-        // Guardar contexto del modal para los botones Totales/Pagadas/Pendientes/Parciales
-        setModalMes(mesYYYYMM);
-        setModalEstado(estado);
-
-        const base = `/reportes/financiero/compras-gastos/detalle?mes=${mesYYYYMM}&estado=${estado}`;
-        const url = centroCostos ? `${base}&centro_costos=${encodeURIComponent(centroCostos)}` : base;
-
-        const rows: FacturaDetalle[] = await authFetch(url);
-
-        const titulo = `Facturas ${
-          estado === "total"
-            ? "Totales"
-            : estado === "pagado"
-            ? "Pagadas (contable)"
-            : "Pendientes (contable)"
-        } • ${format(new Date(`${mesYYYYMM}-01`), "MMM yyyy")}`;
-
-
-        
-        setModalTitle(titulo);
-        setModalRows(rows || []);
-        setModalOpen(true);
-      } catch (e) {
-        console.error("Error abriendo modal de facturas", e);
-      } finally {
-        setModalLoading(false);
-      }
+  /* -------- handler del modal (click en barras) -------- */
+  async function handleBarClick(serie: "total" | "pagadas" | "pendiente", item: EvolucionMes) {
+    try {
+      setModalLoading(true);
+      const estado = serie === "total" ? "total" : serie === "pagadas" ? "pagado" : "pendiente";
+      const mesYYYYMM = toYYYYMM(item.mes);
+      const url = `/reportes/financiero/compras-gastos/detalle?mes=${mesYYYYMM}&estado=${estado}`;
+      const rows: FacturaDetalle[] = await authFetch(url);
+      const titulo = `Facturas ${
+        estado === "total"
+          ? "Totales"
+          : estado === "pagado"
+          ? "Pagado (contable)"
+          : "Pendiente (contable)"
+      } • ${format(new Date(item.mes), "MMM yyyy")}`;
+      setModalTitle(titulo);
+      setModalRows(rows || []);
+      setModalOpen(true);
+    } catch (e) {
+      console.error("Error abriendo modal de facturas", e);
+    } finally {
+      setModalLoading(false);
     }
+  }
 
-
-    async function recargarModal(nuevoEstado: "total" | "pagado" | "pendiente" | "parcial") {
-      try {
-        if (!modalMes) return;
-        setModalLoading(true);
-        setModalEstado(nuevoEstado);
-
-        const base = `/reportes/financiero/compras-gastos/detalle?mes=${modalMes}&estado=${nuevoEstado}`;
-        const url = centroCostos ? `${base}&centro_costos=${encodeURIComponent(centroCostos)}` : base;
-
-        const rows: FacturaDetalle[] = await authFetch(url);
-        setModalRows(rows || []);
-      } catch (e) {
-        console.error("Error recargando modal", e);
-      } finally {
-        setModalLoading(false);
-      }
-    }
+  const evolucionSegura = useMemo(() => {
+    return evolucion.map((item) => {
+      const d = new Date(item.mes);
+      d.setUTCHours(12);
+      return { ...item, mes: d.toISOString() };
+    });
+  }, [evolucion]);
 
 
     /* -------- handler modal proveedor -------- */
@@ -255,8 +218,6 @@ export default function ReporteFinancieroComprasGastosPage() {
       const rows: FacturaDetalle[] = await authFetch(url);
       setModalTitle(`Facturas de ${proveedor}`);
       setModalRows(rows || []);
-      setModalMes("");                 // para que recargarModal no aplique por error
-      setModalEstado("total");         // tab por defecto
       setModalOpen(true);
     } catch (e) {
       console.error("Error cargando facturas de proveedor", e);
@@ -650,22 +611,6 @@ export default function ReporteFinancieroComprasGastosPage() {
             </div>
 
             <div className="p-4 max-h-[70vh] overflow-auto">
-              {modalMes && (
-                <div className="mb-3 flex flex-wrap gap-2">
-                  {(["total", "pagado", "pendiente", "parcial"] as const).map((st) => (
-                    <button
-                      key={st}
-                      onClick={() => recargarModal(st)}
-                      className={`px-3 py-1 rounded-full text-sm border ${
-                        modalEstado === st ? "bg-blue-600 text-white" : "bg-white hover:bg-gray-100"
-                      }`}
-                    >
-                      {st === "total" ? "Totales" : st === "pagado" ? "Pagadas" : st === "pendiente" ? "Pendientes" : "Parciales"}
-                    </button>
-                  ))}
-                </div>
-              )}
-
               {modalLoading ? (
                 <p className="text-sm text-gray-500">Cargando…</p>
               ) : modalRows.length === 0 ? (
@@ -698,34 +643,22 @@ export default function ReporteFinancieroComprasGastosPage() {
                   <tbody>
                     {modalRows.map((r, i) => {
                       const estado = (r.estado_calc || "pendiente") as EstadoCalc;
-                      const esPendiente = estado === "pendiente";
-                      const esParcial = estado === "parcial";
-                      const esAnomalia = !!r.anomalia_saldo_mayor_total;
-
-                      const rowClass =
-                        "border-b " +
-                        (esPendiente ? "text-red-600 " : esParcial ? "text-orange-600 " : "") +
-                        (esAnomalia ? "font-semibold " : "");
-                      
-                      const pagadoCalc = Number.isFinite(Number(r.pagado_calc))
-                        ? Number(r.pagado_calc)
-                        : Number(r.total || 0) - Number(r.saldo || 0);
-
+                      const esRiesgo = estado === "pendiente" || estado === "parcial";
                       return (
-                        <tr key={`${r.factura}-${i}`} className={rowClass}>
-                        
+                        <tr
+                          key={`${r.factura}-${i}`}
+                          className={`border-b${esRiesgo ? " text-red-600" : ""}`}
+                        >
                           <td className="p-2">{r.proveedor_nombre}</td>
                           <td className="p-2">{r.factura}</td>
                           <td className="p-2">{format(new Date(r.fecha), "dd-MM-yyyy")}</td>
                           <td className="p-2">{format(new Date(r.vencimiento), "dd-MM-yyyy")}</td>
                           <td className="p-2">
                             {estado === "pagado" ? "Pagada" : estado === "parcial" ? "Parcial" : "Pendiente"}
-                            {esAnomalia ? " ⚠️" : ""}
                           </td>
                           <td className="p-2">{r.centro_costo_nombre || "—"}</td>
                           <td className="p-2 text-right">{formatCurrency(r.total)}</td>
-                          <td className="p-2 text-right">{formatCurrency(pagadoCalc)}</td>
-
+                          <td className="p-2 text-right">{formatCurrency(Number(r.pagado_calc || (Number(r.total) - Number(r.saldo)) || 0))}</td>
                           <td className="p-2 text-right">{formatCurrency(r.saldo)}</td>
                         </tr>
                       );

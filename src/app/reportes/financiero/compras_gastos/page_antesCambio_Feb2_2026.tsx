@@ -18,8 +18,6 @@ import {
   LabelList,
 } from "recharts";
 import { format } from "date-fns";
-import { formatInTimeZone } from "date-fns-tz";
-
 
 interface EvolucionMes {
   mes: string; // ISO date string
@@ -105,11 +103,6 @@ function toYYYYMM(dateLike: string | Date): string {
   }
 }
 
-function formatMesYYYYMM(mesYYYYMM: string): string {
-  const [y, m] = mesYYYYMM.split("-").map(Number);
-  const d = new Date(Date.UTC(y, m - 1, 1, 12)); // 12:00 UTC evita corrimientos
-  return formatInTimeZone(d, "UTC", "MMM yyyy");
-}
 
 
 
@@ -220,7 +213,7 @@ export default function ReporteFinancieroComprasGastosPage() {
             : estado === "pagado"
             ? "Pagadas (contable)"
             : "Pendientes (contable)"
-        } • ${formatMesYYYYMM(mesYYYYMM)}`;
+        } • ${format(new Date(`${mesYYYYMM}-01`), "MMM yyyy")}`;
 
 
         

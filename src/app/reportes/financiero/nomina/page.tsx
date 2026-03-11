@@ -46,6 +46,7 @@ interface Globales {
   total_auxilios: number;
   total_extralegal: number;
   total_prima: number;
+  total_intereses_cesantias: number;
   total_ingresos: number;
   total_salud: number;
   total_pension: number;
@@ -64,6 +65,7 @@ interface Empleado {
   aux_transporte: number;
   auxilio_extralegal: number;
   prima: number;
+  intereses_cesantias: number;
   total_ingresos: number;
   fondo_salud: number;
   fondo_pension: number;
@@ -228,6 +230,7 @@ export default function ReporteNominaDashboardPage() {
             { label: "Auxilios", key: "total_auxilios", color: "text-cyan-600" },
             { label: "Extralegal", key: "total_extralegal", color: "text-indigo-600" },
             { label: "Prima", key: "total_prima", color: "text-violet-600" },
+            { label: "Intereses Cesantías", key: "total_intereses_cesantias", color: "text-fuchsia-600" },            
             { label: "Ingresos", key: "total_ingresos", color: "text-purple-600" },
             { label: "Préstamos", key: "total_prestamos", color: "text-yellow-600" },
             { label: "ReteFuente", key: "total_retefuente", color: "text-orange-600" },
@@ -367,6 +370,7 @@ export default function ReporteNominaDashboardPage() {
                     "Aux. Transporte",
                     "Aux. Extralegal",
                     "Prima",
+                    "Intereses Cesantías",
                     "Ingresos",
                     "Salud",
                     "Pensión",
@@ -392,6 +396,7 @@ export default function ReporteNominaDashboardPage() {
                     <td className="px-3 py-1 border text-center">{formatMiles(e.aux_transporte)}</td>
                     <td className="px-3 py-1 border text-center">{formatMiles(e.auxilio_extralegal)}</td>
                     <td className="px-3 py-1 border text-center">{formatMiles(e.prima || 0)}</td>
+                    <td className="px-3 py-1 border text-center">{formatMiles(e.intereses_cesantias || 0)}</td>
                     <td className="px-3 py-1 border text-center">{formatMiles(e.total_ingresos)}</td>
                     <td className="px-3 py-1 border text-center">{formatMiles(e.fondo_salud)}</td>
                     <td className="px-3 py-1 border text-center">{formatMiles(e.fondo_pension)}</td>

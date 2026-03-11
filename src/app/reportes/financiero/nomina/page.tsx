@@ -14,8 +14,6 @@ import {
   Tooltip,
   LabelList,
   CartesianGrid,
-  LineChart,
-  Line,
   Legend,
 } from "recharts";
 
@@ -141,6 +139,20 @@ export default function ReporteNominaDashboardPage() {
 
   const empleadosOptions = [...empleados].sort((a, b) => a.nombre.localeCompare(b.nombre));
 
+  const kpis = [
+    { label: "Empleados", key: "empleados", color: "text-black" },
+    { label: "Sueldos", key: "total_sueldos", color: "text-blue-600" },
+    { label: "Auxilios", key: "total_auxilios", color: "text-cyan-600" },
+    { label: "Extralegal", key: "total_extralegal", color: "text-indigo-600" },
+    { label: "Prima", key: "total_prima", color: "text-violet-600" },
+    { label: "Int. Cesantías", key: "total_intereses_cesantias", color: "text-fuchsia-600" },
+    { label: "Ingresos", key: "total_ingresos", color: "text-purple-600" },
+    { label: "Préstamos", key: "total_prestamos", color: "text-yellow-600" },
+    { label: "ReteFuente", key: "total_retefuente", color: "text-orange-600" },
+    { label: "Deducciones", key: "total_deducciones", color: "text-red-600" },
+    { label: "Neto Pagar", key: "total_neto_pagar", color: "text-green-600" },
+  ] as const;
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">📊 Dashboard de Costos Nómina</h1>
@@ -223,24 +235,14 @@ export default function ReporteNominaDashboardPage() {
       </Card>
 
       {globales && (
-        <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-10">
-          {[
-            { label: "Empleados", key: "empleados", color: "text-black" },
-            { label: "Sueldos", key: "total_sueldos", color: "text-blue-600" },
-            { label: "Auxilios", key: "total_auxilios", color: "text-cyan-600" },
-            { label: "Extralegal", key: "total_extralegal", color: "text-indigo-600" },
-            { label: "Prima", key: "total_prima", color: "text-violet-600" },
-            { label: "Intereses Cesantías", key: "total_intereses_cesantias", color: "text-fuchsia-600" },            
-            { label: "Ingresos", key: "total_ingresos", color: "text-purple-600" },
-            { label: "Préstamos", key: "total_prestamos", color: "text-yellow-600" },
-            { label: "ReteFuente", key: "total_retefuente", color: "text-orange-600" },
-            { label: "Deducciones", key: "total_deducciones", color: "text-red-600" },
-            { label: "Neto Pagar", key: "total_neto_pagar", color: "text-green-600" },
-          ].map(({ label, key, color }) => (
+        <div className="grid gap-2 grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-11">
+          {kpis.map(({ label, key, color }) => (
             <Card key={label} className="shadow-sm">
-              <CardContent className="p-3 flex flex-col items-center justify-center min-h-[88px]">
-                <div className="text-sm text-gray-500 font-bold text-center">{label}</div>
-                <div className={`text-base font-bold ${color} text-center`}>
+              <CardContent className="px-2 py-2 flex flex-col items-center justify-center min-h-[68px]">
+                <div className="text-[11px] text-gray-500 font-semibold text-center leading-tight">
+                  {label}
+                </div>
+                <div className={`text-sm font-bold ${color} text-center leading-tight mt-1`}>
                   {key === "empleados"
                     ? globales[key as keyof Globales]
                     : formatMiles(globales[key as keyof Globales] || 0)}
@@ -257,8 +259,8 @@ export default function ReporteNominaDashboardPage() {
         </CardHeader>
         <CardContent>
           {evolucionMensual.length > 0 ? (
-            <ResponsiveContainer width="100%" height={340}>
-              <LineChart data={evolucionMensual} margin={{ top: 20, right: 30, left: 10, bottom: 10 }}>
+            <ResponsiveContainer width="100%" height={360}>
+              <BarChart data={evolucionMensual} margin={{ top: 30, right: 20, left: 10, bottom: 10 }} barGap={12}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
                   dataKey="periodo"
@@ -271,31 +273,28 @@ export default function ReporteNominaDashboardPage() {
                   labelFormatter={(label) => `Periodo: ${formatearPeriodo(label)}`}
                 />
                 <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="total_ingresos"
-                  name="Ingresos"
-                  stroke="#7c3aed"
-                  strokeWidth={3}
-                  dot={{ r: 4 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="total_deducciones"
-                  name="Deducciones"
-                  stroke="#dc2626"
-                  strokeWidth={3}
-                  dot={{ r: 4 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="total_neto_pagar"
-                  name="Neto pagar"
-                  stroke="#16a34a"
-                  strokeWidth={3}
-                  dot={{ r: 4 }}
-                />
-              </LineChart>
+                <Bar dataKey="total_deducciones" name="Deducciones" fill="#dc2626" radius={[6, 6, 0, 0]}>
+                  <LabelList
+                    dataKey="total_deducciones"
+                    position="top"
+                    formatter={(value: any) => abreviar(Number(value || 0))}
+                  />
+                </Bar>
+                <Bar dataKey="total_ingresos" name="Ingresos" fill="#7c3aed" radius={[6, 6, 0, 0]}>
+                  <LabelList
+                    dataKey="total_ingresos"
+                    position="top"
+                    formatter={(value: any) => abreviar(Number(value || 0))}
+                  />
+                </Bar>
+                <Bar dataKey="total_neto_pagar" name="Neto pagar" fill="#16a34a" radius={[6, 6, 0, 0]}>
+                  <LabelList
+                    dataKey="total_neto_pagar"
+                    position="top"
+                    formatter={(value: any) => abreviar(Number(value || 0))}
+                  />
+                </Bar>
+              </BarChart>
             </ResponsiveContainer>
           ) : (
             <div className="text-sm text-gray-500">
@@ -411,7 +410,7 @@ export default function ReporteNominaDashboardPage() {
                 ))}
                 {empleados.length === 0 && (
                   <tr>
-                    <td colSpan={15} className="px-4 py-6 text-center text-gray-500">
+                    <td colSpan={16} className="px-4 py-6 text-center text-gray-500">
                       No hay registros de nómina para los filtros seleccionados.
                     </td>
                   </tr>

@@ -37,7 +37,6 @@ const formatCurrency = (val: number) =>
     maximumFractionDigits: 0 
   }).format(val);
 
-// Renderizado de etiqueta para la Torta (Valor resumido al lado de la porción)
 const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, value }: any) => {
   const RADIAN = Math.PI / 180;
   const radius = outerRadius + 30; 
@@ -59,7 +58,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
         {payload.map((entry: any, index: number) => (
           <p key={index} className="text-sm font-bold flex justify-between gap-4" style={{ color: entry.color }}>
             <span>{entry.name}:</span>
-            <span>{formatCurrency(entry.value)} <span className="text-[10px] opacity-60">({abreviar(entry.value)})</span></span>
+            <span>{formatCurrency(entry.value)}</span>
           </p>
         ))}
       </div>
@@ -75,12 +74,13 @@ export default function CruceIVAReportPage() {
   const [agrupadas, setAgrupadas] = useState<any[]>([]);
   const [kpis, setKpis] = useState<any>({});
   const [modo, setModo] = useState<"bimensual" | "trimestral" | "cuatrimestral">("bimensual");
-  const [fechaDesde, setFechaDesde] = useState(new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10));
+  
+  // AJUSTE: Iniciamos en 2025 para que veas los datos que vas a cargar
+  const [fechaDesde, setFechaDesde] = useState("2025-01-01");
   const [fechaHasta, setFechaHasta] = useState(new Date().toISOString().slice(0, 10));
+  
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  
-  // Referencia para activar el explorador de archivos
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = async () => {
@@ -106,19 +106,17 @@ export default function CruceIVAReportPage() {
     formData.append("archivo", file);
 
     try {
-      // CORRECCIÓN: Eliminamos la propiedad 'formData: true' que causaba el error de TS
-      const res = await authFetch("/reportes/cargar_auxiliar", {
+      await authFetch("/reportes/cargar_auxiliar", {
         method: "POST",
         body: formData,
       });
-      alert(`Éxito: Se procesaron registros correctamente.`);
+      alert(`Éxito: Se procesaron los registros de todo el auxiliar.`);
       fetchData(); 
     } catch (err) {
       console.error("Error subiendo archivo:", err);
-      alert("Error cargando el archivo. Revisa que sea el formato correcto de Siigo.");
+      alert("Error cargando el archivo.");
     } finally {
       setUploading(false);
-      // Limpiar el input para permitir subir el mismo archivo si es necesario
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
@@ -137,37 +135,27 @@ export default function CruceIVAReportPage() {
       <div className="flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Cruce de IVA (V2)</h1>
-          <p className="text-slate-500 font-medium">Análisis de cuentas 2408 y Retención 135517.</p>
+          <p className="text-slate-500 font-medium">Auditoría multianual de cuentas 2408 y 135517.</p>
         </div>
         
         <div className="flex items-center gap-3">
-          {/* Input oculto */}
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            className="hidden" 
-            accept=".xlsx, .xls" 
-            onChange={handleFileUpload} 
-          />
-          {/* Botón que dispara el input */}
+          <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx, .xls" onChange={handleFileUpload} />
           <button 
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
             className={`flex items-center gap-2 px-6 py-3 rounded-2xl text-white font-bold shadow-lg transition-all ${uploading ? 'bg-slate-400' : 'bg-indigo-600 hover:bg-indigo-700 active:scale-95'}`}
           >
             {uploading ? <RefreshCcw className="animate-spin" size={20} /> : <FileText size={20} />}
-            {uploading ? "Procesando Excel..." : "Sincronizar Auxiliar"}
+            {uploading ? "Procesando Auxiliar..." : "Sincronizar Auxiliar"}
           </button>
         </div>
       </div>
 
-      {/* BANNER DE INSTRUCCIONES SIIGO */}
       <Alert className="bg-blue-50 border-blue-200 rounded-2xl shadow-sm border-l-4 border-l-blue-500">
         <Info className="h-5 w-5 text-blue-600" />
-        <AlertTitle className="text-blue-800 font-bold ml-2">Instrucciones para la carga</AlertTitle>
+        <AlertTitle className="text-blue-800 font-bold ml-2">Modo Auditoría Full</AlertTitle>
         <AlertDescription className="text-blue-700 ml-2 mt-1 italic">
-          Para cargar la información, ingresa en Siigo Nube a: <span className="font-black">Reportes / Contables / Movimiento Auxiliar por Cuenta Contable</span>. 
-          Exporta a <span className="font-bold underline">Excel</span> seleccionando el año y periodo a cargar.
+          El sistema ahora procesa <strong>todas las cuentas contables</strong> del Excel para cruces avanzados.
         </AlertDescription>
       </Alert>
 
@@ -230,21 +218,13 @@ export default function CruceIVAReportPage() {
           </CardContent>
         </Card>
 
-        {/* TORTA CON VALORES RESUMIDOS AL LADO */}
+        {/* TORTA */}
         <Card className="shadow-xl border-none rounded-[2rem] bg-white">
           <CardHeader className="text-center"><CardTitle className="text-lg font-bold">🎯 Composición Periodo</CardTitle></CardHeader>
           <CardContent className="flex flex-col items-center">
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
-                <Pie 
-                  data={pieData} 
-                  innerRadius={65} 
-                  outerRadius={90} 
-                  paddingAngle={8} 
-                  dataKey="value" 
-                  label={renderCustomizedLabel} 
-                  labelLine={{ stroke: '#cbd5e1', strokeWidth: 1 }}
-                >
+                <Pie data={pieData} innerRadius={65} outerRadius={90} paddingAngle={8} dataKey="value" label={renderCustomizedLabel} labelLine={{ stroke: '#cbd5e1', strokeWidth: 1 }}>
                   {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
                 </Pie>
                 <Tooltip content={<CustomTooltip />} />
@@ -279,7 +259,7 @@ export default function CruceIVAReportPage() {
                   <th className="p-5 text-right">IVA Compras</th>
                   <th className="p-5 text-right">ReteIVA 135517</th>
                   <th className="p-5 text-right">Saldo Neto</th>
-                  <th className="p-5">Cuentas Cruce</th>
+                  <th className="p-5">Rangos Auditados</th>
                   <th className="p-5 text-center">Presentación</th>
                 </tr>
               </thead>
@@ -296,9 +276,10 @@ export default function CruceIVAReportPage() {
                       </span>
                     </td>
                     <td className="p-5">
-                      <div className="flex gap-1">
-                        {['240805', '240810', '135517'].map(c => (
-                          <span key={c} className="text-[9px] bg-slate-100 px-1.5 py-0.5 rounded border font-mono font-bold text-slate-500">{c}</span>
+                      <div className="flex flex-wrap gap-1 max-w-[200px]">
+                        {/* AJUSTE: Etiquetas que reflejan los nuevos filtros del backend */}
+                        {['240801-09', '240810-80', '135517'].map(c => (
+                          <span key={c} className="text-[8px] bg-slate-100 px-1.5 py-0.5 rounded border font-mono font-bold text-slate-500">{c}</span>
                         ))}
                       </div>
                     </td>

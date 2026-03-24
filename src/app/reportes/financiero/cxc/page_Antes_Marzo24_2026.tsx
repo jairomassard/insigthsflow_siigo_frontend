@@ -59,7 +59,6 @@ export default function ReporteCxCPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedBar, setSelectedBar] = useState<Proyeccion | null>(null);
-  const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -88,16 +87,21 @@ export default function ReporteCxCPage() {
     load();
   }, []);
 
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setSelectedCliente(null);
-      }
-    };
+  // Determinar rango usando `dias_vencidos` entregado por backend
+  const calcularRango = (dias_vencidos: number) => {
+    if (dias_vencidos <= 0) return "Por vencer";
+    if (dias_vencidos <= 30) return "1-30";
+    if (dias_vencidos <= 60) return "31-60";
+    if (dias_vencidos <= 90) return "61-90";
+    return "91+";
+  };
 
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
-  }, []);
+  // Saber si una fecha está vencida
+  const esVencido = (fecha: string) => {
+    const hoy = new Date();
+    const f = new Date(fecha);
+    return f < hoy; // vencido si fecha < hoy
+  };
 
 
   // función auxiliar para rango por barra
@@ -389,218 +393,155 @@ export default function ReporteCxCPage() {
           {/* Clientes */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {clientes.map((cliente, idx) => (
-              <ClienteCard
-                key={idx}
-                cliente={cliente}
-                onAmpliar={() => setSelectedCliente(cliente)}
-              />
+              <Card key={idx} className="shadow-md">
+                <CardHeader>
+                  <CardTitle className="text-lg">{cliente.cliente_nombre}</CardTitle>
+                  <div className="text-sm text-gray-600">
+                    Total: <b>{cliente.total_str}</b>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {/* Gráfico de aging */}
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart
+                      data={[
+                        { bucket: "Por vencer", monto: cliente.aging.por_vencer },
+                        { bucket: "1-30", monto: cliente.aging["1_30"] },
+                        { bucket: "31-60", monto: cliente.aging["31_60"] },
+                        { bucket: "61-90", monto: cliente.aging["61_90"] },
+                        { bucket: "91+", monto: cliente.aging["91_mas"] },
+                      ]}
+                      margin={{ top: 30, left: 20 }} // 👈 Ajuste importante
+                    >
+                      <XAxis dataKey="bucket" />
+                      <YAxis hide />
+                      <Tooltip
+                        formatter={(v: number) =>
+                          `$ ${v.toLocaleString("es-CO")}`
+                        }
+                      />
+                      <Bar dataKey="monto" radius={[6, 6, 0, 0]}>
+                        {[
+                            cliente.aging.por_vencer,
+                            cliente.aging["1_30"],
+                            cliente.aging["31_60"],
+                            cliente.aging["61_90"],
+                            cliente.aging["91_mas"],
+                        ].map((_, i) => (
+                            <Cell
+                                key={`cell-${i}`}
+                                fill={
+                                    ["#2563eb", "#f87171", "#ef4444", "#dc2626", "#b91c1c"][i]
+                                }
+                            />
+                        ))}
+                            <LabelList
+                                dataKey="monto"
+                                position="top"
+                                content={(props) => {
+                                const { x, y, value } = props;
+                                if (value == null) return null;
+
+                                let displayValue = "";
+                                const v = Number(value);
+                                if (v >= 1_000_000_000) displayValue = (v / 1_000_000_000).toFixed(1) + "B";
+                                else if (v >= 1_000_000) displayValue = (v / 1_000_000).toFixed(0) + "M";
+                                else if (v >= 1_000) displayValue = (v / 1_000).toFixed(0) + "K";
+                                else displayValue = v.toString();
+
+                                return (
+                                    <text
+                                    x={x}
+                                    y={y}
+                                    dy={-4}
+                                    fill="#333"
+                                    fontSize={12}
+                                    textAnchor="middle"
+                                    >
+                                    {displayValue}
+                                    </text>
+                                );
+                                }}
+                            />
+    
+                       </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+
+                  {/* Detalle de facturas */}
+                  <Accordion type="single" collapsible className="mt-4">
+                    <AccordionItem value="facturas">
+                      <AccordionTrigger className="text-sm font-medium">
+                        Ver detalle de facturas
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <div className="overflow-auto max-h-60">
+                          <table className="w-full text-sm border-collapse">
+                            <thead>
+                              <tr className="bg-gray-100">
+                                <th className="p-2 text-left">Factura</th>
+                                <th className="p-2 text-left">Fecha</th>
+                                <th className="p-2 text-left">Vencimiento</th>
+                                <th className="p-2 text-left">Rango</th>
+                                <th className="p-2 text-right">Saldo</th>
+                                <th className="p-2">Link</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {cliente.facturas.map((f: any, i: number) => {
+                                const rango = calcularRango(f.dias_vencidos);
+                                const esVencida =
+                                  rango !== "Por vencer"; // vencidas son 1-30, 31-60, 61-90, 91+
+                                return (
+                                  <tr
+                                    key={i}
+                                    className={`border-b ${
+                                      esVencida ? "text-red-600" : ""
+                                    }`}
+                                  >
+                                    <td className="p-2">{f.idfactura}</td>
+                                    <td className="p-2">{f.fecha}</td>
+                                    <td className="p-2">{f.vencimiento}</td>
+                                    <td className="p-2">{rango}</td>
+                                    <td className="p-2 text-right">
+                                      {f.saldo_str}
+                                    </td>
+                                    <td className="p-2 text-center">
+                                      {f.public_url ? (
+                                        <a
+                                          href={f.public_url}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="text-blue-600 hover:underline"
+                                        >
+                                          Ver
+                                        </a>
+                                      ) : (
+                                        "-"
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
+                </CardContent>
+              </Card>
             ))}
           </div>
-
-          {selectedCliente && (
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-              onClick={() => setSelectedCliente(null)}
-            >
-              <div
-                className="relative w-full max-w-6xl max-h-[90vh] overflow-auto rounded-2xl bg-white shadow-2xl"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-4 py-3">
-                  <h2 className="text-lg font-semibold">
-                    Detalle ampliado del cliente
-                  </h2>
-
-                  <button
-                    onClick={() => setSelectedCliente(null)}
-                    className="flex h-9 w-9 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600"
-                    aria-label="Cerrar modal"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                <div className="p-4">
-                  <ClienteCard cliente={selectedCliente} />
-                </div>
-              </div>
-            </div>
-          )}
         </>
       )}
     </div>
   );
 }
 
-
-
 // ✅ Formateador general
 function fmt(n: any) {
     return typeof n === "number"
         ? `$ ${n.toLocaleString("es-CO", { maximumFractionDigits: 0 })}`
         : n;
-}
-
-
-type ClienteCardProps = {
-  cliente: Cliente;
-  onAmpliar?: () => void;
-};
-
-function ClienteCard({ cliente, onAmpliar }: ClienteCardProps) {
-  const calcularRango = (dias_vencidos: number) => {
-    if (dias_vencidos <= 0) return "Por vencer";
-    if (dias_vencidos <= 30) return "1-30";
-    if (dias_vencidos <= 60) return "31-60";
-    if (dias_vencidos <= 90) return "61-90";
-    return "91+";
-  };
-
-  return (
-    <Card className="shadow-md h-full">
-      <CardHeader>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <CardTitle className="text-lg">{cliente.cliente_nombre}</CardTitle>
-            <div className="text-sm text-gray-600 mt-1">
-              Total: <b>{cliente.total_str}</b>
-            </div>
-          </div>
-
-          {onAmpliar && (
-            <button
-              onClick={onAmpliar}
-              className="px-3 py-1 text-sm bg-slate-700 text-white rounded hover:bg-slate-800 transition"
-            >
-              Ampliar
-            </button>
-          )}
-        </div>
-      </CardHeader>
-
-      <CardContent>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart
-            data={[
-              { bucket: "Por vencer", monto: cliente.aging.por_vencer },
-              { bucket: "1-30", monto: cliente.aging["1_30"] },
-              { bucket: "31-60", monto: cliente.aging["31_60"] },
-              { bucket: "61-90", monto: cliente.aging["61_90"] },
-              { bucket: "91+", monto: cliente.aging["91_mas"] },
-            ]}
-            margin={{ top: 30, left: 20, right: 10 }}
-          >
-            <XAxis dataKey="bucket" />
-            <YAxis hide />
-            <Tooltip
-              formatter={(v: number) => `$ ${v.toLocaleString("es-CO")}`}
-            />
-            <Bar dataKey="monto" radius={[6, 6, 0, 0]}>
-              {[
-                cliente.aging.por_vencer,
-                cliente.aging["1_30"],
-                cliente.aging["31_60"],
-                cliente.aging["61_90"],
-                cliente.aging["91_mas"],
-              ].map((_, i) => (
-                <Cell
-                  key={`cell-${i}`}
-                  fill={
-                    ["#2563eb", "#f87171", "#ef4444", "#dc2626", "#b91c1c"][i]
-                  }
-                />
-              ))}
-
-              <LabelList
-                dataKey="monto"
-                position="top"
-                content={(props) => {
-                  const { x, y, value } = props;
-                  if (value == null) return null;
-
-                  let displayValue = "";
-                  const v = Number(value);
-
-                  if (v >= 1_000_000_000) displayValue = (v / 1_000_000_000).toFixed(1) + "B";
-                  else if (v >= 1_000_000) displayValue = (v / 1_000_000).toFixed(0) + "M";
-                  else if (v >= 1_000) displayValue = (v / 1_000).toFixed(0) + "K";
-                  else displayValue = v.toString();
-
-                  return (
-                    <text
-                      x={x}
-                      y={y}
-                      dy={-4}
-                      fill="#333"
-                      fontSize={12}
-                      textAnchor="middle"
-                    >
-                      {displayValue}
-                    </text>
-                  );
-                }}
-              />
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-
-        <Accordion type="single" collapsible className="mt-4">
-          <AccordionItem value="facturas">
-            <AccordionTrigger className="text-sm font-medium">
-              Ver detalle de facturas
-            </AccordionTrigger>
-            <AccordionContent>
-              <div className="overflow-auto max-h-[420px]">
-                <table className="w-full text-sm border-collapse">
-                  <thead>
-                    <tr className="bg-gray-100">
-                      <th className="p-2 text-left">Factura</th>
-                      <th className="p-2 text-left">Fecha</th>
-                      <th className="p-2 text-left">Vencimiento</th>
-                      <th className="p-2 text-left">Rango</th>
-                      <th className="p-2 text-right">Saldo</th>
-                      <th className="p-2">Link</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cliente.facturas.map((f: any, i: number) => {
-                      const rango = calcularRango(f.dias_vencidos);
-                      const esVencida = rango !== "Por vencer";
-
-                      return (
-                        <tr
-                          key={i}
-                          className={`border-b ${esVencida ? "text-red-600" : ""}`}
-                        >
-                          <td className="p-2">{f.idfactura}</td>
-                          <td className="p-2">{f.fecha}</td>
-                          <td className="p-2">{f.vencimiento}</td>
-                          <td className="p-2">{rango}</td>
-                          <td className="p-2 text-right">{f.saldo_str}</td>
-                          <td className="p-2 text-center">
-                            {f.public_url ? (
-                              <a
-                                href={f.public_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-blue-600 hover:underline"
-                              >
-                                Ver
-                              </a>
-                            ) : (
-                              "-"
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
-      </CardContent>
-    </Card>
-  );
 }

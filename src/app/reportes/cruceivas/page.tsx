@@ -50,34 +50,34 @@ export default function CruceIVAReportPage() {
 
   // --- FUNCIÓN DE CARGA DE ARCHIVO ---
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return;
-    const file = e.target.files[0];
-    const formData = new FormData();
-    formData.append("file", file);
+    const fileSelected = e.target.files?.[0];
+    if (!fileSelected) return;
 
     setUploading(true);
+    const formData = new FormData();
+    // Usamos "archivo" para que coincida con el nuevo endpoint del backend
+    formData.append("archivo", fileSelected);
+
     try {
-      // Usamos fetch directamente porque FormData requiere un manejo especial de headers
-      const token = localStorage.getItem("access_token"); 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/reportes/cargar_auxiliar`, {
+      // Usamos tu authFetch estándar
+      const res = await authFetch("/reportes/cargar_auxiliar", {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "X-ID-CLIENTE": localStorage.getItem("idcliente") || ""
-        },
         body: formData,
+        // IMPORTANTE: NO pasar headers manuales aquí, authFetch se encarga
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error al cargar archivo");
-
-      alert(`✅ ¡Éxito! Se procesaron ${data.detalles.registros_procesados} registros del periodo ${data.detalles.rango_desde} al ${data.detalles.rango_hasta}.`);
-      fetchData(); // Refrescar reporte
+      // Si authFetch no lanzó error, es que res ya es el JSON procesado
+      alert(`✅ ¡Éxito! Registros procesados: ${res.detalles.registros_procesados}`);
+      
+      // Llamamos a la función que refresca los KPIs y el Gráfico
+      fetchData(); 
+      
     } catch (err: any) {
+      console.error("Error en upload:", err);
       alert("❌ Error: " + err.message);
     } finally {
       setUploading(false);
-      e.target.value = ""; // Limpiar input
+      e.target.value = ""; // Limpiamos el input para poder subir el mismo archivo si se desea
     }
   };
 

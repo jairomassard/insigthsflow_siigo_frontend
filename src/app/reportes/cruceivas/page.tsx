@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { authFetch } from "@/lib/api";
 import useAuthGuard from "@/hooks/useAuthGuard";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -18,7 +18,8 @@ import {
   Pie,
   LabelList
 } from "recharts";
-import { TrendingUp, TrendingDown, DollarSign, FileText, ArrowUpRight, RefreshCcw, Search } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, FileText, ArrowUpRight, RefreshCcw, Search, Info } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 // --- HELPERS DE FORMATO ---
 function abreviar(valor: number): string {
@@ -39,7 +40,7 @@ const formatCurrency = (val: number) =>
 // Renderizado de etiqueta para la Torta (Valor resumido al lado de la porción)
 const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, value }: any) => {
   const RADIAN = Math.PI / 180;
-  const radius = outerRadius + 30; // Distancia de la etiqueta al centro
+  const radius = outerRadius + 30; 
   const x = cx + radius * Math.cos(-midAngle * RADIAN);
   const y = cy + radius * Math.sin(-midAngle * RADIAN);
 
@@ -77,6 +78,10 @@ export default function CruceIVAReportPage() {
   const [fechaDesde, setFechaDesde] = useState(new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10));
   const [fechaHasta, setFechaHasta] = useState(new Date().toISOString().slice(0, 10));
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  
+  // Referencia para activar el explorador de archivos
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -89,6 +94,32 @@ export default function CruceIVAReportPage() {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append("archivo", file);
+
+    try {
+      // CORRECCIÓN: Eliminamos la propiedad 'formData: true' que causaba el error de TS
+      const res = await authFetch("/reportes/cargar_auxiliar", {
+        method: "POST",
+        body: formData,
+      });
+      alert(`Éxito: Se procesaron registros correctamente.`);
+      fetchData(); 
+    } catch (err) {
+      console.error("Error subiendo archivo:", err);
+      alert("Error cargando el archivo. Revisa que sea el formato correcto de Siigo.");
+    } finally {
+      setUploading(false);
+      // Limpiar el input para permitir subir el mismo archivo si es necesario
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -105,13 +136,40 @@ export default function CruceIVAReportPage() {
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Auditoría Cruce de IVA</h1>
-          <p className="text-slate-500 font-medium">Control contable de cuentas 2408 y Retención 135517.</p>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Cruce de IVA (V2)</h1>
+          <p className="text-slate-500 font-medium">Análisis de cuentas 2408 y Retención 135517.</p>
         </div>
-        <button className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-indigo-600 text-white font-bold shadow-lg hover:bg-indigo-700 active:scale-95 transition-all">
-          <FileText size={20} /> Sincronizar Auxiliar
-        </button>
+        
+        <div className="flex items-center gap-3">
+          {/* Input oculto */}
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            className="hidden" 
+            accept=".xlsx, .xls" 
+            onChange={handleFileUpload} 
+          />
+          {/* Botón que dispara el input */}
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className={`flex items-center gap-2 px-6 py-3 rounded-2xl text-white font-bold shadow-lg transition-all ${uploading ? 'bg-slate-400' : 'bg-indigo-600 hover:bg-indigo-700 active:scale-95'}`}
+          >
+            {uploading ? <RefreshCcw className="animate-spin" size={20} /> : <FileText size={20} />}
+            {uploading ? "Procesando Excel..." : "Sincronizar Auxiliar"}
+          </button>
+        </div>
       </div>
+
+      {/* BANNER DE INSTRUCCIONES SIIGO */}
+      <Alert className="bg-blue-50 border-blue-200 rounded-2xl shadow-sm border-l-4 border-l-blue-500">
+        <Info className="h-5 w-5 text-blue-600" />
+        <AlertTitle className="text-blue-800 font-bold ml-2">Instrucciones para la carga</AlertTitle>
+        <AlertDescription className="text-blue-700 ml-2 mt-1 italic">
+          Para cargar la información, ingresa en Siigo Nube a: <span className="font-black">Reportes / Contables / Movimiento Auxiliar por Cuenta Contable</span>. 
+          Exporta a <span className="font-bold underline">Excel</span> seleccionando el año y periodo a cargar.
+        </AlertDescription>
+      </Alert>
 
       {/* FILTROS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-white p-5 rounded-3xl shadow-sm border border-slate-200">
@@ -167,15 +225,12 @@ export default function CruceIVAReportPage() {
                 <Bar dataKey="reteiva_favor" name="ReteIVA (135517)" fill="#f97316" radius={[6, 6, 0, 0]} barSize={35}>
                   <LabelList dataKey="reteiva_favor" content={(props: any) => <CustomLabel {...props} />} />
                 </Bar>
-                <Bar dataKey="saldo_iva" name="Neto" fill="#22c55e" radius={[6, 6, 0, 0]} barSize={35}>
-                  <LabelList dataKey="saldo_iva" content={(props: any) => <CustomLabel {...props} />} />
-                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
-        {/* GRAFICO TORTA CON VALORES RESUMIDOS */}
+        {/* TORTA CON VALORES RESUMIDOS AL LADO */}
         <Card className="shadow-xl border-none rounded-[2rem] bg-white">
           <CardHeader className="text-center"><CardTitle className="text-lg font-bold">🎯 Composición Periodo</CardTitle></CardHeader>
           <CardContent className="flex flex-col items-center">
@@ -212,25 +267,25 @@ export default function CruceIVAReportPage() {
       {/* TABLA DE AUDITORÍA */}
       <Card className="shadow-2xl border-none rounded-[2rem] overflow-hidden bg-white">
         <CardHeader className="bg-slate-900 text-white p-5">
-           <CardTitle className="text-lg font-bold flex items-center gap-2"><Search size={20} className="text-indigo-400" /> Trazabilidad por Periodo Agrupado</CardTitle>
+           <CardTitle className="text-lg font-bold flex items-center gap-2"><Search size={20} className="text-indigo-400" /> Detalle de Liquidación Sugerida</CardTitle>
         </CardHeader>
         <CardContent className="p-0 text-sm">
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
-                <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest border-b">
-                  <th className="p-5 text-left">Periodo Agrupado</th>
+                <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest border-b text-left">
+                  <th className="p-5">Periodo Agrupado</th>
                   <th className="p-5 text-right">IVA Ventas</th>
                   <th className="p-5 text-right">IVA Compras</th>
                   <th className="p-5 text-right">ReteIVA 135517</th>
                   <th className="p-5 text-right">Saldo Neto</th>
-                  <th className="p-5">Cruce Auxiliares</th>
+                  <th className="p-5">Cuentas Cruce</th>
                   <th className="p-5 text-center">Presentación</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {agrupadas.map((f, i) => (
-                  <tr key={i} className="hover:bg-slate-50 transition-colors">
+                  <tr key={i} className="hover:bg-indigo-50/20 transition-colors">
                     <td className="p-5 font-black text-slate-700">{f.label}</td>
                     <td className="p-5 text-right font-bold text-blue-600">{formatCurrency(f.iva_ventas)}</td>
                     <td className="p-5 text-right font-bold text-red-500">{formatCurrency(f.iva_compras)}</td>

@@ -448,6 +448,8 @@ type ClienteCardProps = {
 };
 
 function ClienteCard({ cliente, onAmpliar }: ClienteCardProps) {
+  const [ordenFacturas, setOrdenFacturas] = useState<"fecha" | "vencimiento">("fecha");
+
   const calcularRango = (dias_vencidos: number) => {
     if (dias_vencidos <= 0) return "Por vencer";
     if (dias_vencidos <= 30) return "1-30";
@@ -455,6 +457,47 @@ function ClienteCard({ cliente, onAmpliar }: ClienteCardProps) {
     if (dias_vencidos <= 90) return "61-90";
     return "91+";
   };
+
+  const parseFecha = (valor: any) => {
+    if (!valor) return 0;
+
+    const texto = String(valor).trim();
+
+    // Soporta YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) {
+      return new Date(`${texto}T00:00:00`).getTime();
+    }
+
+    // Soporta DD/MM/YYYY o DD-MM-YYYY
+    const match = texto.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+    if (match) {
+      const [, dd, mm, yyyy] = match;
+      return new Date(
+        Number(yyyy),
+        Number(mm) - 1,
+        Number(dd)
+      ).getTime();
+    }
+
+    const intento = new Date(texto).getTime();
+    return isNaN(intento) ? 0 : intento;
+  };
+
+  const facturasOrdenadas = [...cliente.facturas].sort((a: any, b: any) => {
+    if (ordenFacturas === "vencimiento") {
+      const diasA = Number(a.dias_vencidos ?? 0);
+      const diasB = Number(b.dias_vencidos ?? 0);
+
+      // Más vencidas primero
+      if (diasB !== diasA) return diasB - diasA;
+
+      // Desempate por fecha de vencimiento más próxima
+      return parseFecha(a.vencimiento) - parseFecha(b.vencimiento);
+    }
+
+    // Orden por fecha de emisión más reciente primero
+    return parseFecha(b.fecha) - parseFecha(a.fecha);
+  });
 
   return (
     <Card className="shadow-md h-full">
@@ -550,6 +593,38 @@ function ClienteCard({ cliente, onAmpliar }: ClienteCardProps) {
               Ver detalle de facturas
             </AccordionTrigger>
             <AccordionContent>
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-gray-700">
+                  Ordenar por:
+                </span>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setOrdenFacturas("fecha")}
+                    className={`px-3 py-1 rounded text-sm border transition ${
+                      ordenFacturas === "fecha"
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                    }`}
+                  >
+                    Fecha
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setOrdenFacturas("vencimiento")}
+                    className={`px-3 py-1 rounded text-sm border transition ${
+                      ordenFacturas === "vencimiento"
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                    }`}
+                  >
+                    Vencimiento
+                  </button>
+                </div>
+              </div>
+
               <div className="overflow-auto max-h-[420px]">
                 <table className="w-full text-sm border-collapse">
                   <thead>
@@ -563,7 +638,7 @@ function ClienteCard({ cliente, onAmpliar }: ClienteCardProps) {
                     </tr>
                   </thead>
                   <tbody>
-                    {cliente.facturas.map((f: any, i: number) => {
+                    {facturasOrdenadas.map((f: any, i: number) => {
                       const rango = calcularRango(f.dias_vencidos);
                       const esVencida = rango !== "Por vencer";
 

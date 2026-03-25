@@ -53,11 +53,27 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
+// Etiqueta encima de las barras
 const CustomLabel = (props: any) => {
   const { x, y, width, value } = props;
   if (!value || value === 0) return null;
   return (
-    <text x={x + width / 2} y={y - 12} fill="#94a3b8" fontSize={9} fontWeight="900" textAnchor="middle">
+    <text x={x + width / 2} y={y - 12} fill="#94a3b8" fontSize={10} fontWeight="900" textAnchor="middle">
+      {abreviar(value)}
+    </text>
+  );
+};
+
+// Etiqueta a los lados de la torta
+const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, value }: any) => {
+  if (!value || value === 0) return null;
+  const RADIAN = Math.PI / 180;
+  const radius = outerRadius + 25; 
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+  return (
+    <text x={x} y={y} fill="#64748b" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={11} fontWeight="bold">
       {abreviar(value)}
     </text>
   );
@@ -115,25 +131,32 @@ export default function CruceIVAReportPage() {
   useEffect(() => { fetchData(); }, [fechaDesde, fechaHasta, modo, inc19, inc5]);
 
   return (
-    <div className="space-y-4 p-4 bg-slate-50 min-h-screen">
+    <div className="space-y-5 p-5 bg-slate-50 min-h-screen">
       
-      {/* HEADER */}
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-5 rounded-[2rem] border shadow-sm">
+      {/* HEADER DINÁMICO REORGANIZADO */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-[2rem] border shadow-sm">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
             Cruce de IVA <span className="text-[10px] bg-indigo-600 text-white px-3 py-1 rounded-full uppercase tracking-widest">v2.1</span>
           </h1>
-          <p className="text-slate-500 text-xs font-medium italic">Ruta Siigo: Contabilidad {'>'} Comprobantes {'>'} Informe auxiliar contable</p>
+          <p className="text-slate-500 text-xs font-medium mt-1">Auditoría detallada de cuentas 2408 y retenciones 135517.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx" onChange={handleFileUpload} />
-          <button 
-            onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-2xl text-xs font-black hover:bg-black transition-all shadow-lg active:scale-95"
-          >
-            {uploading ? <RefreshCcw className="animate-spin" size={16} /> : <FileText size={16} />}
-            {uploading ? "Sincronizando..." : "Sincronizar Auxiliar"}
-          </button>
+        
+        {/* BOTÓN Y RUTA SIIGO ALINEADOS A LA DERECHA */}
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex items-center gap-2">
+            <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx" onChange={handleFileUpload} />
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-2xl text-xs font-black hover:bg-black transition-all shadow-lg active:scale-95"
+            >
+              {uploading ? <RefreshCcw className="animate-spin" size={16} /> : <FileText size={16} />}
+              {uploading ? "Sincronizando..." : "Sincronizar Auxiliar"}
+            </button>
+          </div>
+          <p className="text-slate-400 text-[10px] font-semibold italic">
+            Ruta Siigo: Contabilidad {'>'} Comprobantes {'>'} Informe auxiliar contable
+          </p>
         </div>
       </div>
 
@@ -179,30 +202,32 @@ export default function CruceIVAReportPage() {
         <StatCard title="Neto a Pagar" value={kpis.saldo_iva} icon={<ArrowUpRight size={20}/>} color="emerald" highlight />
       </div>
 
-      {/* GRÁFICO PRINCIPAL */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* GRÁFICOS */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        
+        {/* GRÁFICO PRINCIPAL - BARRAS MÁS ANCHAS */}
         <Card className="lg:col-span-2 rounded-[2rem] shadow-xl border-none bg-white p-2">
           <CardHeader className="pb-0"><CardTitle className="text-sm font-black text-slate-500 uppercase tracking-tight">📈 Comparativa por Tasas de IVA</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={320}>
-              <BarChart data={series} margin={{ top: 30, right: 10, left: 0, bottom: 0 }}>
+              <BarChart data={series} margin={{ top: 30, right: 10, left: 0, bottom: 0 }} barCategoryGap="15%">
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold'}} />
+                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{fontSize: 11, fontWeight: 'bold'}} />
                 <YAxis hide />
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip content={<CustomTooltip />} cursor={{fill: '#f8fafc'}} />
                 <Legend iconType="circle" wrapperStyle={{fontSize: '11px', paddingTop: '20px'}} />
                 
-                {/* minPointSize={5} asegura que valores pequeños como el 5% se vean */}
-                <Bar dataKey="iva_v19" name="Venta 19%" fill="#4338ca" radius={[4,4,0,0]} barSize={20} minPointSize={2}>
+                {/* barSize aumentado de 20 a 35 para que se vean imponentes */}
+                <Bar dataKey="iva_v19" name="Venta 19%" fill="#4338ca" radius={[6,6,0,0]} barSize={35} minPointSize={5}>
                    <LabelList dataKey="iva_v19" content={(props: any) => <CustomLabel {...props} />} />
                 </Bar>
-                <Bar dataKey="iva_v5" name="Venta 5%" fill="#818cf8" radius={[4,4,0,0]} barSize={20} minPointSize={5}>
+                <Bar dataKey="iva_v5" name="Venta 5%" fill="#818cf8" radius={[6,6,0,0]} barSize={35} minPointSize={5}>
                    <LabelList dataKey="iva_v5" content={(props: any) => <CustomLabel {...props} />} />
                 </Bar>
-                <Bar dataKey="iva_c19" name="Compra 19%" fill="#dc2626" radius={[4,4,0,0]} barSize={20} minPointSize={2}>
+                <Bar dataKey="iva_c19" name="Compra 19%" fill="#dc2626" radius={[6,6,0,0]} barSize={35} minPointSize={5}>
                    <LabelList dataKey="iva_c19" content={(props: any) => <CustomLabel {...props} />} />
                 </Bar>
-                <Bar dataKey="iva_c5" name="Compra 5%" fill="#fca5a5" radius={[4,4,0,0]} barSize={20} minPointSize={5}>
+                <Bar dataKey="iva_c5" name="Compra 5%" fill="#fca5a5" radius={[6,6,0,0]} barSize={35} minPointSize={5}>
                    <LabelList dataKey="iva_c5" content={(props: any) => <CustomLabel {...props} />} />
                 </Bar>
               </BarChart>
@@ -210,34 +235,49 @@ export default function CruceIVAReportPage() {
           </CardContent>
         </Card>
 
-        {/* COMPOSICIÓN (PIE) */}
+        {/* COMPOSICIÓN (PIE) Y RESUMEN COMPLETO */}
         <Card className="rounded-[2rem] shadow-xl border-none bg-white overflow-hidden">
           <CardHeader className="text-center pb-0"><CardTitle className="text-sm font-black text-slate-500 uppercase tracking-widest">🎯 Mix Periodo</CardTitle></CardHeader>
           <CardContent className="flex flex-col items-center">
-            <ResponsiveContainer width="100%" height={220}>
+            
+            <ResponsiveContainer width="100%" height={200}>
               <PieChart>
                 <Pie 
                   data={[
-                    {name: 'Ventas', value: kpis.iva_ventas || 0},
-                    {name: 'Compras', value: kpis.iva_compras || 0},
-                    {name: 'Rete', value: kpis.reteiva_favor || 0}
+                    {name: 'Ventas', value: kpis.iva_ventas || 0, color: '#4338ca'},
+                    {name: 'Compras', value: kpis.iva_compras || 0, color: '#dc2626'},
+                    {name: 'ReteIVA', value: kpis.reteiva_favor || 0, color: '#f97316'}
                   ]} 
-                  innerRadius={50} 
-                  outerRadius={70} 
-                  paddingAngle={8} 
+                  innerRadius={45} 
+                  outerRadius={60} 
+                  paddingAngle={5} 
                   dataKey="value"
+                  label={renderCustomizedLabel}
+                  labelLine={{ stroke: '#cbd5e1', strokeWidth: 1 }}
                 >
                   <Cell fill="#4338ca" /><Cell fill="#dc2626" /><Cell fill="#f97316" />
                 </Pie>
                 <Tooltip content={<CustomTooltip />} />
               </PieChart>
             </ResponsiveContainer>
-            <div className="w-full space-y-2 px-2 pb-4">
-               <div className="flex justify-between p-3 rounded-2xl bg-slate-50 border border-slate-100 font-bold text-xs">
-                 <span>IVA Neto Ventas</span><span className="text-indigo-600 font-black">{formatCurrency(kpis.iva_ventas)}</span>
+
+            {/* LEYENDA Y VALORES COMPLETOS (Ventas, Compras, ReteIVA y Saldo) */}
+            <div className="w-full space-y-1.5 px-3 pb-2 mt-2">
+               <div className="flex justify-between items-center p-2.5 rounded-xl bg-slate-50 border border-slate-100 font-bold text-xs">
+                 <span className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-[#4338ca]"></div> IVA Ventas</span>
+                 <span className="text-slate-800 font-black">{formatCurrency(kpis.iva_ventas)}</span>
                </div>
-               <div className="flex justify-between p-3 rounded-2xl bg-slate-50 border border-slate-100 font-bold text-xs">
-                 <span>Saldo a Pagar</span><span className="text-emerald-600 font-black">{formatCurrency(kpis.saldo_iva)}</span>
+               <div className="flex justify-between items-center p-2.5 rounded-xl bg-slate-50 border border-slate-100 font-bold text-xs">
+                 <span className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-[#dc2626]"></div> IVA Compras</span>
+                 <span className="text-slate-800 font-black">{formatCurrency(kpis.iva_compras)}</span>
+               </div>
+               <div className="flex justify-between items-center p-2.5 rounded-xl bg-slate-50 border border-slate-100 font-bold text-xs">
+                 <span className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-[#f97316]"></div> ReteIVA</span>
+                 <span className="text-slate-800 font-black">{formatCurrency(kpis.reteiva_favor)}</span>
+               </div>
+               <div className="flex justify-between items-center p-2.5 mt-2 rounded-xl bg-emerald-50 border border-emerald-100 font-bold text-xs">
+                 <span className="text-emerald-700 uppercase tracking-tight">Saldo a Pagar</span>
+                 <span className="text-emerald-700 font-black text-sm">{formatCurrency(kpis.saldo_iva)}</span>
                </div>
             </div>
           </CardContent>

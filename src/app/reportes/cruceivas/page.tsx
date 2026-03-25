@@ -18,7 +18,7 @@ import {
   Pie,
   LabelList
 } from "recharts";
-import { TrendingUp, TrendingDown, DollarSign, FileText, ArrowUpRight, RefreshCcw, Search, Info, CheckCircle2 } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, FileText, ArrowUpRight, RefreshCcw, Search, CheckCircle2 } from "lucide-react";
 
 // --- HELPERS DE FORMATO ---
 function abreviar(valor: number): string {
@@ -192,17 +192,17 @@ export default function CruceIVAReportPage() {
                 <Tooltip content={<CustomTooltip />} />
                 <Legend iconType="circle" wrapperStyle={{fontSize: '11px', paddingTop: '20px'}} />
                 
-                {/* Barras dinámicas con los keys correctos del backend */}
-                <Bar dataKey="iva_v19" name="Venta 19%" fill="#4338ca" radius={[4,4,0,0]} barSize={20}>
+                {/* minPointSize={5} asegura que valores pequeños como el 5% se vean */}
+                <Bar dataKey="iva_v19" name="Venta 19%" fill="#4338ca" radius={[4,4,0,0]} barSize={20} minPointSize={2}>
                    <LabelList dataKey="iva_v19" content={(props: any) => <CustomLabel {...props} />} />
                 </Bar>
-                <Bar dataKey="iva_v5" name="Venta 5%" fill="#818cf8" radius={[4,4,0,0]} barSize={20}>
+                <Bar dataKey="iva_v5" name="Venta 5%" fill="#818cf8" radius={[4,4,0,0]} barSize={20} minPointSize={5}>
                    <LabelList dataKey="iva_v5" content={(props: any) => <CustomLabel {...props} />} />
                 </Bar>
-                <Bar dataKey="iva_c19" name="Compra 19%" fill="#dc2626" radius={[4,4,0,0]} barSize={20}>
+                <Bar dataKey="iva_c19" name="Compra 19%" fill="#dc2626" radius={[4,4,0,0]} barSize={20} minPointSize={2}>
                    <LabelList dataKey="iva_c19" content={(props: any) => <CustomLabel {...props} />} />
                 </Bar>
-                <Bar dataKey="iva_c5" name="Compra 5%" fill="#fca5a5" radius={[4,4,0,0]} barSize={20}>
+                <Bar dataKey="iva_c5" name="Compra 5%" fill="#fca5a5" radius={[4,4,0,0]} barSize={20} minPointSize={5}>
                    <LabelList dataKey="iva_c5" content={(props: any) => <CustomLabel {...props} />} />
                 </Bar>
               </BarChart>

@@ -19,9 +19,8 @@ import {
   LabelList
 } from "recharts";
 import { TrendingUp, TrendingDown, DollarSign, FileText, ArrowUpRight, RefreshCcw, Search, Info, CheckCircle2 } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-// --- HELPERS DE FORMATO (RECUPERADOS) ---
+// --- HELPERS DE FORMATO ---
 function abreviar(valor: number): string {
   const absValue = Math.abs(valor);
   if (absValue >= 1_000_000_000) return `${(valor / 1_000_000_000).toFixed(1)}B`;
@@ -118,7 +117,7 @@ export default function CruceIVAReportPage() {
   return (
     <div className="space-y-4 p-4 bg-slate-50 min-h-screen">
       
-      {/* HEADER DINÁMICO */}
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-5 rounded-[2rem] border shadow-sm">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
@@ -138,7 +137,7 @@ export default function CruceIVAReportPage() {
         </div>
       </div>
 
-      {/* FILTROS DE AUDITORÍA */}
+      {/* FILTROS */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-white p-5 rounded-[2rem] border shadow-sm">
         <div className="space-y-1">
           <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Rango de Fecha</label>
@@ -180,10 +179,10 @@ export default function CruceIVAReportPage() {
         <StatCard title="Neto a Pagar" value={kpis.saldo_iva} icon={<ArrowUpRight size={20}/>} color="emerald" highlight />
       </div>
 
-      {/* GRÁFICO PRINCIPAL - BARRAS GRANDES */}
+      {/* GRÁFICO PRINCIPAL */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2 rounded-[2rem] shadow-xl border-none bg-white p-2">
-          <CardHeader className="pb-0"><CardTitle className="text-sm font-black text-slate-500 uppercase">📈 Auditoría de IVA por Porcentaje</CardTitle></CardHeader>
+          <CardHeader className="pb-0"><CardTitle className="text-sm font-black text-slate-500 uppercase tracking-tight">📈 Comparativa por Tasas de IVA</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={320}>
               <BarChart data={series} margin={{ top: 30, right: 10, left: 0, bottom: 0 }}>
@@ -193,15 +192,18 @@ export default function CruceIVAReportPage() {
                 <Tooltip content={<CustomTooltip />} />
                 <Legend iconType="circle" wrapperStyle={{fontSize: '11px', paddingTop: '20px'}} />
                 
-                {/* Barras Gruesas e Independientes */}
-                <Bar dataKey="iva_v19" name="Venta 19%" fill="#4338ca" radius={[6,6,0,0]} barSize={25}>
+                {/* Barras dinámicas con los keys correctos del backend */}
+                <Bar dataKey="iva_v19" name="Venta 19%" fill="#4338ca" radius={[4,4,0,0]} barSize={20}>
                    <LabelList dataKey="iva_v19" content={(props: any) => <CustomLabel {...props} />} />
                 </Bar>
-                <Bar dataKey="iva_v5" name="Venta 5%" fill="#818cf8" radius={[6,6,0,0]} barSize={25}>
+                <Bar dataKey="iva_v5" name="Venta 5%" fill="#818cf8" radius={[4,4,0,0]} barSize={20}>
                    <LabelList dataKey="iva_v5" content={(props: any) => <CustomLabel {...props} />} />
                 </Bar>
-                <Bar dataKey="iva_c19" name="Compra 19%" fill="#dc2626" radius={[6,6,0,0]} barSize={25}>
+                <Bar dataKey="iva_c19" name="Compra 19%" fill="#dc2626" radius={[4,4,0,0]} barSize={20}>
                    <LabelList dataKey="iva_c19" content={(props: any) => <CustomLabel {...props} />} />
+                </Bar>
+                <Bar dataKey="iva_c5" name="Compra 5%" fill="#fca5a5" radius={[4,4,0,0]} barSize={20}>
+                   <LabelList dataKey="iva_c5" content={(props: any) => <CustomLabel {...props} />} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -216,9 +218,9 @@ export default function CruceIVAReportPage() {
               <PieChart>
                 <Pie 
                   data={[
-                    {name: 'Ventas', value: kpis.iva_ventas},
-                    {name: 'Compras', value: kpis.iva_compras},
-                    {name: 'Rete', value: kpis.reteiva_favor}
+                    {name: 'Ventas', value: kpis.iva_ventas || 0},
+                    {name: 'Compras', value: kpis.iva_compras || 0},
+                    {name: 'Rete', value: kpis.reteiva_favor || 0}
                   ]} 
                   innerRadius={50} 
                   outerRadius={70} 
@@ -231,22 +233,22 @@ export default function CruceIVAReportPage() {
               </PieChart>
             </ResponsiveContainer>
             <div className="w-full space-y-2 px-2 pb-4">
-               <div className="flex justify-between p-3 rounded-2xl bg-slate-50 border border-slate-100 font-bold text-xs italic">
-                 <span>IVA Generado</span><span className="text-indigo-600 font-black">{formatCurrency(kpis.iva_ventas)}</span>
+               <div className="flex justify-between p-3 rounded-2xl bg-slate-50 border border-slate-100 font-bold text-xs">
+                 <span>IVA Neto Ventas</span><span className="text-indigo-600 font-black">{formatCurrency(kpis.iva_ventas)}</span>
                </div>
-               <div className="flex justify-between p-3 rounded-2xl bg-slate-50 border border-slate-100 font-bold text-xs italic">
-                 <span>Saldo Neto</span><span className="text-emerald-600 font-black">{formatCurrency(kpis.saldo_iva)}</span>
+               <div className="flex justify-between p-3 rounded-2xl bg-slate-50 border border-slate-100 font-bold text-xs">
+                 <span>Saldo a Pagar</span><span className="text-emerald-600 font-black">{formatCurrency(kpis.saldo_iva)}</span>
                </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* TABLA DE LIQUIDACIÓN RECHULA */}
+      {/* TABLA DE LIQUIDACIÓN */}
       <Card className="rounded-[2rem] shadow-2xl border-none overflow-hidden bg-white">
         <div className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center">
           <span className="flex items-center gap-2 font-black text-sm uppercase tracking-widest"><Search size={18} className="text-indigo-400" /> Liquidación Sugerida DIAN</span>
-          <span className="text-[10px] font-bold bg-white/10 px-3 py-1 rounded-full border border-white/20">FORMULARIO 300</span>
+          <span className="text-[10px] font-bold bg-white/10 px-3 py-1 rounded-full border border-white/20 uppercase tracking-tighter">Cruce Auditoría</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -268,7 +270,9 @@ export default function CruceIVAReportPage() {
                   <td className="p-5 text-right text-red-500">{formatCurrency(f.iva_compras)}</td>
                   <td className="p-5 text-right text-orange-600">{formatCurrency(f.reteiva_favor)}</td>
                   <td className="p-5 text-right">
-                    <span className="bg-emerald-100 text-emerald-700 px-4 py-1.5 rounded-xl font-black">{formatCurrency(f.saldo_iva)}</span>
+                    <span className={`px-4 py-1.5 rounded-xl font-black ${f.saldo_iva > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                      {formatCurrency(f.saldo_iva)}
+                    </span>
                   </td>
                   <td className="p-5 text-center">
                     <span className="text-[10px] bg-slate-100 text-slate-500 px-3 py-1 rounded-full uppercase font-black">{f.mes_presentacion}</span>

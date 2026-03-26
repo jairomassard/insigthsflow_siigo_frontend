@@ -214,6 +214,7 @@ export default function ClientHome() {
 
         {(tiene("ver_reporte_consolidado") ||
           tiene("ver_reporte_cruceivas") ||
+          tiene("ver_reporte_retenciones") ||
           tiene("ver_reporte_balance") ||
           tiene("ver_reporte_indicadores")) && (
           <Section title="🌟 Reportes Especiales" color="bg-green-50">
@@ -231,6 +232,14 @@ export default function ClientHome() {
                 title="Cruce IVAs"
                 href="/reportes/cruceivas"
                 description="Muestra los cruce de IVAs mes a mes, sin considerar retenciones y muestra valores tentativos a pagar por cruce por periodos."
+              />
+            )}
+            {tiene("ver_reporte_retenciones") && (
+              <FeatureCard
+                icon="🧮"
+                title="Retenciones"
+                href="/reportes/retenciones"
+                description="Consulta y analiza las retenciones aplicadas en los diferentes períodos."
               />
             )}
             {tiene("ver_reporte_balance") && (

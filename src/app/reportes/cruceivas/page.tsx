@@ -155,7 +155,7 @@ export default function CruceIVAReportPage() {
             </button>
           </div>
           <p className="text-slate-400 text-[10px] font-semibold italic">
-            Ruta Siigo: Contabilidad {'>'} Comprobantes {'>'} Informe auxiliar contable
+            Ruta Siigo: Reportes {'>'} Contables {'>'} Contables {'>'} Movimiento auxiliar por cuenta contable en excel
           </p>
         </div>
       </div>

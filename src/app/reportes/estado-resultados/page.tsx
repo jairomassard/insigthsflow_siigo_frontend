@@ -186,11 +186,11 @@ export default function EstadoResultadosPage() {
   const [uploading, setUploading] = useState(false);
   const [vista, setVista] = useState<"resumida" | "detallada">("detallada");
   const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>({
-    ingOp: true,
-    costos: true,
-    gasOp: true,
-    ingNoOp: true,
-    gasNoOp: true,
+    ingOp: false,
+    costos: false,
+    gasOp: false,
+    ingNoOp: false,
+    gasNoOp: false,
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -200,6 +200,26 @@ export default function EstadoResultadosPage() {
       ...prev,
       [key]: !prev[key],
     }));
+  };
+
+  const expandAllSections = () => {
+  setOpenSections({
+      ingOp: true,
+      costos: true,
+      gasOp: true,
+      ingNoOp: true,
+      gasNoOp: true,
+    });
+  };
+
+  const collapseAllSections = () => {
+    setOpenSections({
+      ingOp: false,
+      costos: false,
+      gasOp: false,
+      ingNoOp: false,
+      gasNoOp: false,
+    });
   };
 
   const fetchData = async () => {
@@ -675,7 +695,26 @@ export default function EstadoResultadosPage() {
                 Análisis Horizontal Mes a Mes + Acumulado
               </p>
             </div>
-            <TableIcon size={32} className="text-emerald-400 opacity-50" />
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={expandAllSections}
+                className="px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-300 border border-emerald-400/20 text-xs font-black hover:bg-emerald-500/20 transition-all"
+              >
+                Expandir todo
+              </button>
+
+              <button
+                type="button"
+                onClick={collapseAllSections}
+                className="px-3 py-2 rounded-xl bg-white/5 text-white border border-white/10 text-xs font-black hover:bg-white/10 transition-all"
+              >
+                Contraer todo
+              </button>
+
+              <TableIcon size={30} className="text-emerald-400 opacity-60 ml-1" />
+            </div>
           </div>
 
           <div className="overflow-x-auto">
@@ -877,15 +916,24 @@ const SectionHeader = ({
       }`}
     >
       <div className="flex items-center justify-between">
-        <span>{title}</span>
+        <span className="flex items-center gap-2">
+          <span
+            className={`inline-block w-2.5 h-2.5 rounded-full ${
+              expanded ? "bg-emerald-500" : "bg-slate-300"
+            }`}
+          />
+          {title}
+        </span>
 
         <button
           type="button"
           onClick={onToggle}
-          className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-all"
+          className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-all duration-200 hover:scale-105 active:scale-95"
           title={expanded ? "Contraer sección" : "Expandir sección"}
         >
-          {expanded ? <Minus size={16} /> : <Plus size={16} />}
+          <span className="transition-transform duration-200">
+            {expanded ? <Minus size={16} /> : <Plus size={16} />}
+          </span>
         </button>
       </div>
     </td>

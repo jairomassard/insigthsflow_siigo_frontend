@@ -23,58 +23,46 @@ import {
   Activity,
   Table as TableIcon,
   Landmark,
+  Download,
+  Eye,
+  EyeOff,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 
 // =========================================================
 // TIPOS
 // =========================================================
 type EvolucionItem = {
   label: string;
-  ingresos_operacionales: number;
-  ingresos_no_operacionales: number;
-  ingresos_totales: number;
-  costos_venta: number;
-  gastos_operacionales: number;
-  gastos_no_operacionales: number;
-  utilidad_bruta: number;
-  utilidad_operativa: number;
-  ebitda: number;
-  utilidad_antes_impuestos: number;
-  utilidad_neta: number;
-  costos_gastos: number;
-  margen_bruto: number;
-  margen_operativo: number;
-  margen_ebitda: number;
-  margen_neto: number;
+  ingresos?: number;
+  ingresos_totales?: number;
+  costos_gastos?: number;
+  utilidad_bruta?: number;
+  utilidad_operativa?: number;
+  ebitda?: number;
+  utilidad_neta?: number;
+  margen_bruto?: number;
+  margen_operativo?: number;
+  margen_ebitda?: number;
+  margen_neto?: number;
 };
 
 type CuentaItem = {
   cuenta: string;
   cuenta_padre?: string;
   nombre: string;
-  seccion:
-    | "INGRESOS_OPERACIONALES"
-    | "INGRESOS_NO_OPERACIONALES"
-    | "COSTOS_VENTA"
-    | "GASTOS_OPERACIONALES"
-    | "GASTOS_NO_OPERACIONALES"
-    | "OTROS";
-  naturaleza: string;
+  seccion?: string;
+  clase?: string;
+  naturaleza?: string;
   valores_mes: Record<string, number>;
   total: number;
 };
 
 type Kpis = {
-  ingresos_operacionales?: number;
-  ingresos_no_operacionales?: number;
   ingresos_totales?: number;
-  costos_venta?: number;
   utilidad_bruta?: number;
-  gastos_operacionales?: number;
   utilidad_operativa?: number;
   ebitda?: number;
-  gastos_no_operacionales?: number;
-  utilidad_antes_impuestos?: number;
   utilidad_neta?: number;
   margen_bruto?: number;
   margen_operativo?: number;
@@ -124,14 +112,15 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-const CustomLabel = (props: any) => {
-  const { x, y, width, value, offset = -15 } = props;
+// Etiqueta para barras: más cerca del tope
+const BarLabel = (props: any) => {
+  const { x, y, width, value } = props;
   if (!value || value === 0) return null;
 
   return (
     <text
-      x={width ? x + width / 2 : x}
-      y={y + offset}
+      x={x + width / 2}
+      y={y - 6}
       fill="#475569"
       fontSize={10}
       fontWeight="900"
@@ -141,6 +130,37 @@ const CustomLabel = (props: any) => {
     </text>
   );
 };
+
+// Etiqueta para línea EBITDA
+const LineLabel = (props: any) => {
+  const { x, y, value } = props;
+  if (!value || value === 0) return null;
+
+  return (
+    <text
+      x={x}
+      y={y - 12}
+      fill="#475569"
+      fontSize={10}
+      fontWeight="900"
+      textAnchor="middle"
+    >
+      {abreviar(value)}
+    </text>
+  );
+};
+
+function getCuentaPrefix(cuenta?: string, length = 2) {
+  return String(cuenta || "").slice(0, length);
+}
+
+function matchCuenta(
+  cuenta: CuentaItem,
+  seccionEsperada: string,
+  fallback: (c: CuentaItem) => boolean
+) {
+  return cuenta.seccion ? cuenta.seccion === seccionEsperada : fallback(cuenta);
+}
 
 // =========================================================
 // PAGE
@@ -155,6 +175,7 @@ export default function EstadoResultadosPage() {
   const [fechaHasta, setFechaHasta] = useState("2026-12-31");
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [vista, setVista] = useState<"resumida" | "detallada">("detallada");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = async () => {
@@ -199,18 +220,82 @@ export default function EstadoResultadosPage() {
   // Solo carga inicial
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const periodos = useMemo(() => evolucion.map((e) => e.label), [evolucion]);
 
-  const getCuentas = (seccion: CuentaItem["seccion"]) =>
-    composicion.filter((c) => c.seccion === seccion);
+  const evolucionChart = useMemo(
+    () =>
+      evolucion.map((e) => ({
+        ...e,
+        ingresos_chart: e.ingresos_totales ?? e.ingresos ?? 0,
+      })),
+    [evolucion]
+  );
+    
+  const getCuentas = (predicate: (c: CuentaItem) => boolean) =>
+    composicion.filter(predicate);
 
-  const ingOp = useMemo(() => getCuentas("INGRESOS_OPERACIONALES"), [composicion]);
-  const costos = useMemo(() => getCuentas("COSTOS_VENTA"), [composicion]);
-  const gasOp = useMemo(() => getCuentas("GASTOS_OPERACIONALES"), [composicion]);
-  const ingNoOp = useMemo(() => getCuentas("INGRESOS_NO_OPERACIONALES"), [composicion]);
-  const gasNoOp = useMemo(() => getCuentas("GASTOS_NO_OPERACIONALES"), [composicion]);
+  const ingOp = useMemo(
+    () =>
+      getCuentas((c) =>
+        matchCuenta(
+          c,
+          "INGRESOS_OPERACIONALES",
+          (x) => getCuentaPrefix(x.cuenta, 2) === "41"
+        )
+      ),
+    [composicion]
+  );
+
+  const costos = useMemo(
+    () =>
+      getCuentas((c) =>
+        matchCuenta(
+          c,
+          "COSTOS_VENTA",
+          (x) => ["6", "7"].includes(getCuentaPrefix(x.cuenta, 1))
+        )
+      ),
+    [composicion]
+  );
+
+  const gasOp = useMemo(
+    () =>
+      getCuentas((c) =>
+        matchCuenta(
+          c,
+          "GASTOS_OPERACIONALES",
+          (x) => ["51", "52"].includes(getCuentaPrefix(x.cuenta, 2))
+        )
+      ),
+    [composicion]
+  );
+
+  const ingNoOp = useMemo(
+    () =>
+      getCuentas((c) =>
+        matchCuenta(
+          c,
+          "INGRESOS_NO_OPERACIONALES",
+          (x) => getCuentaPrefix(x.cuenta, 2) === "42"
+        )
+      ),
+    [composicion]
+  );
+
+  const gasNoOp = useMemo(
+    () =>
+      getCuentas((c) =>
+        matchCuenta(
+          c,
+          "GASTOS_NO_OPERACIONALES",
+          (x) => ["53", "54"].includes(getCuentaPrefix(x.cuenta, 2))
+        )
+      ),
+    [composicion]
+  );
 
   const getTotalesPorMes = (cuentas: CuentaItem[]) => {
     const totales: Record<string, number> = {};
@@ -264,6 +349,81 @@ export default function EstadoResultadosPage() {
 
   const unMes = uaiMes;
 
+  const exportExcel = () => {
+    const wb = XLSX.utils.book_new();
+
+    const kpisSheet = XLSX.utils.json_to_sheet([
+      {
+        indicador: "Ingresos Totales",
+        valor: kpis.ingresos_totales || 0,
+        margen: "",
+      },
+      {
+        indicador: "Utilidad Bruta",
+        valor: kpis.utilidad_bruta || 0,
+        margen: kpis.margen_bruto || 0,
+      },
+      {
+        indicador: "Utilidad Operativa",
+        valor: kpis.utilidad_operativa || utilidadOperativa || 0,
+        margen: kpis.margen_operativo || 0,
+      },
+      {
+        indicador: "EBITDA",
+        valor: kpis.ebitda || 0,
+        margen: kpis.margen_ebitda || 0,
+      },
+      {
+        indicador: "Utilidad Neta",
+        valor: kpis.utilidad_neta || 0,
+        margen: kpis.margen_neto || 0,
+      },
+    ]);
+
+    const evolucionSheet = XLSX.utils.json_to_sheet(
+      evolucion.map((e) => ({
+        periodo: e.label,
+        ingresos: e.ingresos_totales ?? e.ingresos ?? 0,
+        costos_gastos: e.costos_gastos ?? 0,
+        utilidad_bruta: e.utilidad_bruta ?? 0,
+        utilidad_operativa: e.utilidad_operativa ?? 0,
+        ebitda: e.ebitda ?? 0,
+        utilidad_neta: e.utilidad_neta ?? 0,
+      }))
+    );
+
+    const matrizRows: any[] = [];
+
+    const pushSection = (sectionName: string, cuentas: CuentaItem[]) => {
+      cuentas.forEach((c) => {
+        const row: Record<string, any> = {
+          seccion: sectionName,
+          cuenta: c.cuenta,
+          nombre: c.nombre,
+          total: c.total,
+        };
+        periodos.forEach((p) => {
+          row[p] = c.valores_mes[p] || 0;
+        });
+        matrizRows.push(row);
+      });
+    };
+
+    pushSection("INGRESOS OPERACIONALES", ingOp);
+    pushSection("COSTOS DE VENTA", costos);
+    pushSection("GASTOS OPERACIONALES", gasOp);
+    pushSection("INGRESOS NO OPERACIONALES", ingNoOp);
+    pushSection("GASTOS NO OPERACIONALES", gasNoOp);
+
+    const matrizSheet = XLSX.utils.json_to_sheet(matrizRows);
+
+    XLSX.utils.book_append_sheet(wb, kpisSheet, "KPIs");
+    XLSX.utils.book_append_sheet(wb, evolucionSheet, "Evolucion");
+    XLSX.utils.book_append_sheet(wb, matrizSheet, "Matriz");
+
+    XLSX.writeFile(wb, `pnl_${fechaDesde}_a_${fechaHasta}.xlsx`);
+  };
+
   return (
     <div className="space-y-5 p-5 bg-slate-50 min-h-screen">
       {/* HEADER */}
@@ -289,6 +449,15 @@ export default function EstadoResultadosPage() {
               accept=".xlsx,.xls,.csv"
               onChange={handleFileUpload}
             />
+
+            <button
+              onClick={exportExcel}
+              className="flex items-center gap-2 px-4 py-3 bg-emerald-50 text-emerald-700 rounded-2xl text-xs font-black hover:bg-emerald-100 transition-all border border-emerald-100"
+            >
+              <Download size={16} />
+              Exportar Excel
+            </button>
+
             <button
               onClick={() => fileInputRef.current?.click()}
               className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-2xl text-xs font-black hover:bg-black transition-all shadow-lg active:scale-95"
@@ -297,13 +466,14 @@ export default function EstadoResultadosPage() {
               {uploading ? "Sincronizando..." : "Sincronizar Auxiliar"}
             </button>
           </div>
+
           <p className="text-slate-400 text-[10px] font-semibold italic">
             Ruta Siigo: Contabilidad {" > "} Comprobantes {" > "} Informe auxiliar contable
           </p>
         </div>
       </div>
 
-      {/* FILTROS */}
+      {/* FILTROS + VISTA */}
       <div className="flex flex-wrap gap-4 bg-white p-4 rounded-[2rem] border shadow-sm items-end justify-between">
         <div className="flex gap-4 flex-wrap">
           <div className="flex flex-col min-w-[240px]">
@@ -337,6 +507,31 @@ export default function EstadoResultadosPage() {
             </button>
           </div>
         </div>
+
+        <div className="flex items-center gap-2 bg-slate-50 rounded-2xl p-1 border">
+          <button
+            onClick={() => setVista("resumida")}
+            className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${
+              vista === "resumida"
+                ? "bg-slate-900 text-white"
+                : "text-slate-600 hover:bg-white"
+            }`}
+          >
+            <EyeOff size={14} />
+            Vista resumida
+          </button>
+          <button
+            onClick={() => setVista("detallada")}
+            className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${
+              vista === "detallada"
+                ? "bg-slate-900 text-white"
+                : "text-slate-600 hover:bg-white"
+            }`}
+          >
+            <Eye size={14} />
+            Vista detallada
+          </button>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -356,7 +551,7 @@ export default function EstadoResultadosPage() {
         />
         <StatCard
           title="Utilidad Operativa"
-          value={kpis.utilidad_operativa || 0}
+          value={kpis.utilidad_operativa || utilidadOperativa || 0}
           icon={<Landmark size={20} />}
           color="sky"
           badge={formatPercent(kpis.margen_operativo)}
@@ -399,7 +594,7 @@ export default function EstadoResultadosPage() {
 
         <CardContent className="pt-2">
           <ResponsiveContainer width="100%" height={380}>
-            <ComposedChart data={evolucion} margin={{ top: 40, right: 10, left: 0, bottom: 0 }}>
+            <ComposedChart data={evolucionChart} margin={{ top: 28, right: 10, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
               <XAxis
                 dataKey="label"
@@ -410,12 +605,24 @@ export default function EstadoResultadosPage() {
               <YAxis hide />
               <Tooltip content={<CustomTooltip />} cursor={{ fill: "#f8fafc" }} />
 
-              <Bar dataKey="ingresos_totales" name="Ingresos" fill="#10b981" radius={[6, 6, 0, 0]} barSize={40}>
-                <LabelList dataKey="ingresos_totales" content={(props: any) => <CustomLabel {...props} />} />
+              <Bar
+                dataKey="ingresos_chart"
+                name="Ingresos"
+                fill="#10b981"
+                radius={[6, 6, 0, 0]}
+                barSize={40}
+              >
+                <LabelList dataKey="ingresos_chart" content={<BarLabel />} />
               </Bar>
 
-              <Bar dataKey="costos_gastos" name="Costos y Gastos" fill="#f43f5e" radius={[6, 6, 0, 0]} barSize={40}>
-                <LabelList dataKey="costos_gastos" content={(props: any) => <CustomLabel {...props} />} />
+              <Bar
+                dataKey="costos_gastos"
+                name="Costos y Gastos"
+                fill="#f43f5e"
+                radius={[6, 6, 0, 0]}
+                barSize={40}
+              >
+                <LabelList dataKey="costos_gastos" content={<BarLabel />} />
               </Bar>
 
               <Line
@@ -426,7 +633,7 @@ export default function EstadoResultadosPage() {
                 strokeWidth={4}
                 dot={{ r: 4, fill: "#4f46e5", strokeWidth: 2, stroke: "#fff" }}
               >
-                <LabelList dataKey="ebitda" content={(props: any) => <CustomLabel {...props} offset={-20} />} />
+                <LabelList dataKey="ebitda" content={<LineLabel />} />
               </Line>
             </ComposedChart>
           </ResponsiveContainer>
@@ -434,155 +641,148 @@ export default function EstadoResultadosPage() {
       </Card>
 
       {/* MATRIZ */}
-      <Card className="rounded-[2rem] shadow-2xl border-none overflow-hidden bg-white">
-        <div className="bg-slate-900 text-white px-8 py-5 flex justify-between items-center">
-          <div>
-            <h2 className="font-black text-lg uppercase tracking-widest">
-              Estado de Resultados Integral (Matricial)
-            </h2>
-            <p className="text-slate-400 text-xs mt-1 font-medium">
-              Análisis Horizontal Mes a Mes + Acumulado
-            </p>
+      {vista === "detallada" && (
+        <Card className="rounded-[2rem] shadow-2xl border-none overflow-hidden bg-white">
+          <div className="bg-slate-900 text-white px-8 py-5 flex justify-between items-center">
+            <div>
+              <h2 className="font-black text-lg uppercase tracking-widest">
+                Estado de Resultados Integral (Matricial)
+              </h2>
+              <p className="text-slate-400 text-xs mt-1 font-medium">
+                Análisis Horizontal Mes a Mes + Acumulado
+              </p>
+            </div>
+            <TableIcon size={32} className="text-emerald-400 opacity-50" />
           </div>
-          <TableIcon size={32} className="text-emerald-400 opacity-50" />
-        </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[1000px]">
-            <thead>
-              <tr className="bg-slate-100 text-slate-500 text-[10px] uppercase font-black tracking-widest border-b">
-                <th className="py-4 px-6 text-left sticky left-0 bg-slate-100 z-10 w-[340px]">
-                  Concepto / Cuenta
-                </th>
-                {periodos.map((p) => (
-                  <th key={p} className="py-4 px-4 text-right">
-                    {p}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[1000px]">
+              <thead>
+                <tr className="bg-slate-100 text-slate-500 text-[10px] uppercase font-black tracking-widest border-b">
+                  <th className="py-4 px-6 text-left sticky left-0 bg-slate-100 z-10 w-[340px]">
+                    Concepto / Cuenta
                   </th>
+                  {periodos.map((p) => (
+                    <th key={p} className="py-4 px-4 text-right">
+                      {p}
+                    </th>
+                  ))}
+                  <th className="py-4 px-6 text-right bg-emerald-50 text-emerald-800 border-l border-emerald-100">
+                    Total Acumulado
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-slate-100">
+                <SectionHeader title="INGRESOS OPERACIONALES" colSpan={periodos.length + 2} />
+                {ingOp.map((c) => (
+                  <RowCuenta key={c.cuenta} cuenta={c} isGasto={false} periodos={periodos} />
                 ))}
-                <th className="py-4 px-6 text-right bg-emerald-50 text-emerald-800 border-l border-emerald-100">
-                  Total Acumulado
-                </th>
-              </tr>
-            </thead>
+                <RowTotal
+                  title="TOTAL INGRESOS OPERACIONALES"
+                  totalesMes={tIngOpMes}
+                  totalAcumulado={totalIngOp}
+                  periodos={periodos}
+                />
 
-            <tbody className="divide-y divide-slate-100">
-              {/* INGRESOS OPERACIONALES */}
-              <SectionHeader title="INGRESOS OPERACIONALES" colSpan={periodos.length + 2} />
-              {ingOp.map((c) => (
-                <RowCuenta key={c.cuenta} cuenta={c} isGasto={false} periodos={periodos} />
-              ))}
-              <RowTotal
-                title="TOTAL INGRESOS OPERACIONALES"
-                totalesMes={tIngOpMes}
-                totalAcumulado={totalIngOp}
-                periodos={periodos}
-              />
+                <SectionHeader title="COSTOS DE VENTA" colSpan={periodos.length + 2} white />
+                {costos.map((c) => (
+                  <RowCuenta key={c.cuenta} cuenta={c} isGasto={true} periodos={periodos} />
+                ))}
+                <RowTotal
+                  title="TOTAL COSTOS DE VENTA"
+                  totalesMes={tCostosMes}
+                  totalAcumulado={totalCostos}
+                  isGasto
+                  periodos={periodos}
+                />
 
-              {/* COSTOS */}
-              <SectionHeader title="COSTOS DE VENTA" colSpan={periodos.length + 2} white />
-              {costos.map((c) => (
-                <RowCuenta key={c.cuenta} cuenta={c} isGasto={true} periodos={periodos} />
-              ))}
-              <RowTotal
-                title="TOTAL COSTOS DE VENTA"
-                totalesMes={tCostosMes}
-                totalAcumulado={totalCostos}
-                isGasto
-                periodos={periodos}
-              />
+                <ResultRow
+                  title="(=) Utilidad Bruta"
+                  values={ubMes}
+                  total={utilidadBruta}
+                  periodos={periodos}
+                  rowClass="bg-emerald-50"
+                  titleClass="text-emerald-800 bg-emerald-50"
+                  valueClass="text-emerald-800"
+                  totalClass="text-emerald-900 bg-emerald-100/50 border-l border-emerald-200"
+                />
 
-              {/* UTILIDAD BRUTA */}
-              <ResultRow
-                title="(=) Utilidad Bruta"
-                values={ubMes}
-                total={utilidadBruta}
-                periodos={periodos}
-                rowClass="bg-emerald-50"
-                titleClass="text-emerald-800 bg-emerald-50"
-                valueClass="text-emerald-800"
-                totalClass="text-emerald-900 bg-emerald-100/50 border-l border-emerald-200"
-              />
+                <SectionHeader title="GASTOS OPERACIONALES" colSpan={periodos.length + 2} white />
+                {gasOp.map((c) => (
+                  <RowCuenta key={c.cuenta} cuenta={c} isGasto={true} periodos={periodos} />
+                ))}
+                <RowTotal
+                  title="TOTAL GASTOS OPERACIONALES"
+                  totalesMes={tGasOpMes}
+                  totalAcumulado={totalGasOp}
+                  isGasto
+                  periodos={periodos}
+                />
 
-              {/* GASTOS OPERACIONALES */}
-              <SectionHeader title="GASTOS OPERACIONALES" colSpan={periodos.length + 2} white />
-              {gasOp.map((c) => (
-                <RowCuenta key={c.cuenta} cuenta={c} isGasto={true} periodos={periodos} />
-              ))}
-              <RowTotal
-                title="TOTAL GASTOS OPERACIONALES"
-                totalesMes={tGasOpMes}
-                totalAcumulado={totalGasOp}
-                isGasto
-                periodos={periodos}
-              />
+                <ResultRow
+                  title="(=) Utilidad Operativa"
+                  values={uoMes}
+                  total={utilidadOperativa}
+                  periodos={periodos}
+                  rowClass="bg-blue-50"
+                  titleClass="text-blue-800 bg-blue-50"
+                  valueClass="text-blue-800"
+                  totalClass="text-blue-900 bg-blue-100/50 border-l border-blue-200"
+                />
 
-              {/* UTILIDAD OPERATIVA */}
-              <ResultRow
-                title="(=) Utilidad Operativa"
-                values={uoMes}
-                total={utilidadOperativa}
-                periodos={periodos}
-                rowClass="bg-blue-50"
-                titleClass="text-blue-800 bg-blue-50"
-                valueClass="text-blue-800"
-                totalClass="text-blue-900 bg-blue-100/50 border-l border-blue-200"
-              />
+                <SectionHeader title="INGRESOS NO OPERACIONALES" colSpan={periodos.length + 2} white />
+                {ingNoOp.map((c) => (
+                  <RowCuenta key={c.cuenta} cuenta={c} isGasto={false} periodos={periodos} />
+                ))}
+                <RowTotal
+                  title="TOTAL INGRESOS NO OPERACIONALES"
+                  totalesMes={tIngNoOpMes}
+                  totalAcumulado={totalIngNoOp}
+                  periodos={periodos}
+                />
 
-              {/* INGRESOS NO OPERACIONALES */}
-              <SectionHeader title="INGRESOS NO OPERACIONALES" colSpan={periodos.length + 2} white />
-              {ingNoOp.map((c) => (
-                <RowCuenta key={c.cuenta} cuenta={c} isGasto={false} periodos={periodos} />
-              ))}
-              <RowTotal
-                title="TOTAL INGRESOS NO OPERACIONALES"
-                totalesMes={tIngNoOpMes}
-                totalAcumulado={totalIngNoOp}
-                periodos={periodos}
-              />
+                <SectionHeader title="GASTOS NO OPERACIONALES" colSpan={periodos.length + 2} white />
+                {gasNoOp.map((c) => (
+                  <RowCuenta key={c.cuenta} cuenta={c} isGasto={true} periodos={periodos} />
+                ))}
+                <RowTotal
+                  title="TOTAL GASTOS NO OPERACIONALES"
+                  totalesMes={tGasNoOpMes}
+                  totalAcumulado={totalGasNoOp}
+                  isGasto
+                  periodos={periodos}
+                />
 
-              {/* GASTOS NO OPERACIONALES */}
-              <SectionHeader title="GASTOS NO OPERACIONALES" colSpan={periodos.length + 2} white />
-              {gasNoOp.map((c) => (
-                <RowCuenta key={c.cuenta} cuenta={c} isGasto={true} periodos={periodos} />
-              ))}
-              <RowTotal
-                title="TOTAL GASTOS NO OPERACIONALES"
-                totalesMes={tGasNoOpMes}
-                totalAcumulado={totalGasNoOp}
-                isGasto
-                periodos={periodos}
-              />
+                <ResultRow
+                  title="(=) Utilidad Antes de Impuestos"
+                  values={uaiMes}
+                  total={utilidadAntesImpuestos}
+                  periodos={periodos}
+                  rowClass="bg-amber-50"
+                  titleClass="text-amber-800 bg-amber-50"
+                  valueClass="text-amber-800"
+                  totalClass="text-amber-900 bg-amber-100/50 border-l border-amber-200"
+                />
 
-              {/* UTILIDAD ANTES DE IMPUESTOS */}
-              <ResultRow
-                title="(=) Utilidad Antes de Impuestos"
-                values={uaiMes}
-                total={utilidadAntesImpuestos}
-                periodos={periodos}
-                rowClass="bg-amber-50"
-                titleClass="text-amber-800 bg-amber-50"
-                valueClass="text-amber-800"
-                totalClass="text-amber-900 bg-amber-100/50 border-l border-amber-200"
-              />
-
-              {/* UTILIDAD NETA */}
-              <tr className="bg-slate-900 border-t-4 border-slate-900">
-                <td className="py-5 px-6 font-black text-white text-base uppercase tracking-widest sticky left-0 bg-slate-900">
-                  (=) Utilidad Neta del Ejercicio
-                </td>
-                {periodos.map((p) => (
-                  <td key={p} className="py-5 px-4 text-right font-black text-emerald-400 text-sm">
-                    {formatCurrency(unMes[p])}
+                <tr className="bg-slate-900 border-t-4 border-slate-900">
+                  <td className="py-5 px-6 font-black text-white text-base uppercase tracking-widest sticky left-0 bg-slate-900">
+                    (=) Utilidad Neta del Ejercicio
                   </td>
-                ))}
-                <td className="py-5 px-6 text-right font-black text-emerald-400 text-xl bg-slate-800 border-l border-slate-700">
-                  {formatCurrency(utilidadNeta)}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </Card>
+                  {periodos.map((p) => (
+                    <td key={p} className="py-5 px-4 text-right font-black text-emerald-400 text-sm">
+                      {formatCurrency(unMes[p])}
+                    </td>
+                  ))}
+                  <td className="py-5 px-6 text-right font-black text-emerald-400 text-xl bg-slate-800 border-l border-slate-700">
+                    {formatCurrency(utilidadNeta)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
@@ -631,9 +831,8 @@ const RowCuenta = ({
     </td>
 
     {periodos.map((p) => {
-      const valor = cuenta.valores_mes[p] || 0;
-      const cls =
-        valor < 0 ? "text-amber-700" : isGasto ? "text-rose-600" : "text-slate-800";
+      const valor = Math.abs(cuenta.valores_mes[p] || 0);
+      const cls = isGasto ? "text-rose-600" : "text-slate-800";
 
       return (
         <td key={p} className={`py-2 px-4 text-right font-bold text-xs ${cls}`}>
@@ -644,10 +843,10 @@ const RowCuenta = ({
 
     <td
       className={`py-2 px-6 text-right font-black text-xs bg-slate-50/50 border-l border-slate-100 ${
-        cuenta.total < 0 ? "text-amber-700" : isGasto ? "text-rose-700" : "text-slate-900"
+        isGasto ? "text-rose-700" : "text-slate-900"
       }`}
     >
-      {formatCurrency(cuenta.total)}
+      {formatCurrency(Math.abs(cuenta.total || 0))}
     </td>
   </tr>
 );
@@ -669,22 +868,22 @@ const RowTotal = ({
     <td className="py-3 px-6 font-black text-slate-700 text-[11px] sticky left-0 bg-slate-50/80">
       {title}
     </td>
-    {periodos.map((p) => {
-      const valor = totalesMes[p] || 0;
-      const cls = valor < 0 ? "text-amber-700" : isGasto ? "text-rose-600" : "text-slate-900";
-
-      return (
-        <td key={p} className={`py-3 px-4 text-right font-black text-xs ${cls}`}>
-          {formatCurrency(valor)}
-        </td>
-      );
-    })}
+    {periodos.map((p) => (
+      <td
+        key={p}
+        className={`py-3 px-4 text-right font-black text-xs ${
+          isGasto ? "text-rose-600" : "text-slate-900"
+        }`}
+      >
+        {formatCurrency(Math.abs(totalesMes[p] || 0))}
+      </td>
+    ))}
     <td
       className={`py-3 px-6 text-right font-black text-sm bg-slate-100/50 border-l border-slate-200 ${
-        totalAcumulado < 0 ? "text-amber-700" : isGasto ? "text-rose-700" : "text-slate-900"
+        isGasto ? "text-rose-700" : "text-slate-900"
       }`}
     >
-      {formatCurrency(totalAcumulado)}
+      {formatCurrency(Math.abs(totalAcumulado || 0))}
     </td>
   </tr>
 );
@@ -712,10 +911,12 @@ const ResultRow = ({
     <td className={`py-4 px-6 font-black text-sm uppercase sticky left-0 ${titleClass}`}>{title}</td>
     {periodos.map((p) => (
       <td key={p} className={`py-4 px-4 text-right font-black text-sm ${valueClass}`}>
-        {formatCurrency(values[p])}
+        {formatCurrency(values[p] || 0)}
       </td>
     ))}
-    <td className={`py-4 px-6 text-right font-black text-base ${totalClass}`}>{formatCurrency(total)}</td>
+    <td className={`py-4 px-6 text-right font-black text-base ${totalClass}`}>
+      {formatCurrency(total || 0)}
+    </td>
   </tr>
 );
 

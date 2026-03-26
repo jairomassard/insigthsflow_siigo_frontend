@@ -210,6 +210,15 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               },
             ]
           : []),
+        ...(tiene("ver_reporte_estado_resultados")
+          ? [
+              {
+                href: "/reportes/estado-resultados",
+                label: "Estado de Resultados",
+                icon: <FileBarChart2 className="w-4 h-4" />,
+              },
+            ]
+          : []),  
         ...(tiene("ver_reporte_balance")
           ? [
               {

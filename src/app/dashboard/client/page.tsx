@@ -215,6 +215,7 @@ export default function ClientHome() {
         {(tiene("ver_reporte_consolidado") ||
           tiene("ver_reporte_cruceivas") ||
           tiene("ver_reporte_retenciones") ||
+          tiene("ver_reporte_estado_resultados") ||
           tiene("ver_reporte_balance") ||
           tiene("ver_reporte_indicadores")) && (
           <Section title="🌟 Reportes Especiales" color="bg-green-50">
@@ -240,6 +241,14 @@ export default function ClientHome() {
                 title="Retenciones"
                 href="/reportes/retenciones"
                 description="Consulta y analiza las retenciones aplicadas en los diferentes períodos."
+              />
+            )}
+            {tiene("ver_reporte_estado_resultados") && (
+              <FeatureCard
+                icon="📑"
+                title="Estado de Resultados"
+                href="/reportes/estado-resultados"
+                description="Consulta ingresos, costos, gastos y utilidad del período en un solo reporte."
               />
             )}
             {tiene("ver_reporte_balance") && (

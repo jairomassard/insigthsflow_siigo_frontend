@@ -26,6 +26,8 @@ import {
   Download,
   Eye,
   EyeOff,
+  Plus,
+  Minus,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 
@@ -69,6 +71,13 @@ type Kpis = {
   margen_ebitda?: number;
   margen_neto?: number;
 };
+
+type SectionKey =
+  | "ingOp"
+  | "costos"
+  | "gasOp"
+  | "ingNoOp"
+  | "gasNoOp";
 
 // =========================================================
 // HELPERS
@@ -176,7 +185,22 @@ export default function EstadoResultadosPage() {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [vista, setVista] = useState<"resumida" | "detallada">("detallada");
+  const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>({
+    ingOp: true,
+    costos: true,
+    gasOp: true,
+    ingNoOp: true,
+    gasNoOp: true,
+  });
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const toggleSection = (key: SectionKey) => {
+    setOpenSections((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -217,7 +241,6 @@ export default function EstadoResultadosPage() {
     }
   };
 
-  // Solo carga inicial
   useEffect(() => {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -233,7 +256,7 @@ export default function EstadoResultadosPage() {
       })),
     [evolucion]
   );
-    
+
   const getCuentas = (predicate: (c: CuentaItem) => boolean) =>
     composicion.filter(predicate);
 
@@ -425,7 +448,7 @@ export default function EstadoResultadosPage() {
   };
 
   return (
-    <div className="space-y-5 p-5 bg-slate-50 min-h-screen">
+    <div className="space-y-4 p-5 bg-slate-50 min-h-screen">
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-[2rem] border shadow-sm">
         <div>
@@ -535,31 +558,31 @@ export default function EstadoResultadosPage() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
         <StatCard
           title="Ingresos Totales"
           value={kpis.ingresos_totales || 0}
-          icon={<TrendingUp size={20} />}
+          icon={<TrendingUp size={18} />}
           color="emerald"
         />
         <StatCard
           title="Utilidad Bruta"
           value={kpis.utilidad_bruta || 0}
-          icon={<DollarSign size={20} />}
+          icon={<DollarSign size={18} />}
           color="blue"
           badge={formatPercent(kpis.margen_bruto)}
         />
         <StatCard
           title="Utilidad Operativa"
           value={kpis.utilidad_operativa || utilidadOperativa || 0}
-          icon={<Landmark size={20} />}
+          icon={<Landmark size={18} />}
           color="sky"
           badge={formatPercent(kpis.margen_operativo)}
         />
         <StatCard
           title="EBITDA"
           value={kpis.ebitda || 0}
-          icon={<Activity size={20} />}
+          icon={<Activity size={18} />}
           color="indigo"
           badge={formatPercent(kpis.margen_ebitda)}
           highlight
@@ -567,7 +590,7 @@ export default function EstadoResultadosPage() {
         <StatCard
           title="Utilidad Neta"
           value={kpis.utilidad_neta || 0}
-          icon={<TrendingUp size={20} />}
+          icon={<TrendingUp size={18} />}
           color="slate"
           badge={formatPercent(kpis.margen_neto)}
         />
@@ -659,7 +682,7 @@ export default function EstadoResultadosPage() {
             <table className="w-full text-sm min-w-[1000px]">
               <thead>
                 <tr className="bg-slate-100 text-slate-500 text-[10px] uppercase font-black tracking-widest border-b">
-                  <th className="py-4 px-6 text-left sticky left-0 bg-slate-100 z-10 w-[340px]">
+                  <th className="py-4 px-6 text-left sticky left-0 bg-slate-100 z-10 w-[360px]">
                     Concepto / Cuenta
                   </th>
                   {periodos.map((p) => (
@@ -674,10 +697,17 @@ export default function EstadoResultadosPage() {
               </thead>
 
               <tbody className="divide-y divide-slate-100">
-                <SectionHeader title="INGRESOS OPERACIONALES" colSpan={periodos.length + 2} />
-                {ingOp.map((c) => (
-                  <RowCuenta key={c.cuenta} cuenta={c} isGasto={false} periodos={periodos} />
-                ))}
+                {/* INGRESOS OPERACIONALES */}
+                <SectionHeader
+                  title="INGRESOS OPERACIONALES"
+                  colSpan={periodos.length + 2}
+                  expanded={openSections.ingOp}
+                  onToggle={() => toggleSection("ingOp")}
+                />
+                {openSections.ingOp &&
+                  ingOp.map((c) => (
+                    <RowCuenta key={c.cuenta} cuenta={c} isGasto={false} periodos={periodos} />
+                  ))}
                 <RowTotal
                   title="TOTAL INGRESOS OPERACIONALES"
                   totalesMes={tIngOpMes}
@@ -685,10 +715,18 @@ export default function EstadoResultadosPage() {
                   periodos={periodos}
                 />
 
-                <SectionHeader title="COSTOS DE VENTA" colSpan={periodos.length + 2} white />
-                {costos.map((c) => (
-                  <RowCuenta key={c.cuenta} cuenta={c} isGasto={true} periodos={periodos} />
-                ))}
+                {/* COSTOS */}
+                <SectionHeader
+                  title="COSTOS DE VENTA"
+                  colSpan={periodos.length + 2}
+                  white
+                  expanded={openSections.costos}
+                  onToggle={() => toggleSection("costos")}
+                />
+                {openSections.costos &&
+                  costos.map((c) => (
+                    <RowCuenta key={c.cuenta} cuenta={c} isGasto={true} periodos={periodos} />
+                  ))}
                 <RowTotal
                   title="TOTAL COSTOS DE VENTA"
                   totalesMes={tCostosMes}
@@ -697,6 +735,7 @@ export default function EstadoResultadosPage() {
                   periodos={periodos}
                 />
 
+                {/* UTILIDAD BRUTA */}
                 <ResultRow
                   title="(=) Utilidad Bruta"
                   values={ubMes}
@@ -708,10 +747,18 @@ export default function EstadoResultadosPage() {
                   totalClass="text-emerald-900 bg-emerald-100/50 border-l border-emerald-200"
                 />
 
-                <SectionHeader title="GASTOS OPERACIONALES" colSpan={periodos.length + 2} white />
-                {gasOp.map((c) => (
-                  <RowCuenta key={c.cuenta} cuenta={c} isGasto={true} periodos={periodos} />
-                ))}
+                {/* GASTOS OPERACIONALES */}
+                <SectionHeader
+                  title="GASTOS OPERACIONALES"
+                  colSpan={periodos.length + 2}
+                  white
+                  expanded={openSections.gasOp}
+                  onToggle={() => toggleSection("gasOp")}
+                />
+                {openSections.gasOp &&
+                  gasOp.map((c) => (
+                    <RowCuenta key={c.cuenta} cuenta={c} isGasto={true} periodos={periodos} />
+                  ))}
                 <RowTotal
                   title="TOTAL GASTOS OPERACIONALES"
                   totalesMes={tGasOpMes}
@@ -720,6 +767,7 @@ export default function EstadoResultadosPage() {
                   periodos={periodos}
                 />
 
+                {/* UTILIDAD OPERATIVA */}
                 <ResultRow
                   title="(=) Utilidad Operativa"
                   values={uoMes}
@@ -731,10 +779,18 @@ export default function EstadoResultadosPage() {
                   totalClass="text-blue-900 bg-blue-100/50 border-l border-blue-200"
                 />
 
-                <SectionHeader title="INGRESOS NO OPERACIONALES" colSpan={periodos.length + 2} white />
-                {ingNoOp.map((c) => (
-                  <RowCuenta key={c.cuenta} cuenta={c} isGasto={false} periodos={periodos} />
-                ))}
+                {/* INGRESOS NO OPERACIONALES */}
+                <SectionHeader
+                  title="INGRESOS NO OPERACIONALES"
+                  colSpan={periodos.length + 2}
+                  white
+                  expanded={openSections.ingNoOp}
+                  onToggle={() => toggleSection("ingNoOp")}
+                />
+                {openSections.ingNoOp &&
+                  ingNoOp.map((c) => (
+                    <RowCuenta key={c.cuenta} cuenta={c} isGasto={false} periodos={periodos} />
+                  ))}
                 <RowTotal
                   title="TOTAL INGRESOS NO OPERACIONALES"
                   totalesMes={tIngNoOpMes}
@@ -742,10 +798,18 @@ export default function EstadoResultadosPage() {
                   periodos={periodos}
                 />
 
-                <SectionHeader title="GASTOS NO OPERACIONALES" colSpan={periodos.length + 2} white />
-                {gasNoOp.map((c) => (
-                  <RowCuenta key={c.cuenta} cuenta={c} isGasto={true} periodos={periodos} />
-                ))}
+                {/* GASTOS NO OPERACIONALES */}
+                <SectionHeader
+                  title="GASTOS NO OPERACIONALES"
+                  colSpan={periodos.length + 2}
+                  white
+                  expanded={openSections.gasNoOp}
+                  onToggle={() => toggleSection("gasNoOp")}
+                />
+                {openSections.gasNoOp &&
+                  gasNoOp.map((c) => (
+                    <RowCuenta key={c.cuenta} cuenta={c} isGasto={true} periodos={periodos} />
+                  ))}
                 <RowTotal
                   title="TOTAL GASTOS NO OPERACIONALES"
                   totalesMes={tGasNoOpMes}
@@ -754,6 +818,7 @@ export default function EstadoResultadosPage() {
                   periodos={periodos}
                 />
 
+                {/* UTILIDAD ANTES DE IMPUESTOS */}
                 <ResultRow
                   title="(=) Utilidad Antes de Impuestos"
                   values={uaiMes}
@@ -765,6 +830,7 @@ export default function EstadoResultadosPage() {
                   totalClass="text-amber-900 bg-amber-100/50 border-l border-amber-200"
                 />
 
+                {/* UTILIDAD NETA */}
                 <tr className="bg-slate-900 border-t-4 border-slate-900">
                   <td className="py-5 px-6 font-black text-white text-base uppercase tracking-widest sticky left-0 bg-slate-900">
                     (=) Utilidad Neta del Ejercicio
@@ -794,10 +860,14 @@ const SectionHeader = ({
   title,
   colSpan,
   white = false,
+  expanded,
+  onToggle,
 }: {
   title: string;
   colSpan: number;
   white?: boolean;
+  expanded: boolean;
+  onToggle: () => void;
 }) => (
   <tr className={white ? "" : "bg-slate-50/50"}>
     <td
@@ -806,7 +876,18 @@ const SectionHeader = ({
         white ? "bg-white pt-6" : "bg-slate-50/50"
       }`}
     >
-      {title}
+      <div className="flex items-center justify-between">
+        <span>{title}</span>
+
+        <button
+          type="button"
+          onClick={onToggle}
+          className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-all"
+          title={expanded ? "Contraer sección" : "Expandir sección"}
+        >
+          {expanded ? <Minus size={16} /> : <Plus size={16} />}
+        </button>
+      </div>
     </td>
   </tr>
 );
@@ -821,7 +902,7 @@ const RowCuenta = ({
   periodos: string[];
 }) => (
   <tr className="hover:bg-slate-50 transition-colors group">
-    <td className="py-2 px-6 text-slate-600 font-medium text-xs flex gap-3 items-center sticky left-0 bg-white group-hover:bg-slate-50 transition-colors w-[340px]">
+    <td className="py-2 px-6 text-slate-600 font-medium text-xs flex gap-3 items-center sticky left-0 bg-white group-hover:bg-slate-50 transition-colors w-[360px]">
       <span className="font-mono bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[10px]">
         {cuenta.cuenta}
       </span>
@@ -945,18 +1026,18 @@ const StatCard = ({
 
   return (
     <Card
-      className={`relative overflow-hidden border shadow-lg rounded-[2rem] transition-all hover:scale-[1.02] ${
+      className={`relative overflow-hidden border shadow-lg rounded-[2rem] transition-all hover:scale-[1.01] ${
         highlight ? "bg-indigo-600 text-white shadow-indigo-200 border-none" : themes[color]
       }`}
     >
-      <CardContent className="p-6">
-        <div className="flex justify-between items-center mb-4">
-          <div className={`p-3 rounded-2xl ${highlight ? "bg-white/20" : "bg-slate-50"}`}>
+      <CardContent className="p-4">
+        <div className="flex justify-between items-center mb-3">
+          <div className={`p-2.5 rounded-2xl ${highlight ? "bg-white/20" : "bg-slate-50"}`}>
             {icon}
           </div>
           {badge && (
             <div
-              className={`text-[10px] font-black px-2 py-1 rounded-lg flex items-center gap-1 ${
+              className={`text-[9px] font-black px-2 py-1 rounded-lg flex items-center gap-1 ${
                 highlight ? "bg-emerald-400 text-emerald-950" : "bg-slate-100 text-slate-500"
               }`}
             >
@@ -966,13 +1047,15 @@ const StatCard = ({
         </div>
 
         <p
-          className={`text-[10px] font-black uppercase tracking-widest ${
+          className={`text-[9px] font-black uppercase tracking-widest ${
             highlight ? "text-indigo-100" : "text-slate-400"
           }`}
         >
           {title}
         </p>
-        <p className="text-2xl font-black mt-1 tracking-tighter">{formatCurrency(value || 0)}</p>
+        <p className="text-[1.9rem] leading-none font-black mt-1 tracking-tighter">
+          {formatCurrency(value || 0)}
+        </p>
       </CardContent>
     </Card>
   );

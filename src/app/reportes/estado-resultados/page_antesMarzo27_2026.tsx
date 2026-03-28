@@ -79,8 +79,6 @@ type SectionKey =
   | "ingNoOp"
   | "gasNoOp";
 
-type ModoVisual = "gerencial" | "auditoria";
-
 // =========================================================
 // HELPERS
 // =========================================================
@@ -101,26 +99,6 @@ const formatCurrency = (val: number) =>
   }).format(val || 0);
 
 const formatPercent = (val?: number) => `${(val ?? 0).toFixed(2)}%`;
-
-const formatSignedCurrency = (val: number) => {
-  const abs = Math.abs(val || 0);
-  const formatted = new Intl.NumberFormat("es-CO", {
-    style: "currency",
-    currency: "COP",
-    maximumFractionDigits: 0,
-  }).format(abs);
-
-  return val < 0 ? `-${formatted}` : formatted;
-};
-
-const normalizeDisplayValue = (
-  val: number,
-  modo: ModoVisual,
-  isGasto: boolean
-) => {
-  if (modo === "gerencial" && isGasto) return Math.abs(val || 0);
-  return val || 0;
-};
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
@@ -207,7 +185,6 @@ export default function EstadoResultadosPage() {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [vista, setVista] = useState<"resumida" | "detallada">("detallada");
-  const [modoVisual, setModoVisual] = useState<ModoVisual>("gerencial");
   const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>({
     ingOp: false,
     costos: false,
@@ -226,7 +203,7 @@ export default function EstadoResultadosPage() {
   };
 
   const expandAllSections = () => {
-    setOpenSections({
+  setOpenSections({
       ingOp: true,
       costos: true,
       gasOp: true,
@@ -248,9 +225,7 @@ export default function EstadoResultadosPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await authFetch(
-        `/reportes/pnl_v1?desde=${fechaDesde}&hasta=${fechaHasta}`
-      );
+      const res = await authFetch(`/reportes/pnl_v1?desde=${fechaDesde}&hasta=${fechaHasta}`);
       setEvolucion(res.evolucion ?? []);
       setComposicion(res.composicion ?? []);
       setKpis(res.kpis ?? {});
@@ -262,9 +237,7 @@ export default function EstadoResultadosPage() {
     }
   };
 
-  const handleFileUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -393,8 +366,7 @@ export default function EstadoResultadosPage() {
 
   const utilidadBruta = totalIngOp - totalCostos;
   const utilidadOperativa = utilidadBruta - totalGasOp;
-  const utilidadAntesImpuestos =
-    utilidadOperativa + totalIngNoOp - totalGasNoOp;
+  const utilidadAntesImpuestos = utilidadOperativa + totalIngNoOp - totalGasNoOp;
   const utilidadNeta = utilidadAntesImpuestos;
 
   const tIngOpMes = getTotalesPorMes(ingOp);
@@ -419,31 +391,6 @@ export default function EstadoResultadosPage() {
   );
 
   const unMes = uaiMes;
-
-  const alertasAuditoria = useMemo(() => {
-    const alertas: string[] = [];
-
-    if (utilidadOperativa > utilidadBruta) {
-      alertas.push(
-        "La utilidad operativa es mayor que la utilidad bruta. Esto sugiere gastos operacionales netos negativos o reclasificaciones contables."
-      );
-    }
-
-    if ((kpis.ebitda || 0) < (kpis.utilidad_operativa || utilidadOperativa || 0)) {
-      alertas.push(
-        "El EBITDA quedó por debajo de la utilidad operativa. Revisa cuentas de depreciación/amortización."
-      );
-    }
-
-    const sumaMesesGasOp = Object.values(tGasOpMes).reduce((a, b) => a + b, 0);
-    if (Math.abs(totalGasOp - sumaMesesGasOp) > 1) {
-      alertas.push(
-        "El acumulado de gastos operacionales no coincide con la suma visual de los meses. Puede haber signos ocultos o compensaciones."
-      );
-    }
-
-    return alertas;
-  }, [utilidadOperativa, utilidadBruta, kpis.ebitda, kpis.utilidad_operativa, totalGasOp, tGasOpMes]);
 
   const exportExcel = () => {
     const wb = XLSX.utils.book_new();
@@ -558,11 +505,7 @@ export default function EstadoResultadosPage() {
               onClick={() => fileInputRef.current?.click()}
               className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-2xl text-xs font-black hover:bg-black transition-all shadow-lg active:scale-95"
             >
-              {uploading ? (
-                <RefreshCcw className="animate-spin" size={16} />
-              ) : (
-                <FileText size={16} />
-              )}
+              {uploading ? <RefreshCcw className="animate-spin" size={16} /> : <FileText size={16} />}
               {uploading ? "Sincronizando..." : "Sincronizar Auxiliar"}
             </button>
           </div>
@@ -597,9 +540,7 @@ export default function EstadoResultadosPage() {
           </div>
 
           <div className="flex flex-col">
-            <label className="text-[10px] font-black text-white uppercase ml-1 mb-1">
-              .
-            </label>
+            <label className="text-[10px] font-black text-white uppercase ml-1 mb-1">.</label>
             <button
               onClick={fetchData}
               className="bg-indigo-50 text-indigo-700 font-black px-6 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 hover:bg-indigo-100 transition-all border border-indigo-100"
@@ -610,54 +551,29 @@ export default function EstadoResultadosPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 bg-slate-50 rounded-2xl p-1 border">
-            <button
-              onClick={() => setVista("resumida")}
-              className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${
-                vista === "resumida"
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-600 hover:bg-white"
-              }`}
-            >
-              <EyeOff size={14} />
-              Vista resumida
-            </button>
-            <button
-              onClick={() => setVista("detallada")}
-              className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${
-                vista === "detallada"
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-600 hover:bg-white"
-              }`}
-            >
-              <Eye size={14} />
-              Vista detallada
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2 bg-amber-50 rounded-2xl p-1 border border-amber-100">
-            <button
-              onClick={() => setModoVisual("gerencial")}
-              className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${
-                modoVisual === "gerencial"
-                  ? "bg-emerald-600 text-white"
-                  : "text-slate-600 hover:bg-white"
-              }`}
-            >
-              Modo gerencial
-            </button>
-            <button
-              onClick={() => setModoVisual("auditoria")}
-              className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${
-                modoVisual === "auditoria"
-                  ? "bg-amber-600 text-white"
-                  : "text-slate-600 hover:bg-white"
-              }`}
-            >
-              Modo auditoría
-            </button>
-          </div>
+        <div className="flex items-center gap-2 bg-slate-50 rounded-2xl p-1 border">
+          <button
+            onClick={() => setVista("resumida")}
+            className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${
+              vista === "resumida"
+                ? "bg-slate-900 text-white"
+                : "text-slate-600 hover:bg-white"
+            }`}
+          >
+            <EyeOff size={14} />
+            Vista resumida
+          </button>
+          <button
+            onClick={() => setVista("detallada")}
+            className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${
+              vista === "detallada"
+                ? "bg-slate-900 text-white"
+                : "text-slate-600 hover:bg-white"
+            }`}
+          >
+            <Eye size={14} />
+            Vista detallada
+          </button>
         </div>
       </div>
 
@@ -721,15 +637,8 @@ export default function EstadoResultadosPage() {
 
         <CardContent className="pt-2">
           <ResponsiveContainer width="100%" height={380}>
-            <ComposedChart
-              data={evolucionChart}
-              margin={{ top: 28, right: 10, left: 0, bottom: 0 }}
-            >
-              <CartesianGrid
-                strokeDasharray="3 3"
-                vertical={false}
-                stroke="#f1f5f9"
-              />
+            <ComposedChart data={evolucionChart} margin={{ top: 28, right: 10, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
               <XAxis
                 dataKey="label"
                 axisLine={false}
@@ -773,27 +682,6 @@ export default function EstadoResultadosPage() {
           </ResponsiveContainer>
         </CardContent>
       </Card>
-
-      {/* ALERTAS AUDITORÍA */}
-      {modoVisual === "auditoria" && alertasAuditoria.length > 0 && (
-        <Card className="rounded-[2rem] border border-amber-200 bg-amber-50 shadow-sm">
-          <CardContent className="p-4">
-            <h3 className="text-sm font-black text-amber-800 uppercase tracking-wide mb-2">
-              Alertas de auditoría
-            </h3>
-            <div className="space-y-2">
-              {alertasAuditoria.map((alerta, idx) => (
-                <div
-                  key={idx}
-                  className="text-sm text-amber-900 bg-white/70 border border-amber-100 rounded-xl px-3 py-2"
-                >
-                  {alerta}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* MATRIZ */}
       {vista === "detallada" && (
@@ -857,20 +745,13 @@ export default function EstadoResultadosPage() {
                 />
                 {openSections.ingOp &&
                   ingOp.map((c) => (
-                    <RowCuenta
-                      key={c.cuenta}
-                      cuenta={c}
-                      isGasto={false}
-                      periodos={periodos}
-                      modoVisual={modoVisual}
-                    />
+                    <RowCuenta key={c.cuenta} cuenta={c} isGasto={false} periodos={periodos} />
                   ))}
                 <RowTotal
                   title="TOTAL INGRESOS OPERACIONALES"
                   totalesMes={tIngOpMes}
                   totalAcumulado={totalIngOp}
                   periodos={periodos}
-                  modoVisual={modoVisual}
                 />
 
                 {/* COSTOS */}
@@ -883,13 +764,7 @@ export default function EstadoResultadosPage() {
                 />
                 {openSections.costos &&
                   costos.map((c) => (
-                    <RowCuenta
-                      key={c.cuenta}
-                      cuenta={c}
-                      isGasto={true}
-                      periodos={periodos}
-                      modoVisual={modoVisual}
-                    />
+                    <RowCuenta key={c.cuenta} cuenta={c} isGasto={true} periodos={periodos} />
                   ))}
                 <RowTotal
                   title="TOTAL COSTOS DE VENTA"
@@ -897,7 +772,6 @@ export default function EstadoResultadosPage() {
                   totalAcumulado={totalCostos}
                   isGasto
                   periodos={periodos}
-                  modoVisual={modoVisual}
                 />
 
                 {/* UTILIDAD BRUTA */}
@@ -922,13 +796,7 @@ export default function EstadoResultadosPage() {
                 />
                 {openSections.gasOp &&
                   gasOp.map((c) => (
-                    <RowCuenta
-                      key={c.cuenta}
-                      cuenta={c}
-                      isGasto={true}
-                      periodos={periodos}
-                      modoVisual={modoVisual}
-                    />
+                    <RowCuenta key={c.cuenta} cuenta={c} isGasto={true} periodos={periodos} />
                   ))}
                 <RowTotal
                   title="TOTAL GASTOS OPERACIONALES"
@@ -936,7 +804,6 @@ export default function EstadoResultadosPage() {
                   totalAcumulado={totalGasOp}
                   isGasto
                   periodos={periodos}
-                  modoVisual={modoVisual}
                 />
 
                 {/* UTILIDAD OPERATIVA */}
@@ -961,20 +828,13 @@ export default function EstadoResultadosPage() {
                 />
                 {openSections.ingNoOp &&
                   ingNoOp.map((c) => (
-                    <RowCuenta
-                      key={c.cuenta}
-                      cuenta={c}
-                      isGasto={false}
-                      periodos={periodos}
-                      modoVisual={modoVisual}
-                    />
+                    <RowCuenta key={c.cuenta} cuenta={c} isGasto={false} periodos={periodos} />
                   ))}
                 <RowTotal
                   title="TOTAL INGRESOS NO OPERACIONALES"
                   totalesMes={tIngNoOpMes}
                   totalAcumulado={totalIngNoOp}
                   periodos={periodos}
-                  modoVisual={modoVisual}
                 />
 
                 {/* GASTOS NO OPERACIONALES */}
@@ -987,13 +847,7 @@ export default function EstadoResultadosPage() {
                 />
                 {openSections.gasNoOp &&
                   gasNoOp.map((c) => (
-                    <RowCuenta
-                      key={c.cuenta}
-                      cuenta={c}
-                      isGasto={true}
-                      periodos={periodos}
-                      modoVisual={modoVisual}
-                    />
+                    <RowCuenta key={c.cuenta} cuenta={c} isGasto={true} periodos={periodos} />
                   ))}
                 <RowTotal
                   title="TOTAL GASTOS NO OPERACIONALES"
@@ -1001,7 +855,6 @@ export default function EstadoResultadosPage() {
                   totalAcumulado={totalGasNoOp}
                   isGasto
                   periodos={periodos}
-                  modoVisual={modoVisual}
                 />
 
                 {/* UTILIDAD ANTES DE IMPUESTOS */}
@@ -1022,10 +875,7 @@ export default function EstadoResultadosPage() {
                     (=) Utilidad Neta del Ejercicio
                   </td>
                   {periodos.map((p) => (
-                    <td
-                      key={p}
-                      className="py-5 px-4 text-right font-black text-emerald-400 text-sm"
-                    >
+                    <td key={p} className="py-5 px-4 text-right font-black text-emerald-400 text-sm">
                       {formatCurrency(unMes[p])}
                     </td>
                   ))}
@@ -1094,68 +944,38 @@ const RowCuenta = ({
   cuenta,
   isGasto,
   periodos,
-  modoVisual,
 }: {
   cuenta: CuentaItem;
   isGasto: boolean;
   periodos: string[];
-  modoVisual: ModoVisual;
 }) => (
   <tr className="hover:bg-slate-50 transition-colors group">
     <td className="py-2 px-6 text-slate-600 font-medium text-xs flex gap-3 items-center sticky left-0 bg-white group-hover:bg-slate-50 transition-colors w-[360px]">
       <span className="font-mono bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[10px]">
         {cuenta.cuenta}
       </span>
-      <span
-        className="group-hover:text-indigo-600 transition-colors truncate"
-        title={cuenta.nombre}
-      >
+      <span className="group-hover:text-indigo-600 transition-colors truncate" title={cuenta.nombre}>
         {cuenta.nombre}
       </span>
     </td>
 
     {periodos.map((p) => {
-      const valorReal = cuenta.valores_mes[p] || 0;
-      const valorMostrar = normalizeDisplayValue(valorReal, modoVisual, isGasto);
-
-      let cls = "text-slate-800";
-      if (modoVisual === "auditoria") {
-        cls = valorReal < 0
-          ? "text-amber-700"
-          : isGasto
-          ? "text-rose-600"
-          : "text-slate-800";
-      } else {
-        cls = isGasto ? "text-rose-600" : "text-slate-800";
-      }
+      const valor = Math.abs(cuenta.valores_mes[p] || 0);
+      const cls = isGasto ? "text-rose-600" : "text-slate-800";
 
       return (
         <td key={p} className={`py-2 px-4 text-right font-bold text-xs ${cls}`}>
-          {modoVisual === "auditoria"
-            ? formatSignedCurrency(valorReal)
-            : formatCurrency(valorMostrar)}
+          {formatCurrency(valor)}
         </td>
       );
     })}
 
     <td
       className={`py-2 px-6 text-right font-black text-xs bg-slate-50/50 border-l border-slate-100 ${
-        modoVisual === "auditoria"
-          ? cuenta.total < 0
-            ? "text-amber-700"
-            : isGasto
-            ? "text-rose-700"
-            : "text-slate-900"
-          : isGasto
-          ? "text-rose-700"
-          : "text-slate-900"
+        isGasto ? "text-rose-700" : "text-slate-900"
       }`}
     >
-      {modoVisual === "auditoria"
-        ? formatSignedCurrency(cuenta.total || 0)
-        : formatCurrency(
-            normalizeDisplayValue(cuenta.total || 0, modoVisual, isGasto)
-          )}
+      {formatCurrency(Math.abs(cuenta.total || 0))}
     </td>
   </tr>
 );
@@ -1166,60 +986,33 @@ const RowTotal = ({
   totalAcumulado,
   isGasto = false,
   periodos,
-  modoVisual,
 }: {
   title: string;
   totalesMes: Record<string, number>;
   totalAcumulado: number;
   isGasto?: boolean;
   periodos: string[];
-  modoVisual: ModoVisual;
 }) => (
   <tr className="border-t border-slate-200 bg-slate-50/80">
     <td className="py-3 px-6 font-black text-slate-700 text-[11px] sticky left-0 bg-slate-50/80">
       {title}
     </td>
-    {periodos.map((p) => {
-      const valorReal = totalesMes[p] || 0;
-      const valorMostrar = normalizeDisplayValue(valorReal, modoVisual, isGasto);
-
-      let cls = "text-slate-900";
-      if (modoVisual === "auditoria") {
-        cls = valorReal < 0
-          ? "text-amber-700"
-          : isGasto
-          ? "text-rose-600"
-          : "text-slate-900";
-      } else {
-        cls = isGasto ? "text-rose-600" : "text-slate-900";
-      }
-
-      return (
-        <td key={p} className={`py-3 px-4 text-right font-black text-xs ${cls}`}>
-          {modoVisual === "auditoria"
-            ? formatSignedCurrency(valorReal)
-            : formatCurrency(valorMostrar)}
-        </td>
-      );
-    })}
+    {periodos.map((p) => (
+      <td
+        key={p}
+        className={`py-3 px-4 text-right font-black text-xs ${
+          isGasto ? "text-rose-600" : "text-slate-900"
+        }`}
+      >
+        {formatCurrency(Math.abs(totalesMes[p] || 0))}
+      </td>
+    ))}
     <td
       className={`py-3 px-6 text-right font-black text-sm bg-slate-100/50 border-l border-slate-200 ${
-        modoVisual === "auditoria"
-          ? totalAcumulado < 0
-            ? "text-amber-700"
-            : isGasto
-            ? "text-rose-700"
-            : "text-slate-900"
-          : isGasto
-          ? "text-rose-700"
-          : "text-slate-900"
+        isGasto ? "text-rose-700" : "text-slate-900"
       }`}
     >
-      {modoVisual === "auditoria"
-        ? formatSignedCurrency(totalAcumulado || 0)
-        : formatCurrency(
-            normalizeDisplayValue(totalAcumulado || 0, modoVisual, isGasto)
-          )}
+      {formatCurrency(Math.abs(totalAcumulado || 0))}
     </td>
   </tr>
 );
@@ -1244,11 +1037,7 @@ const ResultRow = ({
   totalClass: string;
 }) => (
   <tr className={rowClass}>
-    <td
-      className={`py-4 px-6 font-black text-sm uppercase sticky left-0 ${titleClass}`}
-    >
-      {title}
-    </td>
+    <td className={`py-4 px-6 font-black text-sm uppercase sticky left-0 ${titleClass}`}>{title}</td>
     {periodos.map((p) => (
       <td key={p} className={`py-4 px-4 text-right font-black text-sm ${valueClass}`}>
         {formatCurrency(values[p] || 0)}
@@ -1286,9 +1075,7 @@ const StatCard = ({
   return (
     <Card
       className={`relative overflow-hidden border shadow-lg rounded-[2rem] transition-all hover:scale-[1.01] ${
-        highlight
-          ? "bg-indigo-600 text-white shadow-indigo-200 border-none"
-          : themes[color]
+        highlight ? "bg-indigo-600 text-white shadow-indigo-200 border-none" : themes[color]
       }`}
     >
       <CardContent className="p-4">
@@ -1299,9 +1086,7 @@ const StatCard = ({
           {badge && (
             <div
               className={`text-[9px] font-black px-2 py-1 rounded-lg flex items-center gap-1 ${
-                highlight
-                  ? "bg-emerald-400 text-emerald-950"
-                  : "bg-slate-100 text-slate-500"
+                highlight ? "bg-emerald-400 text-emerald-950" : "bg-slate-100 text-slate-500"
               }`}
             >
               {badge} MARGEN

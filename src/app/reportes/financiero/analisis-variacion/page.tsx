@@ -11,13 +11,15 @@ import {
   Search,
   Lightbulb,
   TrendingUp,
-  TrendingDown,
   Activity,
   DollarSign,
   Landmark,
   ArrowUpRight,
   ArrowDownRight,
   BarChart3,
+  Sparkles,
+  TriangleAlert,
+  Target,
 } from "lucide-react";
 
 // =========================================================
@@ -244,6 +246,54 @@ function getDeltaClass(val: number) {
   return "text-slate-500";
 }
 
+function formatPeriodoLabel(periodo: string) {
+  const [year, month] = periodo.split("-");
+  const meses = [
+    "Ene", "Feb", "Mar", "Abr", "May", "Jun",
+    "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
+  ];
+  const idx = Number(month) - 1;
+  return `${meses[idx] || month} ${year}`;
+}
+
+function formatPeriodoRangeLabel(labels: string[]) {
+  if (!labels.length) return "Sin selección";
+  if (labels.length === 1) return formatPeriodoLabel(labels[0]);
+
+  const first = labels[0];
+  const last = labels[labels.length - 1];
+
+  const [y1, m1] = first.split("-");
+  const [y2, m2] = last.split("-");
+
+  const meses = [
+    "Ene", "Feb", "Mar", "Abr", "May", "Jun",
+    "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
+  ];
+
+  if (y1 === y2) {
+    return `${meses[Number(m1) - 1]}-${meses[Number(m2) - 1]} ${y1}`;
+  }
+
+  return `${meses[Number(m1) - 1]} ${y1} a ${meses[Number(m2) - 1]} ${y2}`;
+}
+
+function formatPeriodoNarrativo(labels: string[], modo: CompareMode) {
+  if (!labels.length) return "período sin selección";
+  if (modo === "mensual") return formatPeriodoLabel(labels[0]);
+  return `el acumulado de ${formatPeriodoRangeLabel(labels)}`;
+}
+
+function getImpactLabel(favorable: boolean) {
+  return favorable ? "Mejora resultado" : "Presiona resultado";
+}
+
+function getImpactClasses(favorable: boolean) {
+  return favorable
+    ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
+    : "bg-rose-50 text-rose-700 border border-rose-100";
+}
+
 // =========================================================
 // PAGE
 // =========================================================
@@ -269,7 +319,9 @@ export default function AnalisisVariacionInteligentePage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await authFetch(`/reportes/analisis_variacion_v1?desde=${fechaDesde}&hasta=${fechaHasta}`);
+      const res = await authFetch(
+        `/reportes/analisis_variacion_v1?desde=${fechaDesde}&hasta=${fechaHasta}`
+      );
       const evo: EvolucionItem[] = res.evolucion ?? [];
       const comp: CuentaItem[] = res.composicion ?? [];
 
@@ -405,22 +457,22 @@ export default function AnalisisVariacionInteligentePage() {
     const pctUo = porcentajeCambio(compUo, baseUo);
     const pctUn = porcentajeCambio(compUn, baseUn);
 
-    const nombreBase =
-      modoComparacion === "mensual"
-        ? labelsBase[0] || "Período base"
-        : `${labelsBase[0] || ""} a ${labelsBase[labelsBase.length - 1] || ""}`;
-
-    const nombreComp =
-      modoComparacion === "mensual"
-        ? labelsComparacion[0] || "Período comparación"
-        : `${labelsComparacion[0] || ""} a ${labelsComparacion[labelsComparacion.length - 1] || ""}`;
+    const nombreBase = formatPeriodoNarrativo(labelsBase, modoComparacion);
+    const nombreComp = formatPeriodoNarrativo(labelsComparacion, modoComparacion);
 
     explicacion.push(
-      `Frente a ${nombreBase}, el período ${nombreComp} ${tendenciaVerbo(compIng, baseIng)} en ingresos a ${formatCurrency(compIng)} (${pctIng === null ? "N/A" : formatSignedPercent(pctIng)}).`
+      `Comparado contra ${nombreBase}, ${nombreComp} ${tendenciaVerbo(
+        compIng,
+        baseIng
+      )} en ingresos hasta ${formatCurrency(compIng)} (${
+        pctIng === null ? "N/A" : formatSignedPercent(pctIng)
+      }).`
     );
 
     explicacion.push(
-      `La utilidad neta ${tendenciaVerbo(compUn, baseUn)} a ${formatCurrency(compUn)} (${pctUn === null ? "N/A" : formatSignedPercent(pctUn)}), mientras la utilidad operativa cerró en ${formatCurrency(compUo)}.`
+      `La utilidad neta ${tendenciaVerbo(compUn, baseUn)} a ${formatCurrency(
+        compUn
+      )} (${pctUn === null ? "N/A" : formatSignedPercent(pctUn)}), mientras la utilidad operativa cerró en ${formatCurrency(compUo)}.`
     );
 
     if (deltaIng > 0 && deltaUb < 0) {
@@ -449,7 +501,11 @@ export default function AnalisisVariacionInteligentePage() {
       );
     }
 
-    if (Math.abs(aggComparacion.ingresos_no_operacionales - aggComparacion.gastos_no_operacionales) > 0) {
+    if (
+      Math.abs(
+        aggComparacion.ingresos_no_operacionales - aggComparacion.gastos_no_operacionales
+      ) > 0
+    ) {
       const netoNoOp =
         aggComparacion.ingresos_no_operacionales - aggComparacion.gastos_no_operacionales;
       diagnostico.push(
@@ -535,9 +591,72 @@ export default function AnalisisVariacionInteligentePage() {
   const readyToCompare =
     labelsBase.length > 0 &&
     labelsComparacion.length > 0 &&
-    !(labelsBase.length === 1 &&
+    !(
+      labelsBase.length === 1 &&
       labelsComparacion.length === 1 &&
-      labelsBase[0] === labelsComparacion[0]);
+      labelsBase[0] === labelsComparacion[0]
+    );
+
+  const baseLabel = useMemo(() => formatPeriodoRangeLabel(labelsBase), [labelsBase]);
+
+  const comparacionLabel = useMemo(
+    () => formatPeriodoRangeLabel(labelsComparacion),
+    [labelsComparacion]
+  );
+
+  const descripcionComparacion = useMemo(() => {
+    if (!readyToCompare) return "";
+
+    if (modoComparacion === "mensual") {
+      return `Comparando ${baseLabel} vs ${comparacionLabel}.`;
+    }
+
+    return `Comparando acumulados: ${baseLabel} vs ${comparacionLabel}.`;
+  }, [readyToCompare, modoComparacion, baseLabel, comparacionLabel]);
+
+  const detalleComparacion = useMemo(() => {
+    if (!readyToCompare) return "";
+
+    if (modoComparacion === "mensual") {
+      return "Cada lado representa un solo mes.";
+    }
+
+    return `El rango base incluye ${labelsBase.length} mes(es) y el comparado ${labelsComparacion.length} mes(es).`;
+  }, [readyToCompare, modoComparacion, labelsBase.length, labelsComparacion.length]);
+
+  const mayorMejora = useMemo(() => {
+    const mejor = topFavorables[0];
+    if (!mejor) return "No hay una mejora dominante identificada en la selección actual.";
+    return `${mejor.cuenta} - ${mejor.nombre} impulsa positivamente el resultado con ${formatSignedCurrency(
+      mejor.variacion
+    )}.`;
+  }, [topFavorables]);
+
+  const mayorPresion = useMemo(() => {
+    const peor = topDesfavorables[0];
+    if (!peor) return "No se detecta una presión dominante sobre el resultado en la selección actual.";
+    return `${peor.cuenta} - ${peor.nombre} presiona el resultado con ${formatSignedCurrency(
+      peor.variacion
+    )}.`;
+  }, [topDesfavorables]);
+
+  const puntoCritico = useMemo(() => {
+    if (aggComparacion.gastos_operacionales < 0) {
+      return "Los gastos operacionales netos son negativos en el período comparado. Conviene validar reversiones, provisiones o clasificaciones contables.";
+    }
+
+    const ubRow = kpiRows.find((x) => x.key === "utilidad_bruta");
+    if (ubRow && ubRow.variacionPct !== null && ubRow.variacionPct <= -10) {
+      return "El margen bruto se está deteriorando. Revisa costos directos, devoluciones y mezcla comercial.";
+    }
+
+    const unRow = kpiRows.find((x) => x.key === "utilidad_neta");
+    if (unRow && unRow.variacionPct !== null && unRow.variacionPct <= -10) {
+      return "La utilidad neta muestra presión relevante. Revisa costos, gasto operacional y partidas no operacionales.";
+    }
+
+    return "El frente más sensible a vigilar sigue siendo la relación entre crecimiento de ingresos y sostenibilidad del margen.";
+  }, [aggComparacion.gastos_operacionales, kpiRows]);
 
   return (
     <div className="space-y-4 p-5 bg-slate-50 min-h-screen">
@@ -745,14 +864,44 @@ export default function AnalisisVariacionInteligentePage() {
 
         <div className="flex flex-wrap gap-2 text-xs">
           <BadgeInfo
-            label="Base"
-            value={labelsBase.length ? labelsBase.join(", ") : "Sin selección"}
+            label={modoComparacion === "mensual" ? "Base" : "Base acumulada"}
+            value={labelsBase.length ? baseLabel : "Sin selección"}
           />
           <BadgeInfo
-            label="Comparación"
-            value={labelsComparacion.length ? labelsComparacion.join(", ") : "Sin selección"}
+            label={
+              modoComparacion === "mensual" ? "Comparación" : "Comparación acumulada"
+            }
+            value={labelsComparacion.length ? comparacionLabel : "Sin selección"}
           />
         </div>
+
+        {readyToCompare && (
+          <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-widest text-indigo-700">
+                Lectura del comparativo
+              </p>
+              <p className="text-sm font-bold text-slate-800 mt-1">
+                {descripcionComparacion}
+              </p>
+              <p className="text-xs text-slate-600 mt-1">{detalleComparacion}</p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <span className="inline-flex items-center px-3 py-1 rounded-full bg-white border border-indigo-100 text-[11px] font-black text-indigo-700 uppercase tracking-widest">
+                {modoComparacion === "mensual"
+                  ? "Comparación mensual"
+                  : "Comparación acumulada"}
+              </span>
+              <span className="inline-flex items-center px-3 py-1 rounded-full bg-white border border-slate-200 text-[11px] font-black text-slate-700 uppercase tracking-widest">
+                Base: {baseLabel}
+              </span>
+              <span className="inline-flex items-center px-3 py-1 rounded-full bg-white border border-slate-200 text-[11px] font-black text-slate-700 uppercase tracking-widest">
+                Comparación: {comparacionLabel}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {!readyToCompare ? (
@@ -830,6 +979,28 @@ export default function AnalisisVariacionInteligentePage() {
             />
           </div>
 
+          {/* MINI FRANJA EJECUTIVA */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            <ExecutiveStripCard
+              title="Mayor mejora"
+              icon={<Sparkles size={16} />}
+              tone="emerald"
+              text={mayorMejora}
+            />
+            <ExecutiveStripCard
+              title="Mayor presión"
+              icon={<TriangleAlert size={16} />}
+              tone="rose"
+              text={mayorPresion}
+            />
+            <ExecutiveStripCard
+              title="Punto crítico a revisar"
+              icon={<Target size={16} />}
+              tone="amber"
+              text={puntoCritico}
+            />
+          </div>
+
           {/* TABLA KPIs */}
           <Card className="rounded-[2rem] shadow-sm border bg-white">
             <CardHeader className="pb-0">
@@ -888,12 +1059,12 @@ export default function AnalisisVariacionInteligentePage() {
           {/* TOP DRIVERS RESUMEN */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <DriverSummaryCard
-              title="Drivers favorables"
+              title="Factores que mejoran el resultado"
               tone="emerald"
               rows={resumenDrivers.positivos}
             />
             <DriverSummaryCard
-              title="Drivers desfavorables"
+              title="Factores que presionan el resultado"
               tone="rose"
               rows={resumenDrivers.negativos}
             />
@@ -917,7 +1088,7 @@ export default function AnalisisVariacionInteligentePage() {
                     <th className="py-3 px-4 text-right">Comparación</th>
                     <th className="py-3 px-4 text-right">Variación</th>
                     <th className="py-3 px-4 text-right">Impacto</th>
-                    <th className="py-3 px-4 text-center">Lectura</th>
+                    <th className="py-3 px-4 text-center">Impacto gerencial</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -940,7 +1111,11 @@ export default function AnalisisVariacionInteligentePage() {
                       </td>
                       <td
                         className={`py-3 px-4 text-right font-black ${
-                          row.variacion > 0 ? "text-emerald-600" : row.variacion < 0 ? "text-rose-600" : "text-slate-400"
+                          row.variacion > 0
+                            ? "text-emerald-600"
+                            : row.variacion < 0
+                            ? "text-rose-600"
+                            : "text-slate-400"
                         }`}
                       >
                         {formatSignedCurrency(row.variacion)}
@@ -950,13 +1125,11 @@ export default function AnalisisVariacionInteligentePage() {
                       </td>
                       <td className="py-3 px-4 text-center">
                         <span
-                          className={`inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                          className={`inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${getImpactClasses(
                             row.favorable
-                              ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
-                              : "bg-rose-50 text-rose-700 border border-rose-100"
-                          }`}
+                          )}`}
                         >
-                          {row.favorable ? "Favorable" : "Desfavorable"}
+                          {getImpactLabel(row.favorable)}
                         </span>
                       </td>
                     </tr>
@@ -975,11 +1148,11 @@ export default function AnalisisVariacionInteligentePage() {
 // SUBCOMPONENTES
 // =========================================================
 const BadgeInfo = ({ label, value }: { label: string; value: string }) => (
-  <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-100 border text-slate-700">
+  <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 shadow-sm">
     <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
       {label}
     </span>
-    <span className="text-xs font-bold">{value}</span>
+    <span className="text-xs font-bold text-slate-800">{value}</span>
   </div>
 );
 
@@ -1058,7 +1231,11 @@ const CompareStatCard = ({
 
         <div className="mt-3 flex items-center gap-2 text-xs font-black">
           {delta >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-          <span>{tipo === "currency" ? formatDeltaNumber(delta, tipo) : formatDeltaNumber(delta, "percent")}</span>
+          <span>
+            {tipo === "currency"
+              ? formatDeltaNumber(delta, tipo)
+              : formatDeltaNumber(delta, "percent")}
+          </span>
         </div>
       </CardContent>
     </Card>
@@ -1176,6 +1353,56 @@ const DriverSummaryCard = ({
               </div>
             ))
           )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+const ExecutiveStripCard = ({
+  title,
+  icon,
+  tone,
+  text,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  tone: "emerald" | "rose" | "amber";
+  text: string;
+}) => {
+  const styles =
+    tone === "emerald"
+      ? {
+          card: "border-emerald-200 bg-emerald-50",
+          title: "text-emerald-700",
+          box: "bg-white border border-emerald-100 text-slate-700",
+        }
+      : tone === "rose"
+      ? {
+          card: "border-rose-200 bg-rose-50",
+          title: "text-rose-700",
+          box: "bg-white border border-rose-100 text-slate-700",
+        }
+      : {
+          card: "border-amber-200 bg-amber-50",
+          title: "text-amber-700",
+          box: "bg-white border border-amber-100 text-slate-700",
+        };
+
+  return (
+    <Card className={`rounded-[2rem] shadow-sm border ${styles.card}`}>
+      <CardContent className="p-5 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-xl bg-white">{icon}</div>
+          <div>
+            <h3 className={`text-sm font-black uppercase tracking-wide ${styles.title}`}>
+              {title}
+            </h3>
+          </div>
+        </div>
+
+        <div className={`rounded-xl px-3 py-3 text-sm leading-6 ${styles.box}`}>
+          {text}
         </div>
       </CardContent>
     </Card>

@@ -227,6 +227,15 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 icon: <FileBarChart2 className="w-4 h-4" />,
               },
             ]
+          : []),
+        ...(tiene("ver_reporte_balance_general")
+          ? [
+              {
+                href: "/reportes/financiero/balance-general",
+                label: "Balance General",
+                icon: <FileBarChart2 className="w-4 h-4" />,
+              },
+            ]
           : []),  
         ...(tiene("ver_reporte_balance")
           ? [

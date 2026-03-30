@@ -217,6 +217,7 @@ export default function ClientHome() {
           tiene("ver_reporte_retenciones") ||
           tiene("ver_reporte_estado_resultados") ||
           tiene("ver_reporte_analisis_variacion") ||
+          tiene("ver_reporte_balance_general") ||
           tiene("ver_reporte_balance") ||
           tiene("ver_reporte_indicadores")) && (
           <Section title="🌟 Reportes Especiales" color="bg-green-50">
@@ -257,6 +258,14 @@ export default function ClientHome() {
                 title="Análisis de Variación"
                 href="/reportes/financiero/analisis-variacion"
                 description="Compara variaciones entre períodos y analiza cambios relevantes en los resultados financieros."
+              />
+            )}
+            {tiene("ver_reporte_balance_general") && (
+              <FeatureCard
+                icon="🏦"
+                title="Balance General"
+                href="/reportes/financiero/balance-general"
+                description="Consulta activos, pasivos y patrimonio para analizar la situación financiera de la empresa."
               />
             )}
             {tiene("ver_reporte_balance") && (

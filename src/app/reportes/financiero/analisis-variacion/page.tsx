@@ -460,44 +460,47 @@ export default function AnalisisVariacionInteligentePage() {
     const nombreBase = formatPeriodoNarrativo(labelsBase, modoComparacion);
     const nombreComp = formatPeriodoNarrativo(labelsComparacion, modoComparacion);
 
+    // =========================================================
+    // EXPLICACIÓN
+    // =========================================================
     explicacion.push(
-      `Comparado contra ${nombreBase}, ${nombreComp} ${tendenciaVerbo(
-        compIng,
-        baseIng
-      )} en ingresos hasta ${formatCurrency(compIng)} (${
-        pctIng === null ? "N/A" : formatSignedPercent(pctIng)
-      }).`
+      `Frente a ${nombreBase}, ${nombreComp} registra ingresos por ${formatCurrency(
+        compIng
+      )} (${pctIng === null ? "sin base comparable" : formatSignedPercent(pctIng)}), con una variación de ${formatSignedCurrency(deltaIng)}.`
     );
 
     explicacion.push(
-      `La utilidad neta ${tendenciaVerbo(compUn, baseUn)} a ${formatCurrency(
-        compUn
-      )} (${pctUn === null ? "N/A" : formatSignedPercent(pctUn)}), mientras la utilidad operativa cerró en ${formatCurrency(compUo)}.`
+      `La utilidad neta se ubica en ${formatCurrency(compUn)} (${pctUn === null ? "sin base comparable" : formatSignedPercent(
+        pctUn
+      )}), mientras la utilidad operativa alcanza ${formatCurrency(compUo)}.`
     );
 
+    // =========================================================
+    // DIAGNÓSTICO
+    // =========================================================
     if (deltaIng > 0 && deltaUb < 0) {
       diagnostico.push(
-        "Los ingresos mejoraron, pero la utilidad bruta se deterioró. Esto sugiere presión en costos de venta, devoluciones o mezcla comercial menos rentable."
+        "Aunque los ingresos crecen, el margen bruto se reduce. Esto indica presión en costos de venta, devoluciones o una mezcla comercial menos rentable."
       );
     }
 
     if (deltaUb > 0 && deltaUo < 0) {
       diagnostico.push(
-        "La utilidad bruta creció, pero la utilidad operativa se debilitó. Esto apunta a una estructura de gasto operacional más pesada."
+        "La utilidad bruta mejora, pero la utilidad operativa pierde fuerza. Esto sugiere que el gasto operacional está absorbiendo parte importante de la mejora comercial."
       );
     }
 
     if (aggComparacion.gastos_operacionales < 0) {
       diagnostico.push(
-        `El período comparado presenta gastos operacionales netos negativos (${formatSignedCurrency(
+        `Se observan gastos operacionales netos negativos (${formatSignedCurrency(
           aggComparacion.gastos_operacionales
-        )}), lo cual sugiere reversiones, reclasificaciones o ajustes contables poco habituales en lectura gerencial.`
+        )}). Esto puede corresponder a reclasificaciones, reversión de provisiones o ajustes contables que afectan la lectura operativa.`
       );
     }
 
     if (aggComparacion.utilidad_operativa > aggComparacion.utilidad_bruta) {
       diagnostico.push(
-        "La utilidad operativa está por encima de la utilidad bruta, señal de recuperación neta en gastos operacionales."
+        "La utilidad operativa está por encima de la utilidad bruta. Esto sugiere una recuperación neta en gastos operacionales o movimientos contables no habituales en la lectura gerencial."
       );
     }
 
@@ -508,50 +511,56 @@ export default function AnalisisVariacionInteligentePage() {
     ) {
       const netoNoOp =
         aggComparacion.ingresos_no_operacionales - aggComparacion.gastos_no_operacionales;
+
       diagnostico.push(
-        `El resultado no operacional aporta ${formatSignedCurrency(netoNoOp)} al período comparado.`
+        `El resultado no operacional impacta el período en ${formatSignedCurrency(
+          netoNoOp
+        )}, por lo que una parte del resultado final no proviene directamente de la operación principal del negocio.`
       );
     }
 
     if (!diagnostico.length) {
       diagnostico.push(
-        "El comportamiento general del período es consistente y no muestra anomalías fuertes en la relación entre ingresos, costos, gastos y utilidad."
+        "El comportamiento general del período es consistente y no muestra alertas fuertes en la relación entre ingresos, costos, gastos y utilidad."
       );
     }
 
+    // =========================================================
+    // RECOMENDACIONES
+    // =========================================================
     if (pctIng !== null && pctIng <= -15) {
       recomendaciones.push(
-        "Revisar ventas, devoluciones y ritmo comercial, porque la caída de ingresos es material frente al período base."
+        "Prioridad alta: revisar ventas, devoluciones y ritmo comercial, porque la caída de ingresos frente al período base es material."
       );
     }
 
     if (pctUb !== null && pctUb <= -10) {
       recomendaciones.push(
-        "Revisar rentabilidad comercial, estructura de costos directos y cuentas de devoluciones para proteger el margen bruto."
+        "Prioridad alta: revisar costos directos, devoluciones y precios de venta, ya que el margen bruto está deteriorándose."
       );
     }
 
     if (pctUo !== null && pctUo <= -10) {
       recomendaciones.push(
-        "Revisar el gasto operacional con foco en crecimiento no productivo, reclasificaciones y provisiones."
+        "Prioridad media: analizar el crecimiento del gasto operacional y validar que esté alineado con la generación de ingresos."
       );
     }
 
     if (pctUn !== null && pctUn <= -10) {
       recomendaciones.push(
-        "Revisar de inmediato los factores que presionan la utilidad neta: costos, gastos operativos y partidas no operacionales."
+        "Prioridad alta: la utilidad neta presenta presión relevante. Conviene revisar costos, gastos operativos y componentes no operacionales."
       );
     }
 
     if (aggComparacion.gastos_operacionales < 0) {
       recomendaciones.push(
-        "Validar con contabilidad las cuentas operacionales con saldo acreedor para confirmar si corresponden a reversión legítima o error de clasificación."
+        "Validar con contabilidad las cuentas operacionales con saldo acreedor para confirmar si corresponden a reversión legítima, reclasificación o error de registro."
       );
     }
 
     if (topDesfavorables.length > 0) {
       recomendaciones.push(
-        `Priorizar revisión de las cuentas con mayor impacto desfavorable, empezando por ${topDesfavorables
+        `Priorizar revisión de las cuentas con mayor impacto negativo, empezando por ${topDesfavorables
           .slice(0, 2)
           .map((x) => `${x.cuenta} - ${x.nombre}`)
           .join(" y ")}.`
@@ -560,7 +569,7 @@ export default function AnalisisVariacionInteligentePage() {
 
     if (!recomendaciones.length) {
       recomendaciones.push(
-        "Mantener seguimiento sobre margen bruto, gasto operacional y utilidad neta para validar que la mejora sea sostenible."
+        "Mantener seguimiento sobre margen bruto, gasto operacional y utilidad neta para validar que la mejora observada sea sostenible."
       );
     }
 
@@ -627,37 +636,39 @@ export default function AnalisisVariacionInteligentePage() {
   const mayorMejora = useMemo(() => {
     const mejor = topFavorables[0];
     if (!mejor) return "No hay una mejora dominante identificada en la selección actual.";
-    return `${mejor.cuenta} - ${mejor.nombre} impulsa positivamente el resultado con ${formatSignedCurrency(
+
+    return `${mejor.cuenta} - ${mejor.nombre} mejora el resultado en ${formatSignedCurrency(
       mejor.variacion
-    )}.`;
+    )}, principalmente por una reducción o menor impacto de esta cuenta frente al período base.`;
   }, [topFavorables]);
 
   const mayorPresion = useMemo(() => {
     const peor = topDesfavorables[0];
     if (!peor) return "No se detecta una presión dominante sobre el resultado en la selección actual.";
-    return `${peor.cuenta} - ${peor.nombre} presiona el resultado con ${formatSignedCurrency(
+
+    return `${peor.cuenta} - ${peor.nombre} reduce el resultado en ${formatSignedCurrency(
       peor.variacion
-    )}.`;
+    )}, siendo el principal factor de presión frente al período base.`;
   }, [topDesfavorables]);
 
   const puntoCritico = useMemo(() => {
     if (aggComparacion.gastos_operacionales < 0) {
-      return "Los gastos operacionales netos son negativos en el período comparado. Conviene validar reversiones, provisiones o clasificaciones contables.";
+      return "Los gastos operacionales netos son negativos en el período comparado. Conviene validar reversiones, provisiones o clasificaciones contables antes de sacar conclusiones gerenciales definitivas.";
     }
 
     const ubRow = kpiRows.find((x) => x.key === "utilidad_bruta");
     if (ubRow && ubRow.variacionPct !== null && ubRow.variacionPct <= -10) {
-      return "El margen bruto se está deteriorando. Revisa costos directos, devoluciones y mezcla comercial.";
+      return "El principal punto a vigilar es el deterioro del margen bruto. Revisa costos directos, devoluciones y mezcla comercial.";
     }
 
     const unRow = kpiRows.find((x) => x.key === "utilidad_neta");
     if (unRow && unRow.variacionPct !== null && unRow.variacionPct <= -10) {
-      return "La utilidad neta muestra presión relevante. Revisa costos, gasto operacional y partidas no operacionales.";
+      return "La utilidad neta presenta una caída relevante. Conviene revisar costos, gasto operacional y componentes no operacionales.";
     }
 
-    return "El frente más sensible a vigilar sigue siendo la relación entre crecimiento de ingresos y sostenibilidad del margen.";
+    return "El principal punto a vigilar es la sostenibilidad del margen: el crecimiento en ingresos debe traducirse de forma proporcional en rentabilidad.";
   }, [aggComparacion.gastos_operacionales, kpiRows]);
-
+  
   return (
     <div className="space-y-4 p-5 bg-slate-50 min-h-screen">
       {/* HEADER */}

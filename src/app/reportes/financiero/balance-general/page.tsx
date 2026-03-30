@@ -198,15 +198,9 @@ export default function BalanceGeneralPage() {
         comparar_con: compararCon,
       });
 
-      const res = await authFetch(`/reportes/balance_general_v1?${params.toString()}`);
-
-      const json = await res.json();
-
-      if (!res.ok) {
-        throw new Error(json?.error || "No fue posible consultar el balance");
-      }
-
+      const json = await authFetch(`/reportes/balance_general_v1?${params.toString()}`);
       setData(json);
+
     } catch (err: any) {
       setError(err.message || "Error cargando balance");
       setData(null);
@@ -220,23 +214,17 @@ export default function BalanceGeneralPage() {
       setRebuilding(true);
       setError(null);
 
-      const res = await authFetch("/reportes/balance_general/rebuild_snapshot", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          fecha_corte: fechaCorte,
-        }),
-      });
+        await authFetch("/reportes/balance_general/rebuild_snapshot", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                fecha_corte: fechaCorte,
+            }),
+        });
 
-      const json = await res.json();
-
-      if (!res.ok) {
-        throw new Error(json?.error || "No fue posible regenerar el snapshot");
-      }
-
-      await cargarBalance();
+        await cargarBalance();
     } catch (err: any) {
       setError(err.message || "Error regenerando snapshot");
     } finally {

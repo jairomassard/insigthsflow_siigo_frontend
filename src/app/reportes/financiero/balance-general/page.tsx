@@ -13,16 +13,25 @@ type BalanceItem = {
   seccion: string;
   grupo_balance: string;
   saldo_actual: number;
-  saldo_anterior: number;
-  variacion_abs: number;
-  variacion_pct: number;
+  saldo_anterior: number | null;
+  variacion_abs: number | null;
+  variacion_pct: number | null;
 };
 
 type BalanceResponse = {
   ok: boolean;
   fechas: {
     fecha_corte: string;
-    comparar_con: string;
+    comparar_con: string | null;
+  };
+  meta?: {
+    modo_comparativo?: boolean;
+    comparacion_solicitada?: boolean;
+    snapshot_comparativo_existe?: boolean;
+    explicacion_filtros?: {
+      fecha_corte?: string;
+      comparar_con?: string;
+    };
   };
   kpis: {
     activo_corriente: number;
@@ -38,9 +47,15 @@ type BalanceResponse = {
     nivel_endeudamiento_pct: number;
     autonomia_financiera_pct: number;
     cuadratura: number;
+    cuadratura_original?: number;
+    utilidad_calculada_actual?: number;
+    utilidad_calculada_anterior?: number | null;
+    ajuste_patrimonio_aplicado_actual?: number;
+    ajuste_patrimonio_aplicado_anterior?: number | null;
   };
   resumen?: {
     narrativa?: string[];
+    alertas?: string[];
   };
   balance: {
     activo_corriente: BalanceItem[];
@@ -51,7 +66,7 @@ type BalanceResponse = {
   };
 };
 
-function formatCurrency(value: number) {
+function formatCurrency(value: number | null | undefined) {
   return new Intl.NumberFormat("es-CO", {
     style: "currency",
     currency: "COP",
@@ -59,7 +74,7 @@ function formatCurrency(value: number) {
   }).format(value || 0);
 }
 
-function formatNumber(value: number) {
+function formatNumber(value: number | null | undefined) {
   return new Intl.NumberFormat("es-CO", {
     maximumFractionDigits: 2,
   }).format(value || 0);
@@ -71,7 +86,11 @@ function getLastDayOfPreviousMonth(dateStr: string) {
   return prevMonthLastDay.toISOString().slice(0, 10);
 }
 
-function VariacionBadge({ value }: { value: number }) {
+function VariacionBadge({ value }: { value: number | null | undefined }) {
+  if (value === null || value === undefined) {
+    return <span className="text-slate-400 text-xs">—</span>;
+  }
+
   let cls = "bg-slate-100 text-slate-700";
   if (value > 0) cls = "bg-green-100 text-green-700";
   if (value < 0) cls = "bg-red-100 text-red-700";
@@ -100,89 +119,144 @@ function CuadraturaBadge({ value }: { value: number }) {
 function SectionTable({
   title,
   items,
+  showComparison,
+  open,
+  onToggle,
 }: {
   title: string;
   items: BalanceItem[];
+  showComparison: boolean;
+  open: boolean;
+  onToggle: () => void;
 }) {
   const totalActual = items.reduce((acc, it) => acc + (it.saldo_actual || 0), 0);
-  const totalAnterior = items.reduce((acc, it) => acc + (it.saldo_anterior || 0), 0);
-  const variacionAbs = totalActual - totalAnterior;
+  const totalAnterior = showComparison
+    ? items.reduce((acc, it) => acc + (it.saldo_anterior || 0), 0)
+    : 0;
+  const variacionAbs = showComparison ? totalActual - totalAnterior : null;
   const variacionPct =
-    totalAnterior !== 0 ? (variacionAbs / totalAnterior) * 100 : 0;
+    showComparison && totalAnterior !== 0
+      ? (variacionAbs! / totalAnterior) * 100
+      : showComparison
+      ? 0
+      : null;
 
   return (
     <Card className="mb-6">
       <CardHeader className="pb-3">
-        <CardTitle className="text-lg">{title}</CardTitle>
+        <div className="flex items-center justify-between gap-4">
+          <CardTitle className="text-lg">{title}</CardTitle>
+          <Button variant="outline" size="sm" onClick={onToggle}>
+            {open ? "− Ocultar" : "+ Ver detalle"}
+          </Button>
+        </div>
       </CardHeader>
-      <CardContent>
-        <div className="overflow-auto">
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr className="border-b bg-slate-50">
-                <th className="text-left p-2">Cuenta</th>
-                <th className="text-left p-2">Nombre</th>
-                <th className="text-right p-2">Actual</th>
-                <th className="text-right p-2">Anterior</th>
-                <th className="text-right p-2">Variación $</th>
-                <th className="text-right p-2">Variación %</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="p-4 text-center text-slate-500">
-                    Sin registros
-                  </td>
+
+      {open && (
+        <CardContent>
+          <div className="overflow-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="border-b bg-slate-50">
+                  <th className="text-left p-2">Cuenta</th>
+                  <th className="text-left p-2">Nombre</th>
+                  <th className="text-right p-2">Actual</th>
+                  {showComparison && (
+                    <>
+                      <th className="text-right p-2">Anterior</th>
+                      <th className="text-right p-2">Variación $</th>
+                      <th className="text-right p-2">Variación %</th>
+                    </>
+                  )}
                 </tr>
-              ) : (
-                items.map((item) => (
-                  <tr key={item.cuenta} className="border-b hover:bg-slate-50">
-                    <td className="p-2 font-medium">{item.cuenta}</td>
-                    <td className="p-2">{item.nombre}</td>
-                    <td className="p-2 text-right">
-                      {formatCurrency(item.saldo_actual)}
-                    </td>
-                    <td className="p-2 text-right">
-                      {formatCurrency(item.saldo_anterior)}
-                    </td>
-                    <td className="p-2 text-right">
-                      {formatCurrency(item.variacion_abs)}
-                    </td>
-                    <td className="p-2 text-right">
-                      <VariacionBadge value={item.variacion_pct} />
+              </thead>
+
+              <tbody>
+                {items.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={showComparison ? 6 : 3}
+                      className="p-4 text-center text-slate-500"
+                    >
+                      Sin registros
                     </td>
                   </tr>
-                ))
-              )}
+                ) : (
+                  items.map((item) => (
+                    <tr key={item.cuenta} className="border-b hover:bg-slate-50">
+                      <td className="p-2 font-medium">{item.cuenta}</td>
+                      <td className="p-2">{item.nombre}</td>
+                      <td className="p-2 text-right">
+                        {formatCurrency(item.saldo_actual)}
+                      </td>
 
-              <tr className="bg-slate-100 font-semibold">
-                <td className="p-2" colSpan={2}>
-                  Total {title}
-                </td>
-                <td className="p-2 text-right">{formatCurrency(totalActual)}</td>
-                <td className="p-2 text-right">{formatCurrency(totalAnterior)}</td>
-                <td className="p-2 text-right">{formatCurrency(variacionAbs)}</td>
-                <td className="p-2 text-right">
-                  <VariacionBadge value={variacionPct} />
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </CardContent>
+                      {showComparison && (
+                        <>
+                          <td className="p-2 text-right">
+                            {formatCurrency(item.saldo_anterior)}
+                          </td>
+                          <td className="p-2 text-right">
+                            {item.variacion_abs === null
+                              ? "—"
+                              : formatCurrency(item.variacion_abs)}
+                          </td>
+                          <td className="p-2 text-right">
+                            <VariacionBadge value={item.variacion_pct} />
+                          </td>
+                        </>
+                      )}
+                    </tr>
+                  ))
+                )}
+
+                <tr className="bg-slate-100 font-semibold">
+                  <td className="p-2" colSpan={2}>
+                    Total {title}
+                  </td>
+                  <td className="p-2 text-right">{formatCurrency(totalActual)}</td>
+
+                  {showComparison && (
+                    <>
+                      <td className="p-2 text-right">
+                        {formatCurrency(totalAnterior)}
+                      </td>
+                      <td className="p-2 text-right">
+                        {variacionAbs === null ? "—" : formatCurrency(variacionAbs)}
+                      </td>
+                      <td className="p-2 text-right">
+                        <VariacionBadge value={variacionPct} />
+                      </td>
+                    </>
+                  )}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      )}
     </Card>
   );
 }
 
 export default function BalanceGeneralPage() {
   const today = new Date().toISOString().slice(0, 10);
+
   const [fechaCorte, setFechaCorte] = useState(today);
   const [compararCon, setCompararCon] = useState(getLastDayOfPreviousMonth(today));
+  const [usarComparacion, setUsarComparacion] = useState(true);
+
   const [loading, setLoading] = useState(false);
   const [rebuilding, setRebuilding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<BalanceResponse | null>(null);
+
+  const [openSections, setOpenSections] = useState({
+    activo_corriente: true,
+    activo_no_corriente: false,
+    pasivo_corriente: false,
+    pasivo_no_corriente: false,
+    patrimonio: false,
+  });
 
   useEffect(() => {
     setCompararCon(getLastDayOfPreviousMonth(fechaCorte));
@@ -195,12 +269,14 @@ export default function BalanceGeneralPage() {
 
       const params = new URLSearchParams({
         fecha_corte: fechaCorte,
-        comparar_con: compararCon,
       });
+
+      if (usarComparacion && compararCon) {
+        params.append("comparar_con", compararCon);
+      }
 
       const json = await authFetch(`/reportes/balance_general_v1?${params.toString()}`);
       setData(json);
-
     } catch (err: any) {
       setError(err.message || "Error cargando balance");
       setData(null);
@@ -214,17 +290,23 @@ export default function BalanceGeneralPage() {
       setRebuilding(true);
       setError(null);
 
-        await authFetch("/reportes/balance_general/rebuild_snapshot", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                fecha_corte: fechaCorte,
-            }),
-        });
+      const body: any = {
+        fecha_corte: fechaCorte,
+      };
 
-        await cargarBalance();
+      if (usarComparacion && compararCon) {
+        body.comparar_con = compararCon;
+      }
+
+      await authFetch("/reportes/balance_general/rebuild_snapshot", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+
+      await cargarBalance();
     } catch (err: any) {
       setError(err.message || "Error regenerando snapshot");
     } finally {
@@ -242,12 +324,21 @@ export default function BalanceGeneralPage() {
     return data.kpis;
   }, [data]);
 
+  const modoComparativo = !!data?.meta?.modo_comparativo;
+
+  const toggleSection = (key: keyof typeof openSections) => {
+    setOpenSections((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
   return (
     <div className="p-4 md:p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Balance General</h1>
         <p className="text-sm text-slate-600">
-          Estado de situación financiera comparativo a partir del auxiliar contable.
+          Estado de situación financiera a partir del auxiliar contable.
         </p>
       </div>
 
@@ -255,32 +346,60 @@ export default function BalanceGeneralPage() {
         <CardHeader>
           <CardTitle>Filtros y acciones</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-          <div>
-            <label className="text-sm font-medium block mb-1">Fecha corte</label>
-            <Input
-              type="date"
-              value={fechaCorte}
-              onChange={(e) => setFechaCorte(e.target.value)}
-            />
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <div>
+              <label className="text-sm font-medium block mb-1">Fecha corte</label>
+              <Input
+                type="date"
+                value={fechaCorte}
+                onChange={(e) => setFechaCorte(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium block mb-1">Comparar con</label>
+              <Input
+                type="date"
+                value={compararCon}
+                onChange={(e) => setCompararCon(e.target.value)}
+                disabled={!usarComparacion}
+              />
+            </div>
+
+            <Button onClick={cargarBalance} disabled={loading}>
+              {loading ? "Consultando..." : "Consultar balance"}
+            </Button>
+
+            <Button onClick={regenerarSnapshot} disabled={rebuilding} variant="outline">
+              {rebuilding ? "Regenerando..." : "Regenerar snapshot"}
+            </Button>
           </div>
 
-          <div>
-            <label className="text-sm font-medium block mb-1">Comparar con</label>
-            <Input
-              type="date"
-              value={compararCon}
-              onChange={(e) => setCompararCon(e.target.value)}
+          <div className="flex items-center gap-2">
+            <input
+              id="usarComparacion"
+              type="checkbox"
+              checked={usarComparacion}
+              onChange={(e) => setUsarComparacion(e.target.checked)}
             />
+            <label htmlFor="usarComparacion" className="text-sm text-slate-700">
+              Comparar contra otro corte
+            </label>
           </div>
 
-          <Button onClick={cargarBalance} disabled={loading}>
-            {loading ? "Consultando..." : "Consultar balance"}
-          </Button>
-
-          <Button onClick={regenerarSnapshot} disabled={rebuilding} variant="outline">
-            {rebuilding ? "Regenerando..." : "Regenerar snapshot"}
-          </Button>
+          <div className="text-xs text-slate-600 bg-slate-50 border rounded p-3 leading-5">
+            <div>
+              <b>Fecha corte:</b>{" "}
+              {data?.meta?.explicacion_filtros?.fecha_corte ||
+                "Muestra la situación financiera acumulada hasta esa fecha."}
+            </div>
+            <div>
+              <b>Comparar con:</b>{" "}
+              {data?.meta?.explicacion_filtros?.comparar_con ||
+                "Permite comparar contra otro corte para analizar variaciones. Se recomienda usar cierres de mes."}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -385,31 +504,61 @@ export default function BalanceGeneralPage() {
         </Card>
       ) : null}
 
+      {data?.resumen?.alertas?.length ? (
+        <Card className="border-amber-200">
+          <CardHeader>
+            <CardTitle>Alertas y observaciones</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="list-disc pl-5 space-y-2 text-sm text-amber-800">
+              {data.resumen.alertas.map((txt, idx) => (
+                <li key={idx}>{txt}</li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {data && (
         <>
           <SectionTable
             title="Activo Corriente"
             items={data.balance.activo_corriente}
+            showComparison={modoComparativo}
+            open={openSections.activo_corriente}
+            onToggle={() => toggleSection("activo_corriente")}
           />
 
           <SectionTable
             title="Activo No Corriente"
             items={data.balance.activo_no_corriente}
+            showComparison={modoComparativo}
+            open={openSections.activo_no_corriente}
+            onToggle={() => toggleSection("activo_no_corriente")}
           />
 
           <SectionTable
             title="Pasivo Corriente"
             items={data.balance.pasivo_corriente}
+            showComparison={modoComparativo}
+            open={openSections.pasivo_corriente}
+            onToggle={() => toggleSection("pasivo_corriente")}
           />
 
           <SectionTable
             title="Pasivo No Corriente"
             items={data.balance.pasivo_no_corriente}
+            showComparison={modoComparativo}
+            open={openSections.pasivo_no_corriente}
+            onToggle={() => toggleSection("pasivo_no_corriente")}
           />
 
           <SectionTable
             title="Patrimonio"
             items={data.balance.patrimonio}
+            showComparison={modoComparativo}
+            open={openSections.patrimonio}
+            onToggle={() => toggleSection("patrimonio")}
           />
         </>
       )}

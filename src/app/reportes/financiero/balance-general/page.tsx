@@ -22,7 +22,9 @@ import {
   FileBarChart2,
   FileText,
   RefreshCcw,
-  Upload,
+  Layers3,
+  TrendingDown,
+  BarChart3,
 } from "lucide-react";
 
 type BalanceItem = {
@@ -51,14 +53,29 @@ type BalanceResponse = {
       fecha_corte?: string;
       comparar_con?: string;
     };
+    patrimonio?: {
+      patrimonio_explicito_total?: number;
+      patrimonio_calculado_total?: number;
+      patrimonio_total?: number;
+      usa_patrimonio_calculado?: boolean;
+    };
+    activo_no_corriente?: {
+      bruto_total?: number;
+      contra_total?: number;
+      neto_total?: number;
+    };
   };
   kpis: {
     activo_corriente: number;
     activo_no_corriente: number;
+    activo_no_corriente_bruto?: number;
+    activo_no_corriente_contra?: number;
     activos_totales: number;
     pasivo_corriente: number;
     pasivo_no_corriente: number;
     pasivos_totales: number;
+    patrimonio_explicito_total?: number;
+    patrimonio_calculado_total?: number;
     patrimonio_total: number;
     pasivo_mas_patrimonio: number;
     capital_trabajo: number;
@@ -75,12 +92,23 @@ type BalanceResponse = {
   resumen?: {
     narrativa?: string[];
     alertas?: string[];
+    alertas_detalle?: {
+      categoria: string;
+      titulo: string;
+      cantidad: number;
+      mensajes: string[];
+      items: any[];
+    }[];
   };
   balance: {
     activo_corriente: BalanceItem[];
+    activo_no_corriente_bruto: BalanceItem[];
+    activo_no_corriente_contra: BalanceItem[];
     activo_no_corriente: BalanceItem[];
     pasivo_corriente: BalanceItem[];
     pasivo_no_corriente: BalanceItem[];
+    patrimonio_explicito: BalanceItem[];
+    patrimonio_calculado: BalanceItem[];
     patrimonio: BalanceItem[];
   };
 };
@@ -251,12 +279,14 @@ function StatCardBalance({
 
 function SectionTable({
   title,
+  subtitle,
   items,
   showComparison,
   open,
   onToggle,
 }: {
   title: string;
+  subtitle?: string;
   items: BalanceItem[];
   showComparison: boolean;
   open: boolean;
@@ -281,7 +311,7 @@ function SectionTable({
         <div>
           <h2 className="font-black text-lg uppercase tracking-widest">{title}</h2>
           <p className="text-slate-400 text-xs mt-1 font-medium">
-            Resumen del grupo y detalle por cuenta
+            {subtitle || "Resumen del grupo y detalle por cuenta"}
           </p>
         </div>
 
@@ -438,6 +468,53 @@ function SectionTable({
   );
 }
 
+function BreakdownCard({
+  title,
+  subtitle,
+  rows,
+  accent = "indigo",
+}: {
+  title: string;
+  subtitle: string;
+  rows: { label: string; value: number; emphasize?: boolean; negativeStyle?: boolean }[];
+  accent?: "indigo" | "emerald" | "blue";
+}) {
+  const headerClass =
+    accent === "emerald"
+      ? "bg-emerald-700"
+      : accent === "blue"
+        ? "bg-blue-700"
+        : "bg-slate-900";
+
+  return (
+    <Card className="rounded-[2rem] shadow-xl border-none overflow-hidden bg-white">
+      <div className={`${headerClass} text-white px-6 py-5`}>
+        <h2 className="font-black text-lg uppercase tracking-widest">{title}</h2>
+        <p className="text-white/70 text-xs mt-1 font-medium">{subtitle}</p>
+      </div>
+
+      <CardContent className="p-5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {rows.map((row, idx) => (
+            <div key={idx} className="rounded-2xl border bg-slate-50 p-4">
+              <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                {row.label}
+              </div>
+              <div
+                className={`text-2xl font-black tracking-tight ${
+                  row.negativeStyle && row.value < 0 ? "text-amber-700" : row.emphasize ? "text-indigo-700" : "text-slate-900"
+                }`}
+              >
+                {formatCurrency(row.value)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function CollapsibleAlerts({
   alerts,
   open,
@@ -511,10 +588,12 @@ export default function BalanceGeneralPage() {
 
   const [openSections, setOpenSections] = useState({
     activo_corriente: false,
-    activo_no_corriente: false,
+    activo_no_corriente_bruto: false,
+    activo_no_corriente_contra: false,
     pasivo_corriente: false,
     pasivo_no_corriente: false,
-    patrimonio: false,
+    patrimonio_explicito: false,
+    patrimonio_calculado: false,
   });
 
   const [openAlertas, setOpenAlertas] = useState(false);
@@ -526,10 +605,12 @@ export default function BalanceGeneralPage() {
   const resetCollapsedState = () => {
     setOpenSections({
       activo_corriente: false,
-      activo_no_corriente: false,
+      activo_no_corriente_bruto: false,
+      activo_no_corriente_contra: false,
       pasivo_corriente: false,
       pasivo_no_corriente: false,
-      patrimonio: false,
+      patrimonio_explicito: false,
+      patrimonio_calculado: false,
     });
     setOpenAlertas(false);
   };
@@ -632,10 +713,7 @@ export default function BalanceGeneralPage() {
   const comparacionSolicitada = !!data?.meta?.comparacion_solicitada;
 
   const patrimonioCalculado = useMemo(() => {
-    if (!data?.balance?.patrimonio?.length) return false;
-    return data.balance.patrimonio.some(
-      (x) => x.cuenta === "39RESULTADO" || x.cuenta === "39AJUSTE"
-    );
+    return !!data?.meta?.patrimonio?.usa_patrimonio_calculado;
   }, [data]);
 
   const toggleSection = (key: keyof typeof openSections) => {
@@ -644,6 +722,24 @@ export default function BalanceGeneralPage() {
       [key]: !prev[key],
     }));
   };
+
+  const activoNoCorrienteBruto =
+    data?.meta?.activo_no_corriente?.bruto_total ?? cards?.activo_no_corriente_bruto ?? 0;
+
+  const activoNoCorrienteContra =
+    data?.meta?.activo_no_corriente?.contra_total ?? cards?.activo_no_corriente_contra ?? 0;
+
+  const activoNoCorrienteNeto =
+    data?.meta?.activo_no_corriente?.neto_total ?? cards?.activo_no_corriente ?? 0;
+
+  const patrimonioExplicitoTotal =
+    data?.meta?.patrimonio?.patrimonio_explicito_total ?? cards?.patrimonio_explicito_total ?? 0;
+
+  const patrimonioCalculadoTotal =
+    data?.meta?.patrimonio?.patrimonio_calculado_total ?? cards?.patrimonio_calculado_total ?? 0;
+
+  const patrimonioTotal =
+    data?.meta?.patrimonio?.patrimonio_total ?? cards?.patrimonio_total ?? 0;
 
   return (
     <div className="space-y-4 p-5 bg-slate-50 min-h-screen">
@@ -662,7 +758,7 @@ export default function BalanceGeneralPage() {
         </div>
 
         <div className="flex flex-col items-end gap-2">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             <input
               type="file"
               ref={fileInputRef}
@@ -817,11 +913,11 @@ export default function BalanceGeneralPage() {
             />
 
             <StatCardBalance
-              title="Patrimonio"
-              value={formatCurrency(cards.patrimonio_total)}
+              title="Patrimonio Total"
+              value={formatCurrency(patrimonioTotal)}
               icon={<Building2 size={18} />}
               color="sky"
-              badge={patrimonioCalculado ? "CALCULADO" : undefined}
+              badge={patrimonioCalculado ? "MIXTO" : "REPORTADO"}
             />
 
             <StatCardBalance
@@ -879,6 +975,49 @@ export default function BalanceGeneralPage() {
               </CardContent>
             </Card>
           </div>
+
+          <BreakdownCard
+            title="Activo No Corriente Neto"
+            subtitle="Separación entre activo base, depreciaciones/ajustes acumulados y neto final."
+            accent="blue"
+            rows={[
+              {
+                label: "Activo no corriente base",
+                value: activoNoCorrienteBruto,
+              },
+              {
+                label: "Depreciaciones / ajustes acumulados",
+                value: activoNoCorrienteContra,
+                negativeStyle: true,
+              },
+              {
+                label: "Activo no corriente neto",
+                value: activoNoCorrienteNeto,
+                emphasize: true,
+              },
+            ]}
+          />
+
+          <BreakdownCard
+            title="Desglose de Patrimonio"
+            subtitle="Diferencia entre patrimonio reportado explícitamente y patrimonio calculado por el sistema."
+            accent="emerald"
+            rows={[
+              {
+                label: "Patrimonio reportado",
+                value: patrimonioExplicitoTotal,
+              },
+              {
+                label: "Patrimonio calculado",
+                value: patrimonioCalculadoTotal,
+              },
+              {
+                label: "Patrimonio total",
+                value: patrimonioTotal,
+                emphasize: true,
+              },
+            ]}
+          />
         </>
       )}
 
@@ -929,11 +1068,21 @@ export default function BalanceGeneralPage() {
           />
 
           <SectionTable
-            title="Activo No Corriente"
-            items={data.balance.activo_no_corriente}
+            title="Activo No Corriente Base"
+            subtitle="Activos no corrientes antes de depreciaciones, amortizaciones o ajustes contra activo."
+            items={data.balance.activo_no_corriente_bruto}
             showComparison={modoComparativo}
-            open={openSections.activo_no_corriente}
-            onToggle={() => toggleSection("activo_no_corriente")}
+            open={openSections.activo_no_corriente_bruto}
+            onToggle={() => toggleSection("activo_no_corriente_bruto")}
+          />
+
+          <SectionTable
+            title="Depreciaciones y Ajustes Acumulados"
+            subtitle="Contra cuentas del activo no corriente que reducen el valor neto presentado."
+            items={data.balance.activo_no_corriente_contra}
+            showComparison={modoComparativo}
+            open={openSections.activo_no_corriente_contra}
+            onToggle={() => toggleSection("activo_no_corriente_contra")}
           />
 
           <SectionTable
@@ -953,11 +1102,21 @@ export default function BalanceGeneralPage() {
           />
 
           <SectionTable
-            title="Patrimonio"
-            items={data.balance.patrimonio}
+            title="Patrimonio Reportado"
+            subtitle="Cuentas explícitas clase 3 encontradas en el snapshot."
+            items={data.balance.patrimonio_explicito}
             showComparison={modoComparativo}
-            open={openSections.patrimonio}
-            onToggle={() => toggleSection("patrimonio")}
+            open={openSections.patrimonio_explicito}
+            onToggle={() => toggleSection("patrimonio_explicito")}
+          />
+
+          <SectionTable
+            title="Patrimonio Calculado"
+            subtitle="Resultado acumulado y ajustes automáticos aplicados por el sistema."
+            items={data.balance.patrimonio_calculado}
+            showComparison={modoComparativo}
+            open={openSections.patrimonio_calculado}
+            onToggle={() => toggleSection("patrimonio_calculado")}
           />
         </div>
       )}

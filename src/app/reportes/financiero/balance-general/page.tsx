@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { authFetch } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,9 @@ import {
   Eye,
   EyeOff,
   FileBarChart2,
+  FileText,
+  RefreshCcw,
+  Upload,
 } from "lucide-react";
 
 type BalanceItem = {
@@ -500,8 +503,11 @@ export default function BalanceGeneralPage() {
 
   const [loading, setLoading] = useState(false);
   const [rebuilding, setRebuilding] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<BalanceResponse | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [openSections, setOpenSections] = useState({
     activo_corriente: false,
@@ -516,6 +522,17 @@ export default function BalanceGeneralPage() {
   useEffect(() => {
     setCompararCon(getLastDayOfPreviousMonth(fechaCorte));
   }, [fechaCorte]);
+
+  const resetCollapsedState = () => {
+    setOpenSections({
+      activo_corriente: false,
+      activo_no_corriente: false,
+      pasivo_corriente: false,
+      pasivo_no_corriente: false,
+      patrimonio: false,
+    });
+    setOpenAlertas(false);
+  };
 
   const cargarBalance = async () => {
     try {
@@ -532,15 +549,7 @@ export default function BalanceGeneralPage() {
 
       const json = await authFetch(`/reportes/balance_general_v1?${params.toString()}`);
       setData(json);
-
-      setOpenSections({
-        activo_corriente: false,
-        activo_no_corriente: false,
-        pasivo_corriente: false,
-        pasivo_no_corriente: false,
-        patrimonio: false,
-      });
-      setOpenAlertas(false);
+      resetCollapsedState();
     } catch (err: any) {
       setError(err.message || "Error cargando balance");
       setData(null);
@@ -575,6 +584,36 @@ export default function BalanceGeneralPage() {
       setError(err.message || "Error regenerando snapshot");
     } finally {
       setRebuilding(false);
+    }
+  };
+
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setError(null);
+
+    const formData = new FormData();
+    formData.append("archivo", file);
+
+    try {
+      await authFetch("/reportes/cargar_auxiliar", {
+        method: "POST",
+        body: formData,
+      });
+
+      await cargarBalance();
+      alert("Éxito: se procesó el auxiliar contable y se actualizó el Balance General.");
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Error cargando el auxiliar contable");
+      alert("Error cargando el archivo.");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -622,17 +661,43 @@ export default function BalanceGeneralPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <ModeBadge
-            comparativo={modoComparativo}
-            snapshotComparativoExiste={snapshotComparativoExiste}
-          />
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex items-center gap-2">
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              accept=".xlsx,.xls,.csv"
+              onChange={handleFileUpload}
+            />
 
-          {patrimonioCalculado && (
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-amber-100 text-amber-700">
-              Patrimonio calculado
-            </span>
-          )}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-2xl text-xs font-black hover:bg-black transition-all shadow-lg active:scale-95"
+            >
+              {uploading ? (
+                <RefreshCcw className="animate-spin" size={16} />
+              ) : (
+                <FileText size={16} />
+              )}
+              {uploading ? "Sincronizando..." : "Sincronizar Auxiliar"}
+            </button>
+
+            <ModeBadge
+              comparativo={modoComparativo}
+              snapshotComparativoExiste={snapshotComparativoExiste}
+            />
+
+            {patrimonioCalculado && (
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-amber-100 text-amber-700">
+                Patrimonio calculado
+              </span>
+            )}
+          </div>
+
+          <p className="text-slate-400 text-[10px] font-semibold italic text-right">
+            Ruta Siigo: Contabilidad {" > "} Comprobantes {" > "} Informe auxiliar contable
+          </p>
         </div>
       </div>
 

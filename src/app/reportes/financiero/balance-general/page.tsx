@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { authFetch } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +14,12 @@ import {
   BadgeDollarSign,
   Building2,
   Calculator,
+  Plus,
+  Minus,
+  AlertTriangle,
+  Eye,
+  EyeOff,
+  FileBarChart2,
 } from "lucide-react";
 
 type BalanceItem = {
@@ -99,14 +105,18 @@ function getLastDayOfPreviousMonth(dateStr: string) {
 function ValueCell({
   value,
   emphasizeNegative = false,
+  className = "",
 }: {
   value: number | null | undefined;
   emphasizeNegative?: boolean;
+  className?: string;
 }) {
   const isNegative = (value || 0) < 0;
 
   return (
-    <span className={isNegative && emphasizeNegative ? "text-red-600 font-bold" : "font-semibold"}>
+    <span
+      className={`${isNegative && emphasizeNegative ? "text-red-600" : "text-slate-900"} font-bold ${className}`}
+    >
       {formatCurrency(value)}
     </span>
   );
@@ -145,10 +155,10 @@ function CuadraturaBadge({ value }: { value: number }) {
 
 function ModeBadge({
   comparativo,
-  snapshotComparativoExite,
+  snapshotComparativoExiste,
 }: {
   comparativo: boolean;
-  snapshotComparativoExite: boolean;
+  snapshotComparativoExiste: boolean;
 }) {
   if (comparativo) {
     return (
@@ -158,7 +168,7 @@ function ModeBadge({
     );
   }
 
-  if (!snapshotComparativoExite) {
+  if (!snapshotComparativoExiste) {
     return (
       <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-700">
         Modo simple
@@ -228,7 +238,7 @@ function StatCardBalance({
           {title}
         </p>
 
-        <p className="text-[1.9rem] leading-none font-black mt-1 tracking-tighter">
+        <p className="text-[1.9rem] leading-none font-black mt-1 tracking-tighter break-words">
           {value}
         </p>
       </CardContent>
@@ -259,33 +269,37 @@ function SectionTable({
     showComparison && totalAnterior !== 0
       ? (variacionAbs! / totalAnterior) * 100
       : showComparison
-      ? 0
-      : null;
+        ? 0
+        : null;
 
   return (
-    <Card className="mb-6 rounded-[2rem] shadow-lg border bg-white overflow-hidden">
-      <CardHeader className="pb-3 px-6 pt-5">
-        <div className="flex items-center justify-between gap-4">
-          <CardTitle className="text-lg font-black text-slate-900">{title}</CardTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onToggle}
-            className="rounded-xl text-xs font-black border-slate-200"
-          >
-            {open ? "− Ocultar" : "+ Ver detalle"}
-          </Button>
+    <Card className="rounded-[2rem] shadow-xl border-none overflow-hidden bg-white">
+      <div className="bg-slate-900 text-white px-6 py-5 flex justify-between items-center">
+        <div>
+          <h2 className="font-black text-lg uppercase tracking-widest">{title}</h2>
+          <p className="text-slate-400 text-xs mt-1 font-medium">
+            Resumen del grupo y detalle por cuenta
+          </p>
         </div>
-      </CardHeader>
 
-      <CardContent className="pt-0 px-6 pb-6">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 text-white border border-white/10 text-xs font-black hover:bg-white/10 transition-all"
+        >
+          {open ? <Minus size={15} /> : <Plus size={15} />}
+          {open ? "Ocultar" : "Ver detalle"}
+        </button>
+      </div>
+
+      <CardContent className="p-5">
         <div className="rounded-2xl border bg-slate-50 overflow-hidden">
           <div className="grid grid-cols-1 md:grid-cols-12 text-sm">
-            <div className="p-3 font-black text-slate-700 md:col-span-5">
+            <div className="p-4 font-black text-slate-700 md:col-span-5">
               Total {title}
             </div>
 
-            <div className="p-3 text-right md:col-span-3">
+            <div className="p-4 text-right md:col-span-3">
               <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
                 Actual
               </div>
@@ -294,14 +308,14 @@ function SectionTable({
 
             {showComparison && (
               <>
-                <div className="p-3 text-right md:col-span-2 border-t md:border-t-0 md:border-l">
+                <div className="p-4 text-right md:col-span-2 border-t md:border-t-0 md:border-l">
                   <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
                     Anterior
                   </div>
                   <ValueCell value={totalAnterior} emphasizeNegative />
                 </div>
 
-                <div className="p-3 text-right md:col-span-1 border-t md:border-t-0 md:border-l">
+                <div className="p-4 text-right md:col-span-1 border-t md:border-t-0 md:border-l">
                   <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
                     Var. $
                   </div>
@@ -312,7 +326,7 @@ function SectionTable({
                   )}
                 </div>
 
-                <div className="p-3 text-right md:col-span-1 border-t md:border-t-0 md:border-l">
+                <div className="p-4 text-right md:col-span-1 border-t md:border-t-0 md:border-l">
                   <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
                     Var. %
                   </div>
@@ -324,8 +338,8 @@ function SectionTable({
         </div>
 
         {open && (
-          <div className="overflow-auto mt-4">
-            <table className="w-full text-sm border-collapse">
+          <div className="overflow-auto mt-5">
+            <table className="w-full text-sm border-collapse min-w-[760px]">
               <thead>
                 <tr className="border-b bg-slate-100 text-slate-500 text-[10px] uppercase font-black tracking-widest">
                   <th className="text-left p-3">Cuenta</th>
@@ -346,14 +360,17 @@ function SectionTable({
                   <tr>
                     <td
                       colSpan={showComparison ? 6 : 3}
-                      className="p-4 text-center text-slate-500"
+                      className="p-5 text-center text-slate-500"
                     >
                       Sin registros
                     </td>
                   </tr>
                 ) : (
                   items.map((item) => (
-                    <tr key={item.cuenta} className="border-b hover:bg-slate-50 transition-colors">
+                    <tr
+                      key={item.cuenta}
+                      className="border-b hover:bg-slate-50 transition-colors"
+                    >
                       <td className="p-3 font-mono text-xs font-bold whitespace-nowrap text-slate-600">
                         {item.cuenta}
                       </td>
@@ -418,6 +435,62 @@ function SectionTable({
   );
 }
 
+function CollapsibleAlerts({
+  alerts,
+  open,
+  onToggle,
+}: {
+  alerts: string[];
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <Card className="rounded-[2rem] border border-amber-200 bg-amber-50 shadow-sm overflow-hidden">
+      <div className="px-6 py-5 flex items-center justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="p-2.5 rounded-2xl bg-white/70 border border-amber-100">
+            <AlertTriangle size={18} className="text-amber-700" />
+          </div>
+
+          <div>
+            <h3 className="text-sm font-black text-amber-800 uppercase tracking-wide">
+              Alertas y observaciones
+            </h3>
+            <p className="text-xs text-amber-700 mt-1">
+              {alerts.length} observación{alerts.length !== 1 ? "es" : ""} automática
+              {alerts.length !== 1 ? "s" : ""}. No siempre implican error.
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onToggle}
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white/70 text-amber-800 border border-amber-200 text-xs font-black hover:bg-white transition-all"
+        >
+          {open ? <EyeOff size={15} /> : <Eye size={15} />}
+          {open ? "Ocultar" : "Ver detalle"}
+        </button>
+      </div>
+
+      {open && (
+        <CardContent className="px-6 pb-6 pt-0">
+          <div className="space-y-2">
+            {alerts.map((txt, idx) => (
+              <div
+                key={idx}
+                className="text-sm text-amber-900 bg-white/70 border border-amber-100 rounded-xl px-3 py-2"
+              >
+                ⚠️ {txt}
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      )}
+    </Card>
+  );
+}
+
 export default function BalanceGeneralPage() {
   const today = new Date().toISOString().slice(0, 10);
 
@@ -431,12 +504,14 @@ export default function BalanceGeneralPage() {
   const [data, setData] = useState<BalanceResponse | null>(null);
 
   const [openSections, setOpenSections] = useState({
-    activo_corriente: true,
+    activo_corriente: false,
     activo_no_corriente: false,
     pasivo_corriente: false,
     pasivo_no_corriente: false,
     patrimonio: false,
   });
+
+  const [openAlertas, setOpenAlertas] = useState(false);
 
   useEffect(() => {
     setCompararCon(getLastDayOfPreviousMonth(fechaCorte));
@@ -457,6 +532,15 @@ export default function BalanceGeneralPage() {
 
       const json = await authFetch(`/reportes/balance_general_v1?${params.toString()}`);
       setData(json);
+
+      setOpenSections({
+        activo_corriente: false,
+        activo_no_corriente: false,
+        pasivo_corriente: false,
+        pasivo_no_corriente: false,
+        patrimonio: false,
+      });
+      setOpenAlertas(false);
     } catch (err: any) {
       setError(err.message || "Error cargando balance");
       setData(null);
@@ -534,14 +618,14 @@ export default function BalanceGeneralPage() {
           </h1>
 
           <p className="text-slate-500 text-xs font-medium mt-1">
-            Estado de situación financiera con lectura ejecutiva, alertas y validación automática.
+            Estado de situación financiera con lectura ejecutiva, alertas y análisis comparativo.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <ModeBadge
             comparativo={modoComparativo}
-            snapshotComparativoExite={snapshotComparativoExiste}
+            snapshotComparativoExiste={snapshotComparativoExiste}
           />
 
           {patrimonioCalculado && (
@@ -734,17 +818,22 @@ export default function BalanceGeneralPage() {
       )}
 
       {data?.resumen?.narrativa?.length ? (
-        <Card className="rounded-[2rem] shadow-sm border bg-white">
-          <CardContent className="p-6 space-y-4">
+        <Card className="rounded-[2rem] shadow-sm border bg-white overflow-hidden">
+          <div className="bg-slate-900 text-white px-6 py-5 flex items-center gap-3">
+            <div className="p-2.5 rounded-2xl bg-white/10">
+              <FileBarChart2 size={18} className="text-emerald-300" />
+            </div>
             <div>
-              <h3 className="text-sm font-black text-slate-700 uppercase tracking-wide">
+              <h3 className="text-sm font-black uppercase tracking-wide">
                 Lectura ejecutiva
               </h3>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-slate-400 mt-1">
                 Interpretación automática del estado de situación financiera.
               </p>
             </div>
+          </div>
 
+          <CardContent className="p-6">
             <div className="bg-slate-50 border rounded-2xl p-4 space-y-2">
               {data.resumen.narrativa.map((txt, idx) => (
                 <div key={idx} className="text-sm text-slate-800 leading-6">
@@ -757,34 +846,15 @@ export default function BalanceGeneralPage() {
       ) : null}
 
       {data?.resumen?.alertas?.length ? (
-        <Card className="rounded-[2rem] border border-amber-200 bg-amber-50 shadow-sm">
-          <CardContent className="p-6 space-y-4">
-            <div>
-              <h3 className="text-sm font-black text-amber-800 uppercase tracking-wide">
-                Alertas y observaciones
-              </h3>
-              <p className="text-xs text-amber-700 mt-1">
-                Observaciones automáticas. No siempre significan error; pueden responder a
-                devoluciones, compensaciones, naturaleza de la cuenta o reclasificaciones.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              {data.resumen.alertas.map((txt, idx) => (
-                <div
-                  key={idx}
-                  className="text-sm text-amber-900 bg-white/70 border border-amber-100 rounded-xl px-3 py-2"
-                >
-                  ⚠️ {txt}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <CollapsibleAlerts
+          alerts={data.resumen.alertas}
+          open={openAlertas}
+          onToggle={() => setOpenAlertas((prev) => !prev)}
+        />
       ) : null}
 
       {data && (
-        <>
+        <div className="space-y-4">
           <SectionTable
             title="Activo Corriente"
             items={data.balance.activo_corriente}
@@ -824,7 +894,7 @@ export default function BalanceGeneralPage() {
             open={openSections.patrimonio}
             onToggle={() => toggleSection("patrimonio")}
           />
-        </>
+        </div>
       )}
     </div>
   );

@@ -468,32 +468,33 @@ function SectionTable({
   );
 }
 
-function BreakdownCard({
+function SoftBreakdownCard({
   title,
   subtitle,
+  icon,
   rows,
-  accent = "indigo",
 }: {
   title: string;
   subtitle: string;
+  icon: React.ReactNode;
   rows: { label: string; value: number; emphasize?: boolean; negativeStyle?: boolean }[];
-  accent?: "indigo" | "emerald" | "blue";
 }) {
-  const headerClass =
-    accent === "emerald"
-      ? "bg-emerald-700"
-      : accent === "blue"
-        ? "bg-blue-700"
-        : "bg-slate-900";
-
   return (
-    <Card className="rounded-[2rem] shadow-xl border-none overflow-hidden bg-white">
-      <div className={`${headerClass} text-white px-6 py-5`}>
-        <h2 className="font-black text-lg uppercase tracking-widest">{title}</h2>
-        <p className="text-white/70 text-xs mt-1 font-medium">{subtitle}</p>
-      </div>
+    <Card className="rounded-[2rem] shadow-sm border bg-white overflow-hidden">
+      <CardContent className="p-5 space-y-4">
+        <div className="flex items-start gap-3">
+          <div className="p-2.5 rounded-2xl bg-slate-50 border border-slate-100">
+            {icon}
+          </div>
 
-      <CardContent className="p-5">
+          <div>
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide">
+              {title}
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">{subtitle}</p>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {rows.map((row, idx) => (
             <div key={idx} className="rounded-2xl border bg-slate-50 p-4">
@@ -502,7 +503,11 @@ function BreakdownCard({
               </div>
               <div
                 className={`text-2xl font-black tracking-tight ${
-                  row.negativeStyle && row.value < 0 ? "text-amber-700" : row.emphasize ? "text-indigo-700" : "text-slate-900"
+                  row.negativeStyle && row.value < 0
+                    ? "text-amber-700"
+                    : row.emphasize
+                      ? "text-indigo-700"
+                      : "text-slate-900"
                 }`}
               >
                 {formatCurrency(row.value)}
@@ -975,49 +980,6 @@ export default function BalanceGeneralPage() {
               </CardContent>
             </Card>
           </div>
-
-          <BreakdownCard
-            title="Activo No Corriente Neto"
-            subtitle="Separación entre activo base, depreciaciones/ajustes acumulados y neto final."
-            accent="blue"
-            rows={[
-              {
-                label: "Activo no corriente base",
-                value: activoNoCorrienteBruto,
-              },
-              {
-                label: "Depreciaciones / ajustes acumulados",
-                value: activoNoCorrienteContra,
-                negativeStyle: true,
-              },
-              {
-                label: "Activo no corriente neto",
-                value: activoNoCorrienteNeto,
-                emphasize: true,
-              },
-            ]}
-          />
-
-          <BreakdownCard
-            title="Desglose de Patrimonio"
-            subtitle="Diferencia entre patrimonio reportado explícitamente y patrimonio calculado por el sistema."
-            accent="emerald"
-            rows={[
-              {
-                label: "Patrimonio reportado",
-                value: patrimonioExplicitoTotal,
-              },
-              {
-                label: "Patrimonio calculado",
-                value: patrimonioCalculadoTotal,
-              },
-              {
-                label: "Patrimonio total",
-                value: patrimonioTotal,
-                emphasize: true,
-              },
-            ]}
-          />
         </>
       )}
 
@@ -1056,6 +1018,72 @@ export default function BalanceGeneralPage() {
           onToggle={() => setOpenAlertas((prev) => !prev)}
         />
       ) : null}
+
+      {cards && (
+        <Card className="rounded-[2rem] shadow-sm border bg-white">
+          <CardContent className="p-6 space-y-5">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-2xl bg-slate-50 border border-slate-100">
+                <Layers3 size={18} className="text-slate-700" />
+              </div>
+
+              <div>
+                <h3 className="text-sm font-black text-slate-700 uppercase tracking-wide">
+                  Desgloses técnicos del balance
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Componentes contables complementarios para entender mejor el activo no corriente y el patrimonio.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <SoftBreakdownCard
+                title="Activo No Corriente Neto"
+                subtitle="Separación entre activo base, depreciaciones/ajustes acumulados y neto final."
+                icon={<TrendingDown size={18} className="text-blue-700" />}
+                rows={[
+                  {
+                    label: "Activo no corriente base",
+                    value: activoNoCorrienteBruto,
+                  },
+                  {
+                    label: "Depreciaciones / ajustes acumulados",
+                    value: activoNoCorrienteContra,
+                    negativeStyle: true,
+                  },
+                  {
+                    label: "Activo no corriente neto",
+                    value: activoNoCorrienteNeto,
+                    emphasize: true,
+                  },
+                ]}
+              />
+
+              <SoftBreakdownCard
+                title="Desglose de Patrimonio"
+                subtitle="Diferencia entre patrimonio reportado explícitamente y patrimonio calculado por el sistema."
+                icon={<BarChart3 size={18} className="text-emerald-700" />}
+                rows={[
+                  {
+                    label: "Patrimonio reportado",
+                    value: patrimonioExplicitoTotal,
+                  },
+                  {
+                    label: "Patrimonio calculado",
+                    value: patrimonioCalculadoTotal,
+                  },
+                  {
+                    label: "Patrimonio total",
+                    value: patrimonioTotal,
+                    emphasize: true,
+                  },
+                ]}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {data && (
         <div className="space-y-4">

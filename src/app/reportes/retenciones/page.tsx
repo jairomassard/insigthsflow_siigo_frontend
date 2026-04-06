@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { authFetch } from "@/lib/api";
 import useAuthGuard from "@/hooks/useAuthGuard";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -25,7 +25,8 @@ import {
   RefreshCcw,
   Receipt,
   FileBarChart2,
-  Info
+  Info,
+  FileText
 } from "lucide-react";
 
 // ---------------- HELPERS ----------------
@@ -176,6 +177,8 @@ export default function RetencionesReportPage() {
   const [fechaDesde, setFechaDesde] = useState("2026-01-01");
   const [fechaHasta, setFechaHasta] = useState("2026-12-31");
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -194,6 +197,31 @@ export default function RetencionesReportPage() {
       console.error("Error consultando reporte de retenciones:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append("archivo", file);
+
+    try {
+      await authFetch("/reportes/cargar_auxiliar", {
+        method: "POST",
+        body: formData
+      });
+
+      alert("Éxito: Se procesó el auxiliar contable.");
+      fetchData();
+    } catch (err) {
+      console.error("Error cargando auxiliar:", err);
+      alert("Error cargando el archivo.");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -253,11 +281,34 @@ export default function RetencionesReportPage() {
           <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
             Dashboard Retenciones
             <span className="text-[10px] bg-indigo-600 text-white px-3 py-1 rounded-full uppercase tracking-widest">
-              v2.2
+              v2.3
             </span>
           </h1>
           <p className="text-slate-500 text-xs font-medium mt-1">
             Control detallado de retenciones DIAN (2365) e ICA operativo del período (236805).
+          </p>
+        </div>
+
+        {/* BOTÓN SINCRONIZAR AUXILIAR */}
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex items-center gap-2">
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              accept=".xlsx,.xls"
+              onChange={handleFileUpload}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-2xl text-xs font-black hover:bg-black transition-all shadow-lg active:scale-95"
+            >
+              {uploading ? <RefreshCcw className="animate-spin" size={16} /> : <FileText size={16} />}
+              {uploading ? "Sincronizando..." : "Sincronizar Auxiliar"}
+            </button>
+          </div>
+          <p className="text-slate-400 text-[10px] font-semibold italic text-right">
+            Ruta Siigo: Reportes {" > "} Contables {" > "} Contables {" > "} Movimiento auxiliar por cuenta contable en excel
           </p>
         </div>
       </div>

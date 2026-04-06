@@ -24,8 +24,8 @@ import {
   Wallet,
   RefreshCcw,
   Receipt,
-  Scale,
-  FileBarChart2
+  FileBarChart2,
+  Info
 } from "lucide-react";
 
 // ---------------- HELPERS ----------------
@@ -111,14 +111,22 @@ const renderCustomizedLabel = ({
   );
 };
 
-const COLORS = ["#4f46e5", "#8b5cf6", "#ec4899", "#f43f5e", "#f97316", "#14b8a6", "#0f766e", "#6366f1"];
+const COLORS = [
+  "#4f46e5",
+  "#8b5cf6",
+  "#ec4899",
+  "#f43f5e",
+  "#f97316",
+  "#14b8a6",
+  "#0f766e",
+  "#6366f1"
+];
 
+// ---------------- TYPES ----------------
 type EvolucionRow = {
   label: string;
   retefuente: number;
   reteica_conceptos: number;
-  ica_por_pagar: number;
-  reteica_neto: number;
 };
 
 type ComposicionRow = {
@@ -136,13 +144,26 @@ type IcaDetalleMensualRow = {
   valor: number;
 };
 
+type Kpis = {
+  total_retefuente?: number;
+  total_reteica_conceptos?: number;
+  total_general?: number;
+};
+
+type ReferenciasContables = {
+  cuenta_236898?: number;
+  nota?: string;
+};
+
+// ---------------- PAGE ----------------
 export default function RetencionesReportPage() {
   useAuthGuard();
 
   const [evolucion, setEvolucion] = useState<EvolucionRow[]>([]);
   const [composicion, setComposicion] = useState<ComposicionRow[]>([]);
   const [icaDetalleMensual, setIcaDetalleMensual] = useState<IcaDetalleMensualRow[]>([]);
-  const [kpis, setKpis] = useState<any>({});
+  const [kpis, setKpis] = useState<Kpis>({});
+  const [referenciasContables, setReferenciasContables] = useState<ReferenciasContables>({});
   const [fechaDesde, setFechaDesde] = useState("2026-01-01");
   const [fechaHasta, setFechaHasta] = useState("2026-12-31");
   const [loading, setLoading] = useState(false);
@@ -150,13 +171,17 @@ export default function RetencionesReportPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await authFetch(`/reportes/retenciones_v1?desde=${fechaDesde}&hasta=${fechaHasta}`);
+      const res = await authFetch(
+        `/reportes/retenciones_v1?desde=${fechaDesde}&hasta=${fechaHasta}`
+      );
+
       setEvolucion(res.evolucion ?? []);
       setComposicion(res.composicion ?? []);
       setIcaDetalleMensual(res.ica_detalle_mensual ?? []);
       setKpis(res.kpis ?? {});
+      setReferenciasContables(res.referencias_contables ?? {});
     } catch (err) {
-      console.error(err);
+      console.error("Error consultando reporte de retenciones:", err);
     } finally {
       setLoading(false);
     }
@@ -167,23 +192,21 @@ export default function RetencionesReportPage() {
   }, [fechaDesde, fechaHasta]);
 
   const topConceptos = useMemo(() => {
-    // para la torta sacamos los conceptos operativos principales
-    // dejamos por fuera el neto total repetido y ordenamos por magnitud
     return [...composicion]
-      .filter((x) => x.tipo !== "ReteICA_Otros")
       .sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor))
       .slice(0, 8);
   }, [composicion]);
 
   const detalleIcaAgrupado = useMemo(() => {
-    const map = new Map<string, any>();
+    const map = new Map<string, IcaDetalleMensualRow>();
 
     for (const row of icaDetalleMensual) {
       const key = `${row.label}__${row.cuenta}__${row.concepto}`;
       if (!map.has(key)) {
         map.set(key, { ...row });
       } else {
-        map.get(key).valor += row.valor;
+        const existing = map.get(key)!;
+        existing.valor += row.valor;
       }
     }
 
@@ -201,11 +224,11 @@ export default function RetencionesReportPage() {
           <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
             Dashboard Retenciones
             <span className="text-[10px] bg-indigo-600 text-white px-3 py-1 rounded-full uppercase tracking-widest">
-              v2.0
+              v2.1
             </span>
           </h1>
           <p className="text-slate-500 text-xs font-medium mt-1">
-            Control detallado de retenciones DIAN (2365) e ICA (236805 / 236898).
+            Control detallado de retenciones DIAN (2365) e ICA operativo del período (236805).
           </p>
         </div>
       </div>
@@ -242,7 +265,7 @@ export default function RetencionesReportPage() {
       </div>
 
       {/* KPIS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard
           title="Total ReteFuente (2365)"
           value={kpis.total_retefuente}
@@ -256,19 +279,40 @@ export default function RetencionesReportPage() {
           color="pink"
         />
         <StatCard
-          title="ICA retenido por pagar (236898)"
-          value={kpis.total_ica_por_pagar}
-          icon={<Scale size={20} />}
-          color="amber"
-        />
-        <StatCard
-          title="Total Pasivo Retenido Neto"
+          title="Total Retenciones del Período"
           value={kpis.total_general}
           icon={<Wallet size={20} />}
           color="slate"
           highlight
         />
       </div>
+
+      {/* REFERENCIA CONTABLE 236898 */}
+      {!!referenciasContables?.nota && (
+        <Card className="rounded-[2rem] shadow-lg border-none bg-white">
+          <CardContent className="p-5">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-xl bg-amber-50 text-amber-600 mt-0.5">
+                <Info size={18} />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-black text-slate-800">
+                  Referencia contable informativa
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Cuenta 236898:{" "}
+                  <span className="font-black text-slate-700">
+                    {formatCurrency(referenciasContables?.cuenta_236898 || 0)}
+                  </span>
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  {referenciasContables?.nota}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* GRAFICOS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -281,15 +325,33 @@ export default function RetencionesReportPage() {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={340}>
-              <BarChart data={evolucion} margin={{ top: 30, right: 10, left: 0, bottom: 0 }} barCategoryGap="18%">
+              <BarChart
+                data={evolucion}
+                margin={{ top: 30, right: 10, left: 0, bottom: 0 }}
+                barCategoryGap="18%"
+              >
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: "bold" }} />
+                <XAxis
+                  dataKey="label"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 11, fontWeight: "bold" }}
+                />
                 <YAxis hide />
                 <Tooltip content={<CustomTooltip />} cursor={{ fill: "#f8fafc" }} />
                 <Legend iconType="circle" wrapperStyle={{ fontSize: "11px", paddingTop: "20px" }} />
 
-                <Bar dataKey="retefuente" name="ReteFuente (2365)" fill="#4f46e5" radius={[6, 6, 0, 0]} barSize={26}>
-                  <LabelList dataKey="retefuente" content={(props: any) => <CustomLabel {...props} />} />
+                <Bar
+                  dataKey="retefuente"
+                  name="ReteFuente (2365)"
+                  fill="#4f46e5"
+                  radius={[6, 6, 0, 0]}
+                  barSize={30}
+                >
+                  <LabelList
+                    dataKey="retefuente"
+                    content={(props: any) => <CustomLabel {...props} />}
+                  />
                 </Bar>
 
                 <Bar
@@ -297,19 +359,12 @@ export default function RetencionesReportPage() {
                   name="ICA retenido por conceptos (236805)"
                   fill="#ec4899"
                   radius={[6, 6, 0, 0]}
-                  barSize={26}
+                  barSize={30}
                 >
-                  <LabelList dataKey="reteica_conceptos" content={(props: any) => <CustomLabel {...props} />} />
-                </Bar>
-
-                <Bar
-                  dataKey="ica_por_pagar"
-                  name="ICA retenido por pagar (236898)"
-                  fill="#f59e0b"
-                  radius={[6, 6, 0, 0]}
-                  barSize={26}
-                >
-                  <LabelList dataKey="ica_por_pagar" content={(props: any) => <CustomLabel {...props} />} />
+                  <LabelList
+                    dataKey="reteica_conceptos"
+                    content={(props: any) => <CustomLabel {...props} />}
+                  />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -415,7 +470,7 @@ export default function RetencionesReportPage() {
             Detalle mensual de ICA
           </span>
           <span className="text-[10px] font-bold bg-white/10 px-3 py-1 rounded-full border border-white/20 uppercase tracking-tighter">
-            236805 / 236898
+            236805
           </span>
         </div>
 
@@ -458,18 +513,14 @@ const TipoBadge = ({ tipo }: { tipo: string }) => {
     ReteFuente: "bg-indigo-100 text-indigo-700",
     ReteICA: "bg-pink-100 text-pink-700",
     ReteICA_Devolucion: "bg-rose-100 text-rose-700",
-    ICA_POR_PAGAR: "bg-amber-100 text-amber-700",
-    ReteICA_Otros: "bg-slate-100 text-slate-700",
-    Otros: "bg-slate-100 text-slate-700",
+    Otros: "bg-slate-100 text-slate-700"
   };
 
   const labels: Record<string, string> = {
     ReteFuente: "ReteFuente",
     ReteICA: "ReteICA",
     ReteICA_Devolucion: "Devolución ICA",
-    ICA_POR_PAGAR: "ICA por pagar",
-    ReteICA_Otros: "ICA otros",
-    Otros: "Otros",
+    Otros: "Otros"
   };
 
   return (
@@ -483,8 +534,7 @@ const StatCard = ({ title, value, icon, color, highlight = false }: any) => {
   const themes: any = {
     indigo: "text-indigo-600 bg-white border-slate-100",
     pink: "text-pink-600 bg-white border-slate-100",
-    amber: "text-amber-600 bg-white border-slate-100",
-    slate: "text-white bg-slate-900 shadow-slate-300",
+    slate: "text-white bg-slate-900 shadow-slate-300"
   };
 
   return (

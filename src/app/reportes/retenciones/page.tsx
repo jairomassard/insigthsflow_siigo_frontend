@@ -144,6 +144,14 @@ type IcaDetalleMensualRow = {
   valor: number;
 };
 
+type ReteFuenteDetalleMensualRow = {
+  label: string;
+  cuenta: string;
+  concepto: string;
+  tipo: string;
+  valor: number;
+};
+
 type Kpis = {
   total_retefuente?: number;
   total_reteica_conceptos?: number;
@@ -162,6 +170,7 @@ export default function RetencionesReportPage() {
   const [evolucion, setEvolucion] = useState<EvolucionRow[]>([]);
   const [composicion, setComposicion] = useState<ComposicionRow[]>([]);
   const [icaDetalleMensual, setIcaDetalleMensual] = useState<IcaDetalleMensualRow[]>([]);
+  const [retefuenteDetalleMensual, setReteFuenteDetalleMensual] = useState<ReteFuenteDetalleMensualRow[]>([]);
   const [kpis, setKpis] = useState<Kpis>({});
   const [referenciasContables, setReferenciasContables] = useState<ReferenciasContables>({});
   const [fechaDesde, setFechaDesde] = useState("2026-01-01");
@@ -178,6 +187,7 @@ export default function RetencionesReportPage() {
       setEvolucion(res.evolucion ?? []);
       setComposicion(res.composicion ?? []);
       setIcaDetalleMensual(res.ica_detalle_mensual ?? []);
+      setReteFuenteDetalleMensual(res.retefuente_detalle_mensual ?? []);
       setKpis(res.kpis ?? {});
       setReferenciasContables(res.referencias_contables ?? {});
     } catch (err) {
@@ -194,7 +204,7 @@ export default function RetencionesReportPage() {
   const topConceptos = useMemo(() => {
     return [...composicion]
       .sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor))
-      .slice(0, 8);
+      .slice(0, 7);
   }, [composicion]);
 
   const detalleIcaAgrupado = useMemo(() => {
@@ -216,6 +226,25 @@ export default function RetencionesReportPage() {
     });
   }, [icaDetalleMensual]);
 
+  const detalleReteFuenteAgrupado = useMemo(() => {
+    const map = new Map<string, ReteFuenteDetalleMensualRow>();
+
+    for (const row of retefuenteDetalleMensual) {
+      const key = `${row.label}__${row.cuenta}__${row.concepto}`;
+      if (!map.has(key)) {
+        map.set(key, { ...row });
+      } else {
+        const existing = map.get(key)!;
+        existing.valor += row.valor;
+      }
+    }
+
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.label !== b.label) return a.label.localeCompare(b.label);
+      return a.cuenta.localeCompare(b.cuenta);
+    });
+  }, [retefuenteDetalleMensual]);
+
   return (
     <div className="space-y-4 p-4 bg-slate-50 min-h-screen">
       {/* HEADER */}
@@ -224,7 +253,7 @@ export default function RetencionesReportPage() {
           <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
             Dashboard Retenciones
             <span className="text-[10px] bg-indigo-600 text-white px-3 py-1 rounded-full uppercase tracking-widest">
-              v2.1
+              v2.2
             </span>
           </h1>
           <p className="text-slate-500 text-xs font-medium mt-1">
@@ -314,21 +343,20 @@ export default function RetencionesReportPage() {
         </Card>
       )}
 
-      {/* GRAFICOS */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* EVOLUCIÓN */}
-        <Card className="lg:col-span-2 rounded-[2rem] shadow-xl border-none bg-white p-2">
+      {/* TENDENCIA MENSUAL */}
+      <div className="grid grid-cols-1 gap-5">
+        <Card className="rounded-[2rem] shadow-xl border-none bg-white p-2">
           <CardHeader className="pb-0">
             <CardTitle className="text-sm font-black text-slate-500 uppercase tracking-tight">
               📈 Tendencia mensual de retenciones
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={340}>
+            <ResponsiveContainer width="100%" height={360}>
               <BarChart
                 data={evolucion}
                 margin={{ top: 30, right: 10, left: 0, bottom: 0 }}
-                barCategoryGap="18%"
+                barCategoryGap="10%"
               >
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis
@@ -346,7 +374,7 @@ export default function RetencionesReportPage() {
                   name="ReteFuente (2365)"
                   fill="#4f46e5"
                   radius={[6, 6, 0, 0]}
-                  barSize={30}
+                  barSize={46}
                 >
                   <LabelList
                     dataKey="retefuente"
@@ -359,7 +387,7 @@ export default function RetencionesReportPage() {
                   name="ICA retenido por conceptos (236805)"
                   fill="#ec4899"
                   radius={[6, 6, 0, 0]}
-                  barSize={30}
+                  barSize={46}
                 >
                   <LabelList
                     dataKey="reteica_conceptos"
@@ -370,8 +398,49 @@ export default function RetencionesReportPage() {
             </ResponsiveContainer>
           </CardContent>
         </Card>
+      </div>
 
-        {/* TORTA */}
+      {/* TRAZABILIDAD + TORTA */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+        <Card className="xl:col-span-2 rounded-[2rem] shadow-2xl border-none overflow-hidden bg-white">
+          <div className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center">
+            <span className="flex items-center gap-2 font-black text-sm uppercase tracking-widest">
+              <Receipt size={18} className="text-indigo-400" />
+              Trazabilidad por concepto y cuenta
+            </span>
+            <span className="text-[10px] font-bold bg-white/10 px-3 py-1 rounded-full border border-white/20 uppercase tracking-tighter">
+              Detalle real por cuenta
+            </span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b text-slate-400 font-black text-[10px] uppercase">
+                <tr>
+                  <th className="p-5 text-left">Cuenta</th>
+                  <th className="p-5 text-left">Concepto</th>
+                  <th className="p-5 text-center">Tipo</th>
+                  <th className="p-5 text-right">Valor</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-bold">
+                {composicion.map((f, i) => (
+                  <tr key={i} className="hover:bg-indigo-50/30 transition-colors">
+                    <td className="p-5 text-slate-500 font-mono text-xs">{f.cuenta}</td>
+                    <td className="p-5 text-slate-700">{f.concepto}</td>
+                    <td className="p-5 text-center">
+                      <TipoBadge tipo={f.tipo} />
+                    </td>
+                    <td className="p-5 text-right text-slate-900 font-black">
+                      {formatCurrency(f.valor)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
         <Card className="rounded-[2rem] shadow-xl border-none bg-white overflow-hidden">
           <CardHeader className="text-center pb-0">
             <CardTitle className="text-sm font-black text-slate-500 uppercase tracking-widest">
@@ -379,13 +448,13 @@ export default function RetencionesReportPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col items-center">
-            <ResponsiveContainer width="100%" height={240}>
+            <ResponsiveContainer width="100%" height={260}>
               <PieChart>
                 <Pie
                   data={topConceptos}
-                  innerRadius={45}
-                  outerRadius={72}
-                  paddingAngle={5}
+                  innerRadius={50}
+                  outerRadius={78}
+                  paddingAngle={4}
                   dataKey="valor"
                   nameKey="concepto"
                   label={renderCustomizedLabel}
@@ -399,13 +468,13 @@ export default function RetencionesReportPage() {
               </PieChart>
             </ResponsiveContainer>
 
-            <div className="w-full space-y-1.5 px-3 pb-4 mt-2 max-h-[180px] overflow-y-auto custom-scrollbar">
+            <div className="w-full space-y-1.5 px-3 pb-4 mt-2 max-h-[420px] overflow-y-auto custom-scrollbar">
               {topConceptos.map((item, idx) => (
                 <div
                   key={idx}
                   className="flex justify-between items-center p-2 rounded-xl bg-slate-50 border border-slate-100 font-bold text-xs"
                 >
-                  <span className="flex items-center gap-2 truncate max-w-[180px]" title={item.concepto}>
+                  <span className="flex items-center gap-2 truncate max-w-[190px]" title={item.concepto}>
                     <div
                       className="min-w-[10px] h-2.5 rounded-full"
                       style={{ backgroundColor: COLORS[idx % COLORS.length] }}
@@ -422,47 +491,7 @@ export default function RetencionesReportPage() {
         </Card>
       </div>
 
-      {/* TABLA GENERAL */}
-      <Card className="rounded-[2rem] shadow-2xl border-none overflow-hidden bg-white">
-        <div className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center">
-          <span className="flex items-center gap-2 font-black text-sm uppercase tracking-widest">
-            <Receipt size={18} className="text-indigo-400" />
-            Trazabilidad por concepto y cuenta
-          </span>
-          <span className="text-[10px] font-bold bg-white/10 px-3 py-1 rounded-full border border-white/20 uppercase tracking-tighter">
-            Detalle real por cuenta
-          </span>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b text-slate-400 font-black text-[10px] uppercase">
-              <tr>
-                <th className="p-5 text-left">Cuenta</th>
-                <th className="p-5 text-left">Concepto</th>
-                <th className="p-5 text-center">Tipo</th>
-                <th className="p-5 text-right">Valor</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-bold">
-              {composicion.map((f, i) => (
-                <tr key={i} className="hover:bg-indigo-50/30 transition-colors">
-                  <td className="p-5 text-slate-500 font-mono text-xs">{f.cuenta}</td>
-                  <td className="p-5 text-slate-700">{f.concepto}</td>
-                  <td className="p-5 text-center">
-                    <TipoBadge tipo={f.tipo} />
-                  </td>
-                  <td className="p-5 text-right text-slate-900 font-black">
-                    {formatCurrency(f.valor)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      {/* TABLA DETALLE ICA */}
+      {/* DETALLE MENSUAL ICA */}
       <Card className="rounded-[2rem] shadow-2xl border-none overflow-hidden bg-white">
         <div className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center">
           <span className="flex items-center gap-2 font-black text-sm uppercase tracking-widest">
@@ -488,6 +517,48 @@ export default function RetencionesReportPage() {
             <tbody className="divide-y divide-slate-100 font-bold">
               {detalleIcaAgrupado.map((f, i) => (
                 <tr key={i} className="hover:bg-pink-50/30 transition-colors">
+                  <td className="p-5 text-slate-500 font-mono text-xs">{f.label}</td>
+                  <td className="p-5 text-slate-500 font-mono text-xs">{f.cuenta}</td>
+                  <td className="p-5 text-slate-700">{f.concepto}</td>
+                  <td className="p-5 text-center">
+                    <TipoBadge tipo={f.tipo} />
+                  </td>
+                  <td className="p-5 text-right text-slate-900 font-black">
+                    {formatCurrency(f.valor)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* DETALLE MENSUAL RETEFUENTE */}
+      <Card className="rounded-[2rem] shadow-2xl border-none overflow-hidden bg-white">
+        <div className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center">
+          <span className="flex items-center gap-2 font-black text-sm uppercase tracking-widest">
+            <FileBarChart2 size={18} className="text-indigo-400" />
+            Detalle mensual de ReteFuente
+          </span>
+          <span className="text-[10px] font-bold bg-white/10 px-3 py-1 rounded-full border border-white/20 uppercase tracking-tighter">
+            2365
+          </span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 border-b text-slate-400 font-black text-[10px] uppercase">
+              <tr>
+                <th className="p-5 text-left">Periodo</th>
+                <th className="p-5 text-left">Cuenta</th>
+                <th className="p-5 text-left">Concepto</th>
+                <th className="p-5 text-center">Tipo</th>
+                <th className="p-5 text-right">Valor</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 font-bold">
+              {detalleReteFuenteAgrupado.map((f, i) => (
+                <tr key={i} className="hover:bg-indigo-50/30 transition-colors">
                   <td className="p-5 text-slate-500 font-mono text-xs">{f.label}</td>
                   <td className="p-5 text-slate-500 font-mono text-xs">{f.cuenta}</td>
                   <td className="p-5 text-slate-700">{f.concepto}</td>

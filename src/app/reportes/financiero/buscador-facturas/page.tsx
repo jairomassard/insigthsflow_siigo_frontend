@@ -111,8 +111,16 @@ export default function BuscadorFacturasPage() {
 
       const resp = await authFetch(`/reportes/facturas-buscador?${params.toString()}`);
       if (!resp.ok) {
-        throw new Error("No fue posible consultar las facturas.");
-      }
+        let message = "No fue posible consultar las facturas.";
+        try {
+            const err = await resp.json();
+            message = err?.error || err?.message || message;
+            if (err?.trace) {
+            console.error("TRACE BACKEND:", err.trace);
+            }
+        } catch (_) {}
+        throw new Error(message);
+    }
 
       const data = await resp.json();
       setRows(data.rows || []);

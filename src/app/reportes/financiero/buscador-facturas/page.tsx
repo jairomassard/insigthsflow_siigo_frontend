@@ -99,40 +99,35 @@ export default function BuscadorFacturasPage() {
     setError("");
 
     try {
-      const params = new URLSearchParams();
-      if (q) params.append("q", q);
-      if (idfactura) params.append("idfactura", idfactura);
-      if (cliente) params.append("cliente", cliente);
-      if (estadoPago) params.append("estado_pago", estadoPago);
-      if (estado) params.append("estado", estado);
-      if (desde) params.append("desde", desde);
-      if (hasta) params.append("hasta", hasta);
-      params.append("limit", "300");
+        const params = new URLSearchParams();
+        if (q) params.append("q", q);
+        if (idfactura) params.append("idfactura", idfactura);
+        if (cliente) params.append("cliente", cliente);
+        if (estadoPago) params.append("estado_pago", estadoPago);
+        if (estado) params.append("estado", estado);
+        if (desde) params.append("desde", desde);
+        if (hasta) params.append("hasta", hasta);
+        params.append("limit", "300");
 
-      const resp = await authFetch(`/reportes/facturas-buscador?${params.toString()}`);
-      if (!resp.ok) {
-        let message = "No fue posible consultar las facturas.";
-        try {
-            const err = await resp.json();
-            message = err?.error || err?.message || message;
-            if (err?.trace) {
-            console.error("TRACE BACKEND:", err.trace);
-            }
-        } catch (_) {}
-        throw new Error(message);
-    }
+        const data = await authFetch(`/reportes/facturas-buscador?${params.toString()}`);
 
-      const data = await resp.json();
-      setRows(data.rows || []);
-      setSummary(data.summary || null);
+        console.log("FACTURAS BUSCADOR DATA:", data);
+
+        if (!data?.ok) {
+        throw new Error(data?.error || "No fue posible consultar las facturas.");
+        }
+
+        setRows(data.rows || []);
+        setSummary(data.summary || null);
     } catch (err: any) {
-      setError(err?.message || "Ocurrió un error al buscar.");
-      setRows([]);
-      setSummary(null);
+        console.error("ERROR BUSCADOR FACTURAS:", err);
+        setError(err?.message || "Ocurrió un error al buscar.");
+        setRows([]);
+        setSummary(null);
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
-  }
+}
 
   useEffect(() => {
     buscar();

@@ -13,42 +13,59 @@ import {
   XAxis,
   YAxis,
   Tooltip,
+  LabelList,
 } from "recharts";
 
-type FacturaRow = {
-  factura_id: number;
-  idfactura: string;
-  fecha: string;
-  vencimiento: string;
-  cliente_nombre: string;
-  estado: string;
-  estado_pago: string;
-  subtotal: number;
-  impuestos_total: number;
-  reteica: number;
-  reteiva: number;
-  autorretencion: number;
-  total_retenciones: number;
-  total: number;
-  saldo: number;
-  public_url: string;
-  centro_costo_nombre: string | null;
-  centro_costo_codigo: string | null;
-  vendedor_nombre: string | null;
-  descripcion: string | null;
-  coincidencias: number;
+type ClienteOption = {
+  id: string;
+  nombre: string;
 };
 
-type Summary = {
-  total_registros: number;
-  subtotal_total: number;
-  iva_total: number;
-  reteica_total: number;
-  reteiva_total: number;
-  autorretencion_total: number;
-  retenciones_total: number;
-  total_facturado: number;
-  saldo_total: number;
+type CentroCostoOption = {
+  id: number | string;
+  nombre: string;
+  codigo?: string | null;
+};
+
+type FacturaRow = {
+  id?: number;
+  factura_id?: number;
+  idfactura: string;
+  fecha: string;
+  vencimiento?: string | null;
+  cliente_nombre: string;
+  estado?: string | null;
+  estado_pago?: string | null;
+  estado_pago_real?: string | null;
+  subtotal?: number;
+  impuestos?: number;
+  impuestos_total?: number;
+  total_retenciones?: number;
+  retenciones?: number;
+  total?: number;
+  saldo?: number;
+  observaciones?: string | null;
+  descripcion?: string | null;
+  medio_pago?: string | null;
+  public_url?: string | null;
+  centro_costo_nombre?: string | null;
+  centro_costo_codigo?: string | null;
+};
+
+type Kpis = {
+  subtotal?: number;
+  iva?: number;
+  impuestos?: number;
+  retenciones?: number;
+  total_facturado?: number;
+  saldo?: number;
+};
+
+type Serie = {
+  mes?: string;
+  label?: string;
+  total_facturado?: number;
+  total?: number;
 };
 
 function formatCurrency(value: number | null | undefined) {
@@ -68,12 +85,70 @@ function abreviar(value: number | null | undefined) {
   return `${n}`;
 }
 
-function csvEscape(value: unknown) {
-  const str = String(value ?? "");
-  if (str.includes(";") || str.includes('"') || str.includes("\n")) {
-    return `"${str.replace(/"/g, '""')}"`;
+function formatLabelValue(value: unknown) {
+  return abreviar(Number(value || 0));
+}
+
+function estadoPagoLabel(row: FacturaRow) {
+  return (row.estado_pago_real || row.estado_pago || "").toLowerCase();
+}
+
+function estadoPagoClasses(estado: string) {
+  switch (estado) {
+    case "pagada":
+      return "bg-emerald-100 text-emerald-800";
+    case "pendiente":
+      return "bg-red-100 text-red-800";
+    case "parcial":
+      return "bg-amber-100 text-amber-800";
+    default:
+      return "bg-slate-100 text-slate-700";
   }
-  return str;
+}
+
+function normalizarMesLabel(mes: string) {
+  if (!mes) return "";
+  if (/^\d{4}-\d{2}$/.test(mes)) return mes;
+  return mes;
+}
+
+async function descargarArchivoConAuth(url: string) {
+  const token =
+    typeof window !== "undefined"
+      ? localStorage.getItem("token") ||
+        localStorage.getItem("access_token") ||
+        localStorage.getItem("jwt") ||
+        ""
+      : "";
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    let message = "No fue posible exportar el archivo.";
+    try {
+      const maybeJson = await res.clone().json();
+      if (maybeJson?.error) message = maybeJson.error;
+    } catch {}
+    throw new Error(message);
+  }
+
+  const blob = await res.blob();
+  const disposition = res.headers.get("Content-Disposition") || "";
+  const match = disposition.match(/filename\*=UTF-8''([^;]+)|filename="?([^"]+)"?/i);
+  const fileName = decodeURIComponent(match?.[1] || match?.[2] || "busqueda_inteligente_facturas.xlsx");
+
+  const fileUrl = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = fileUrl;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(fileUrl);
 }
 
 export default function BuscadorFacturasPage() {
@@ -82,136 +157,162 @@ export default function BuscadorFacturasPage() {
   const defaultDesde = `${today.getFullYear() - 1}-01-01`;
 
   const [q, setQ] = useState("zapier");
-  const [idfactura, setIdfactura] = useState("");
+  const [factura, setFactura] = useState("");
   const [cliente, setCliente] = useState("");
+  const [costCenter, setCostCenter] = useState("");
   const [estadoPago, setEstadoPago] = useState("");
-  const [estado, setEstado] = useState("");
+  const [estadoFactura, setEstadoFactura] = useState("");
   const [desde, setDesde] = useState(defaultDesde);
   const [hasta, setHasta] = useState(defaultHasta);
 
   const [rows, setRows] = useState<FacturaRow[]>([]);
-  const [summary, setSummary] = useState<Summary | null>(null);
+  const [kpis, setKpis] = useState<Kpis | null>(null);
+  const [series, setSeries] = useState<Serie[]>([]);
+  const [count, setCount] = useState(0);
+
+  const [clientes, setClientes] = useState<ClienteOption[]>([]);
+  const [centros, setCentros] = useState<CentroCostoOption[]>([]);
+
   const [loading, setLoading] = useState(false);
+  const [loadingCatalogos, setLoadingCatalogos] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
+
+  const totalSubtotal = Number(kpis?.subtotal || 0);
+  const totalIva = Number(kpis?.iva ?? kpis?.impuestos ?? 0);
+  const totalRetenciones = Number(kpis?.retenciones || 0);
+  const totalFacturado = Number(kpis?.total_facturado || 0);
+  const totalSaldo = Number(kpis?.saldo || 0);
+
+  async function loadCatalogos() {
+    setLoadingCatalogos(true);
+    try {
+      const qs = new URLSearchParams();
+      if (desde) qs.append("desde", desde);
+      if (hasta) qs.append("hasta", hasta);
+
+      const [clientesRes, centrosRes] = await Promise.all([
+        authFetch(`/catalogos/clientes-facturas?${qs.toString()}`),
+        authFetch(`/catalogos/centros-costo?${qs.toString()}`),
+      ]);
+
+      setClientes(Array.isArray(clientesRes) ? clientesRes : []);
+      setCentros(Array.isArray(centrosRes) ? centrosRes : []);
+    } catch (e) {
+      console.error("Error cargando catálogos:", e);
+    } finally {
+      setLoadingCatalogos(false);
+    }
+  }
 
   async function buscar() {
     setLoading(true);
     setError("");
 
     try {
-        const params = new URLSearchParams();
-        if (q) params.append("q", q);
-        if (idfactura) params.append("idfactura", idfactura);
-        if (cliente) params.append("cliente", cliente);
-        if (estadoPago) params.append("estado_pago", estadoPago);
-        if (estado) params.append("estado", estado);
-        if (desde) params.append("desde", desde);
-        if (hasta) params.append("hasta", hasta);
-        params.append("limit", "300");
+      const params = new URLSearchParams();
+      if (q.trim()) params.append("q", q.trim());
+      if (factura.trim()) params.append("factura", factura.trim());
+      if (cliente) params.append("cliente", cliente);
+      if (costCenter) params.append("cost_center", costCenter);
+      if (estadoPago) params.append("estado_pago", estadoPago);
+      if (estadoFactura) params.append("estado_factura", estadoFactura);
+      if (desde) params.append("desde", desde);
+      if (hasta) params.append("hasta", hasta);
+      params.append("limit", "5000");
 
-        const data = await authFetch(`/reportes/facturas-buscador?${params.toString()}`);
+      const data = await authFetch(`/reportes/busqueda-inteligente-facturas?${params.toString()}`);
 
-        console.log("FACTURAS BUSCADOR DATA:", data);
+      if (data?.error) {
+        throw new Error(data.error);
+      }
 
-        if (!data?.ok) {
-        throw new Error(data?.error || "No fue posible consultar las facturas.");
-        }
-
-        setRows(data.rows || []);
-        setSummary(data.summary || null);
+      setRows(Array.isArray(data?.rows) ? data.rows : []);
+      setKpis(data?.kpis || null);
+      setSeries(Array.isArray(data?.series) ? data.series : []);
+      setCount(Number(data?.count || 0));
     } catch (err: any) {
-        console.error("ERROR BUSCADOR FACTURAS:", err);
-        setError(err?.message || "Ocurrió un error al buscar.");
-        setRows([]);
-        setSummary(null);
+      console.error("ERROR BUSCADOR FACTURAS:", err);
+      setError(err?.message || "Ocurrió un error al buscar.");
+      setRows([]);
+      setKpis(null);
+      setSeries([]);
+      setCount(0);
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
-}
+  }
+
+  async function exportarExcel() {
+    setExporting(true);
+    setError("");
+
+    try {
+      const params = new URLSearchParams();
+      if (q.trim()) params.append("q", q.trim());
+      if (factura.trim()) params.append("factura", factura.trim());
+      if (cliente) params.append("cliente", cliente);
+      if (costCenter) params.append("cost_center", costCenter);
+      if (estadoPago) params.append("estado_pago", estadoPago);
+      if (estadoFactura) params.append("estado_factura", estadoFactura);
+      if (desde) params.append("desde", desde);
+      if (hasta) params.append("hasta", hasta);
+      params.append("limit", "5000");
+
+      await descargarArchivoConAuth(
+        `/reportes/busqueda-inteligente-facturas/export.xlsx?${params.toString()}`
+      );
+    } catch (err: any) {
+      console.error("ERROR EXPORTANDO EXCEL:", err);
+      setError(err?.message || "No fue posible exportar a Excel.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  function limpiar() {
+    setQ("");
+    setFactura("");
+    setCliente("");
+    setCostCenter("");
+    setEstadoPago("");
+    setEstadoFactura("");
+    setDesde(defaultDesde);
+    setHasta(defaultHasta);
+    setError("");
+  }
+
+  useEffect(() => {
+    loadCatalogos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [desde, hasta]);
 
   useEffect(() => {
     buscar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const chartData = useMemo(() => {
-    const map = new Map<string, { mes: string; total: number; cantidad: number }>();
+    if (series.length > 0) {
+      return series.map((item) => ({
+        mes: normalizarMesLabel(item.mes || item.label || ""),
+        total: Number(item.total_facturado ?? item.total ?? 0),
+      }));
+    }
+
+    const map = new Map<string, { mes: string; total: number }>();
 
     for (const row of rows) {
       const mes = row.fecha?.slice(0, 7) || "Sin fecha";
       if (!map.has(mes)) {
-        map.set(mes, { mes, total: 0, cantidad: 0 });
+        map.set(mes, { mes, total: 0 });
       }
       const item = map.get(mes)!;
       item.total += Number(row.total || 0);
-      item.cantidad += 1;
     }
 
     return Array.from(map.values()).sort((a, b) => a.mes.localeCompare(b.mes));
-  }, [rows]);
-
-  function exportarCSV() {
-    if (!rows.length) return;
-
-    const headers = [
-      "numero_factura",
-      "fecha",
-      "vencimiento",
-      "cliente",
-      "descripcion",
-      "valor_antes_iva",
-      "iva",
-      "reteica",
-      "reteiva",
-      "autorretencion",
-      "total_retenciones",
-      "total",
-      "saldo",
-      "estado",
-      "estado_pago",
-      "centro_costo",
-      "vendedor",
-      "public_url",
-    ];
-
-    const lines = [
-      headers.join(";"),
-      ...rows.map((r) =>
-        [
-          r.idfactura,
-          r.fecha,
-          r.vencimiento,
-          r.cliente_nombre,
-          r.descripcion,
-          r.subtotal,
-          r.impuestos_total,
-          r.reteica,
-          r.reteiva,
-          r.autorretencion,
-          r.total_retenciones,
-          r.total,
-          r.saldo,
-          r.estado,
-          r.estado_pago,
-          r.centro_costo_nombre,
-          r.vendedor_nombre,
-          r.public_url,
-        ]
-          .map(csvEscape)
-          .join(";")
-      ),
-    ];
-
-    const blob = new Blob(["\uFEFF" + lines.join("\n")], {
-      type: "text/csv;charset=utf-8;",
-    });
-
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "busqueda_facturas_inteligente.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-  }
+  }, [series, rows]);
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -219,55 +320,87 @@ export default function BuscadorFacturasPage() {
         <h1 className="text-2xl font-bold tracking-tight">
           Buscador inteligente de facturas
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Busca facturas por contenido de descripción, número, cliente y rango de fechas.
+        <p className="mt-1 text-sm text-muted-foreground">
+          Busca facturas por palabra clave, número, cliente, centro de costo y rango de fechas.
         </p>
       </div>
 
-      <Card className="shadow-sm border-0 bg-white">
+      <Card className="border-0 bg-white shadow-sm">
         <CardHeader>
           <CardTitle>Filtros</CardTitle>
         </CardHeader>
+
         <CardContent>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
-            <div className="space-y-2 xl:col-span-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-12">
+            <div className="space-y-2 xl:col-span-4">
               <label className="text-sm font-medium">Palabra clave</label>
               <Input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Ej: zapier"
+                placeholder="Ej: Zapier"
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 xl:col-span-2">
               <label className="text-sm font-medium">Factura</label>
               <Input
-                value={idfactura}
-                onChange={(e) => setIdfactura(e.target.value)}
+                value={factura}
+                onChange={(e) => setFactura(e.target.value)}
                 placeholder="Ej: FV-2-2043"
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 xl:col-span-2">
               <label className="text-sm font-medium">Cliente</label>
-              <Input
+              <select
                 value={cliente}
                 onChange={(e) => setCliente(e.target.value)}
-                placeholder="Ej: Inchcape"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="">Todos</option>
+                {clientes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2 xl:col-span-2">
+              <label className="text-sm font-medium">Centro de costo</label>
+              <select
+                value={costCenter}
+                onChange={(e) => setCostCenter(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="">Todos</option>
+                {centros.map((c) => (
+                  <option key={String(c.id)} value={String(c.id)}>
+                    {c.nombre}{c.codigo ? ` (${c.codigo})` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2 xl:col-span-1">
+              <label className="text-sm font-medium">Desde</label>
+              <Input
+                type="date"
+                value={desde}
+                onChange={(e) => setDesde(e.target.value)}
               />
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Desde</label>
-              <Input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} />
-            </div>
-
-            <div className="space-y-2">
+            <div className="space-y-2 xl:col-span-1">
               <label className="text-sm font-medium">Hasta</label>
-              <Input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} />
+              <Input
+                type="date"
+                value={hasta}
+                onChange={(e) => setHasta(e.target.value)}
+              />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 xl:col-span-2">
               <label className="text-sm font-medium">Estado pago</label>
               <select
                 value={estadoPago}
@@ -281,44 +414,47 @@ export default function BuscadorFacturasPage() {
               </select>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 xl:col-span-2">
               <label className="text-sm font-medium">Estado factura</label>
               <select
-                value={estado}
-                onChange={(e) => setEstado(e.target.value)}
+                value={estadoFactura}
+                onChange={(e) => setEstadoFactura(e.target.value)}
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
                 <option value="">Todos</option>
-                <option value="Emitida">Emitida</option>
-                <option value="Anulada">Anulada</option>
-                <option value="Borrador">Borrador</option>
+                <option value="emitida">Emitida</option>
+                <option value="anulada">Anulada</option>
+                <option value="borrador">Borrador</option>
               </select>
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-5 flex flex-wrap gap-2">
             <Button onClick={buscar} disabled={loading}>
               {loading ? "Buscando..." : "Buscar"}
             </Button>
 
             <Button
               variant="outline"
-              onClick={() => {
-                setQ("");
-                setIdfactura("");
-                setCliente("");
-                setEstadoPago("");
-                setEstado("");
-                setDesde(defaultDesde);
-                setHasta(defaultHasta);
-              }}
+              onClick={limpiar}
+              disabled={loading}
             >
               Limpiar
             </Button>
 
-            <Button variant="secondary" onClick={exportarCSV} disabled={!rows.length}>
-              Exportar CSV
+            <Button
+              variant="secondary"
+              onClick={exportarExcel}
+              disabled={exporting || loading || rows.length === 0}
+            >
+              {exporting ? "Exportando..." : "Exportar Excel"}
             </Button>
+
+            {loadingCatalogos && (
+              <span className="self-center text-sm text-muted-foreground">
+                Actualizando catálogos...
+              </span>
+            )}
           </div>
 
           {error && (
@@ -330,53 +466,51 @@ export default function BuscadorFacturasPage() {
       </Card>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <Card className="shadow-sm border-0">
+        <Card className="border-0 shadow-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Facturas encontradas</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-bold">
-            {summary?.total_registros ?? 0}
-          </CardContent>
+          <CardContent className="text-2xl font-bold">{count}</CardContent>
         </Card>
 
-        <Card className="shadow-sm border-0">
+        <Card className="border-0 shadow-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Subtotal</CardTitle>
           </CardHeader>
           <CardContent className="text-xl font-bold">
-            {formatCurrency(summary?.subtotal_total)}
+            {formatCurrency(totalSubtotal)}
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm border-0">
+        <Card className="border-0 shadow-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">IVA</CardTitle>
           </CardHeader>
           <CardContent className="text-xl font-bold">
-            {formatCurrency(summary?.iva_total)}
+            {formatCurrency(totalIva)}
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm border-0">
+        <Card className="border-0 shadow-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Retenciones</CardTitle>
           </CardHeader>
           <CardContent className="text-xl font-bold">
-            {formatCurrency(summary?.retenciones_total)}
+            {formatCurrency(totalRetenciones)}
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm border-0">
+        <Card className="border-0 shadow-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Total facturado</CardTitle>
           </CardHeader>
           <CardContent className="text-xl font-bold">
-            {formatCurrency(summary?.total_facturado)}
+            {formatCurrency(totalFacturado)}
           </CardContent>
         </Card>
       </div>
 
-      <Card className="shadow-sm border-0">
+      <Card className="border-0 shadow-sm">
         <CardHeader>
           <CardTitle>Evolución mensual</CardTitle>
         </CardHeader>
@@ -391,14 +525,26 @@ export default function BuscadorFacturasPage() {
                   formatter={(value: number) => formatCurrency(Number(value))}
                   labelFormatter={(label) => `Mes: ${label}`}
                 />
-                <Bar dataKey="total" radius={[6, 6, 0, 0]} />
+                <Bar
+                  dataKey="total"
+                  fill="#1E40AF"
+                  radius={[6, 6, 0, 0]}
+                  name="Total facturado"
+                >
+                  <LabelList
+                    dataKey="total"
+                    position="top"
+                    formatter={formatLabelValue}
+                    style={{ fontSize: 10 }}
+                  />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
         </CardContent>
       </Card>
 
-      <Card className="shadow-sm border-0">
+      <Card className="border-0 shadow-sm">
         <CardHeader>
           <CardTitle>Resultados</CardTitle>
         </CardHeader>
@@ -410,7 +556,8 @@ export default function BuscadorFacturasPage() {
                   <th className="px-3 py-2 font-semibold">Fecha</th>
                   <th className="px-3 py-2 font-semibold">Factura</th>
                   <th className="px-3 py-2 font-semibold">Cliente</th>
-                  <th className="px-3 py-2 font-semibold">Descripción</th>
+                  <th className="px-3 py-2 font-semibold">Centro de costo</th>
+                  <th className="px-3 py-2 font-semibold">Descripción / observaciones</th>
                   <th className="px-3 py-2 font-semibold text-right">Subtotal</th>
                   <th className="px-3 py-2 font-semibold text-right">IVA</th>
                   <th className="px-3 py-2 font-semibold text-right">Retenciones</th>
@@ -420,64 +567,93 @@ export default function BuscadorFacturasPage() {
                   <th className="px-3 py-2 font-semibold">Acciones</th>
                 </tr>
               </thead>
+
               <tbody>
                 {rows.length === 0 && !loading ? (
                   <tr>
-                    <td colSpan={11} className="px-3 py-8 text-center text-muted-foreground">
+                    <td colSpan={12} className="px-3 py-8 text-center text-muted-foreground">
                       No se encontraron resultados.
                     </td>
                   </tr>
                 ) : (
-                  rows.map((row) => (
-                    <tr key={`${row.factura_id}-${row.idfactura}`} className="border-t">
-                      <td className="px-3 py-2 whitespace-nowrap">{row.fecha}</td>
-                      <td className="px-3 py-2 whitespace-nowrap font-medium">{row.idfactura}</td>
-                      <td className="px-3 py-2 min-w-[220px]">{row.cliente_nombre}</td>
-                      <td className="px-3 py-2 min-w-[320px]">
-                        <div className="line-clamp-3 whitespace-pre-wrap">
-                          {row.descripcion || "-"}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-right whitespace-nowrap">
-                        {formatCurrency(row.subtotal)}
-                      </td>
-                      <td className="px-3 py-2 text-right whitespace-nowrap">
-                        {formatCurrency(row.impuestos_total)}
-                      </td>
-                      <td className="px-3 py-2 text-right whitespace-nowrap">
-                        {formatCurrency(row.total_retenciones)}
-                      </td>
-                      <td className="px-3 py-2 text-right whitespace-nowrap font-semibold">
-                        {formatCurrency(row.total)}
-                      </td>
-                      <td className="px-3 py-2 text-right whitespace-nowrap">
-                        {formatCurrency(row.saldo)}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        <span className="rounded-full bg-slate-100 px-2 py-1 text-xs">
-                          {row.estado_pago || "-"}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        {row.public_url ? (
-                          <a
-                            href={row.public_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline"
+                  rows.map((row, idx) => {
+                    const iva = Number(row.impuestos ?? row.impuestos_total ?? 0);
+                    const retenciones = Number(row.retenciones ?? row.total_retenciones ?? 0);
+                    const estadoPago = estadoPagoLabel(row);
+                    const descripcion = row.descripcion || row.observaciones || "-";
+
+                    return (
+                      <tr
+                        key={`${row.idfactura}-${row.factura_id ?? row.id ?? idx}`}
+                        className="border-t align-top"
+                      >
+                        <td className="whitespace-nowrap px-3 py-2">{row.fecha}</td>
+                        <td className="whitespace-nowrap px-3 py-2 font-medium">{row.idfactura}</td>
+                        <td className="min-w-[220px] px-3 py-2">{row.cliente_nombre}</td>
+                        <td className="min-w-[180px] px-3 py-2">
+                          {row.centro_costo_nombre || "-"}
+                          {row.centro_costo_codigo ? (
+                            <div className="text-xs text-muted-foreground">
+                              {row.centro_costo_codigo}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="min-w-[320px] px-3 py-2">
+                          <div className="line-clamp-3 whitespace-pre-wrap">
+                            {descripcion}
+                          </div>
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2 text-right">
+                          {formatCurrency(row.subtotal)}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2 text-right">
+                          {formatCurrency(iva)}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2 text-right">
+                          {formatCurrency(retenciones)}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2 text-right font-semibold">
+                          {formatCurrency(row.total)}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2 text-right">
+                          {formatCurrency(row.saldo)}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2">
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-xs font-medium ${estadoPagoClasses(
+                              estadoPago
+                            )}`}
                           >
-                            Ver factura
-                          </a>
-                        ) : (
-                          "-"
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                            {estadoPago || "-"}
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2">
+                          {row.public_url ? (
+                            <a
+                              href={row.public_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:underline"
+                            >
+                              Ver factura
+                            </a>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
           </div>
+
+          {rows.length > 0 && (
+            <div className="mt-3 text-xs text-muted-foreground">
+              Saldo total encontrado: {formatCurrency(totalSaldo)}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

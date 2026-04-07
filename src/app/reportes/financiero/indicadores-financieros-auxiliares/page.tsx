@@ -179,8 +179,7 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
       evolucionMensual.map((r) => ({
         Mes: r.mes,
         Utilidad_Neta: r.utilidad_neta,
-        Liquidez: r.liquidez,
-        Apalancamiento: r.apalancamiento,
+        Rentabilidad: r.rentabilidad,
       }))
     );
 
@@ -256,7 +255,7 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
         <h1 className="text-3xl font-bold tracking-tight">📈 Indicadores Financieros desde Auxiliares</h1>
         <p className="text-sm text-muted-foreground">
           Este módulo reconstruye la situación financiera a partir de movimientos del auxiliar contable,
-          no desde balance de prueba consolidado.
+          usando la lógica del balance general y del estado de resultados.
         </p>
       </div>
 
@@ -305,36 +304,29 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
         </CardHeader>
         <CardContent className="space-y-3 text-sm leading-6 text-slate-700">
           <p>
-            A diferencia del balance de prueba, aquí los indicadores se reconstruyen a partir de los
-            movimientos del auxiliar contable. Por eso la calidad del análisis depende del rango de
-            información cargada.
+            Los indicadores de balance se toman de la reconstrucción del balance general desde auxiliares,
+            mientras que la utilidad y la rentabilidad se calculan con base en el P&amp;L del período.
           </p>
           <div className="grid gap-3 md:grid-cols-3">
             <div className="rounded-xl border border-amber-200 bg-white p-4">
-              <p className="font-semibold">Si solo cargaste marzo</p>
+              <p className="font-semibold">Balance reconstruido</p>
               <p className="text-slate-600">
-                el activo y el pasivo pueden salir incompletos, porque no se arrastran automáticamente
-                los saldos previos del año.
+                Activo, pasivo y patrimonio se calculan con la misma lógica del balance general, incluyendo
+                patrimonio calculado cuando Siigo no trae cuenta 3 útil.
               </p>
             </div>
             <div className="rounded-xl border border-amber-200 bg-white p-4">
-              <p className="font-semibold">Si cargaste enero a marzo</p>
+              <p className="font-semibold">Resultado del período</p>
               <p className="text-slate-600">
-                la foto financiera a marzo ya empieza a tener mucha más coherencia, porque se puede
-                reconstruir mejor el acumulado.
+                Ingresos, costos, gastos y utilidad neta provienen del mismo motor del Estado de Resultados.
               </p>
             </div>
             <div className="rounded-xl border border-amber-200 bg-white p-4">
-              <p className="font-semibold">Escenario ideal</p>
+              <p className="font-semibold">Consistencia</p>
               <p className="text-slate-600">
-                para analizar un corte mensual, el auxiliar debería incluir el acumulado desde el inicio
-                del año contable hasta el mes consultado.
+                Los indicadores compartidos con Balance General deberían coincidir para el mismo corte.
               </p>
             </div>
-          </div>
-          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-            En <strong>BalancePrueba</strong> este problema no existe igual, porque allá el saldo ya venía
-            consolidado. En <strong>Auxiliares</strong> sí toca reconstruirlo a partir de débitos y créditos.
           </div>
         </CardContent>
       </Card>
@@ -430,7 +422,7 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
 
       <Card className="border-slate-200">
         <CardHeader>
-          <CardTitle>📉 Evolución mensual de indicadores</CardTitle>
+          <CardTitle>📉 Evolución mensual del período</CardTitle>
         </CardHeader>
         <CardContent className="space-y-8">
           <div>
@@ -456,7 +448,7 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
           </div>
 
           <div>
-            <h4 className="mb-3 text-sm font-semibold text-slate-700">Liquidez mensual</h4>
+            <h4 className="mb-3 text-sm font-semibold text-slate-700">Rentabilidad mensual</h4>
             <div className="h-[320px]">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={dataGrafica}>
@@ -467,8 +459,8 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
                   <Legend />
                   <Line
                     type="monotone"
-                    dataKey="liquidez"
-                    name="Liquidez"
+                    dataKey="rentabilidad"
+                    name="Rentabilidad"
                     strokeWidth={3}
                     dot={{ r: 3 }}
                   />
@@ -477,26 +469,9 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
             </div>
           </div>
 
-          <div>
-            <h4 className="mb-3 text-sm font-semibold text-slate-700">Apalancamiento mensual</h4>
-            <div className="h-[320px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={dataGrafica}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="mes_label" />
-                  <YAxis />
-                  <Tooltip formatter={(value: any) => fmt2(Number(value || 0))} />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="apalancamiento"
-                    name="Apalancamiento"
-                    strokeWidth={3}
-                    dot={{ r: 3 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+            La evolución mensual de esta página muestra por ahora el comportamiento de utilidad neta y rentabilidad
+            del período. Los indicadores de balance del encabezado corresponden al corte final seleccionado.
           </div>
         </CardContent>
       </Card>

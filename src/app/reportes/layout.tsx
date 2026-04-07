@@ -245,7 +245,16 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 icon: <FileBarChart2 className="w-4 h-4" />,
               },
             ]
-          : []),  
+          : []),
+        ...(tiene("ver_reporte_indicadores_auxiliares")
+          ? [
+              {
+                href: "/reportes/financiero/indicadores-financieros-auxiliares",
+                label: "Indicadores Financieros Auxiliares",
+                icon: <FileBarChart2 className="w-4 h-4" />,
+              },
+            ]
+          : []),    
         ...(tiene("ver_reporte_balance")
           ? [
               {
@@ -259,7 +268,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           ? [
               {
                 href: "/reportes/indicadores",
-                label: "Indicadores Financieros",
+                label: "Ind. Financieros desde Balance Prueba",
                 icon: <FileBarChart2 className="w-4 h-4" />,
               },
             ]

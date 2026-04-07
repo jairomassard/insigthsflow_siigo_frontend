@@ -227,6 +227,7 @@ export default function ClientHome() {
           tiene("ver_reporte_estado_resultados") ||
           tiene("ver_reporte_analisis_variacion") ||
           tiene("ver_reporte_balance_general") ||
+          tiene("ver_reporte_indicadores_auxiliares") ||
           tiene("ver_reporte_balance") ||
           tiene("ver_reporte_indicadores")) && (
           <Section title="🌟 Reportes Especiales" color="bg-green-50">
@@ -277,6 +278,14 @@ export default function ClientHome() {
                 description="Consulta activos, pasivos y patrimonio para analizar la situación financiera de la empresa."
               />
             )}
+            {tiene("ver_reporte_indicadores_auxiliares") && (
+              <FeatureCard
+                icon="📊"
+                title="Indicadores Financieros Auxiliares"
+                href="/reportes/financiero/indicadores-financieros-auxiliares"
+                description="Consulta indicadores financieros calculados directamente desde los auxiliares contables."
+              />
+            )}
             {tiene("ver_reporte_balance") && (
               <FeatureCard
                 icon="⚖️"
@@ -288,9 +297,9 @@ export default function ClientHome() {
             {tiene("ver_reporte_indicadores") && (
               <FeatureCard
                 icon="📈"
-                title="Indicadores Financieros"
+                title="Indicadores Financieros desde Balance Prueba"
                 href="/reportes/indicadores"
-                description="Consulta indicadores financieros inferidos a partir del balance emitido por Siigo y obtén conclusiones sobre ellos."
+                description="Consulta indicadores financieros inferidos a partir del balance de prueba emitido por Siigo y obtén conclusiones sobre ellos."
               />
             )}
           </Section>

@@ -123,6 +123,15 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               },
             ]
           : []),
+        ...(tiene("ver_reporte_buscador_facturas")
+          ? [
+              {
+                href: "/reportes/financiero/buscador-facturas",
+                label: "Buscador Inteligente de Facturas",
+                icon: <FileBarChart2 className="w-4 h-4" />,
+              },
+            ]
+          : []),
       ],
     },
     {

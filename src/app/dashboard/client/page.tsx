@@ -131,7 +131,8 @@ export default function ClientHome() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {(tiene("ver_reporte_ventas") ||
           tiene("ver_reporte_vendedores") ||
-          tiene("ver_reporte_productos")) && (
+          tiene("ver_reporte_productos") ||
+          tiene("ver_reporte_buscador_facturas"))  && (
           <Section title="📈 Reportes de Ventas" color="bg-blue-50">
             {tiene("ver_reporte_ventas") && (
               <FeatureCard
@@ -155,6 +156,14 @@ export default function ClientHome() {
                 title="Ventas por Producto"
                 href="/reportes/productos"
                 description="Evolución mensual y top 10 productos más y menos vendidos."
+              />
+            )}
+            {tiene("ver_reporte_buscador_facturas") && (
+              <FeatureCard
+                icon="🔎"
+                title="Buscador Inteligente de Facturas"
+                href="/reportes/financiero/buscador-facturas"
+                description="Busca y analiza facturas de forma inteligente por múltiples criterios."
               />
             )}
           </Section>

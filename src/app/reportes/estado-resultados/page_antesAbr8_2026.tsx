@@ -28,7 +28,6 @@ import {
   EyeOff,
   Plus,
   Minus,
-  HelpCircle,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 
@@ -203,12 +202,7 @@ function absPercent(part: number, total: number) {
   return (Math.abs(part) / Math.abs(total)) * 100;
 }
 
-function tendenciaTexto(
-  actual: number,
-  anterior: number,
-  labelUp = "aumentó",
-  labelDown = "disminuyó"
-) {
+function tendenciaTexto(actual: number, anterior: number, labelUp = "aumentó", labelDown = "disminuyó") {
   if (actual > anterior) return labelUp;
   if (actual < anterior) return labelDown;
   return "se mantuvo estable";
@@ -224,42 +218,6 @@ function formatDeltaPercent(actual: number, anterior: number) {
   if (pct === null) return "N/A";
   return `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
 }
-
-const KPI_INFO = {
-  ingresosTotales: {
-    title: "Ingresos Totales",
-    description:
-      "Representa el valor total facturado o vendido por la empresa dentro del período analizado, antes de restar costos, gastos e impuestos.",
-  },
-  utilidadBruta: {
-    title: "Utilidad Bruta",
-    description:
-      "Es la ganancia que queda después de restar a los ingresos los costos directamente asociados a la venta o prestación del servicio. Mide qué tan rentable es la operación principal antes de gastos administrativos y comerciales.",
-    marginDescription:
-      "Margen Bruto: indica qué porcentaje de los ingresos se convierte en utilidad bruta. Entre más alto, mayor eficiencia en costos directos.",
-  },
-  utilidadOperativa: {
-    title: "Utilidad Operativa",
-    description:
-      "Es la utilidad que queda luego de restar a la utilidad bruta los gastos operacionales. Refleja el resultado del negocio en su operación normal, sin considerar partidas no operacionales.",
-    marginDescription:
-      "Margen Operativo: muestra qué porcentaje de los ingresos queda como utilidad operativa después de cubrir costos y gastos del negocio.",
-  },
-  ebitda: {
-    title: "EBITDA",
-    description:
-      "Corresponde a la utilidad antes de intereses, impuestos, depreciaciones y amortizaciones. Se usa para medir la capacidad operativa real del negocio y comparar desempeño entre empresas.",
-    marginDescription:
-      "Margen EBITDA: muestra qué porcentaje de los ingresos se convierte en EBITDA. Es útil para analizar la generación operativa de caja del negocio.",
-  },
-  utilidadNeta: {
-    title: "Utilidad Neta",
-    description:
-      "Es el resultado final del período después de considerar costos, gastos operacionales y partidas no operacionales. Indica la ganancia o pérdida definitiva del negocio.",
-    marginDescription:
-      "Margen Neto: representa qué porcentaje de los ingresos termina como utilidad final para la empresa.",
-  },
-};
 
 // =========================================================
 // PAGE
@@ -513,6 +471,7 @@ export default function EstadoResultadosPage() {
     return alertas;
   }, [utilidadOperativa, utilidadBruta, kpis.ebitda, kpis.utilidad_operativa, totalGasOp, tGasOpMes]);
 
+
   const periodoActual = useMemo(() => {
     if (!evolucion.length) return null;
     return evolucion[evolucion.length - 1];
@@ -556,6 +515,7 @@ export default function EstadoResultadosPage() {
     const ingresosNoOp = totalIngNoOp || 0;
     const gastosNoOperacion = totalGasNoOp || 0;
 
+    // RESUMEN
     resumen.push(
       `La empresa registra ingresos operacionales netos por ${formatCurrency(ingresos)} y una utilidad neta acumulada de ${formatCurrency(utilidadNeta)}.`
     );
@@ -569,9 +529,12 @@ export default function EstadoResultadosPage() {
         `El período cerró con pérdida neta de ${formatCurrency(utilidadNeta)}, por lo que conviene revisar presión en costos, gastos y devoluciones.`
       );
     } else {
-      resumen.push(`El período cerró en punto de equilibrio neto.`);
+      resumen.push(
+        `El período cerró en punto de equilibrio neto.`
+      );
     }
 
+    // VARIACIÓN VS PERÍODO ANTERIOR
     if (periodoActual && periodoAnterior) {
       const actualIngresos = periodoActual.ingresos_totales ?? periodoActual.ingresos ?? 0;
       const anteriorIngresos = periodoAnterior.ingresos_totales ?? periodoAnterior.ingresos ?? 0;
@@ -606,6 +569,7 @@ export default function EstadoResultadosPage() {
       );
     }
 
+    // HALLAZGOS
     if (ingresos > 0) {
       hallazgos.push(
         `Los costos de venta consumen ${absPercent(costosVenta, ingresos).toFixed(1)}% de los ingresos operacionales.`
@@ -642,6 +606,7 @@ export default function EstadoResultadosPage() {
       }
     });
 
+    // ALERTAS
     if (gastosOperacion < 0) {
       alertas.push(
         "Se detectan gastos operacionales netos negativos. Conviene validar si corresponde a reversiones contables, provisiones o reclasificaciones."
@@ -691,6 +656,8 @@ export default function EstadoResultadosPage() {
     utilidadOperativa,
     utilidadNeta,
   ]);
+
+
 
   const exportExcel = () => {
     const wb = XLSX.utils.book_new();
@@ -915,7 +882,6 @@ export default function EstadoResultadosPage() {
           value={kpis.ingresos_totales || 0}
           icon={<TrendingUp size={18} />}
           color="emerald"
-          description={KPI_INFO.ingresosTotales.description}
         />
         <StatCard
           title="Utilidad Bruta"
@@ -923,8 +889,6 @@ export default function EstadoResultadosPage() {
           icon={<DollarSign size={18} />}
           color="blue"
           badge={formatPercent(kpis.margen_bruto)}
-          description={KPI_INFO.utilidadBruta.description}
-          badgeDescription={KPI_INFO.utilidadBruta.marginDescription}
         />
         <StatCard
           title="Utilidad Operativa"
@@ -932,8 +896,6 @@ export default function EstadoResultadosPage() {
           icon={<Landmark size={18} />}
           color="sky"
           badge={formatPercent(kpis.margen_operativo)}
-          description={KPI_INFO.utilidadOperativa.description}
-          badgeDescription={KPI_INFO.utilidadOperativa.marginDescription}
         />
         <StatCard
           title="EBITDA"
@@ -942,8 +904,6 @@ export default function EstadoResultadosPage() {
           color="indigo"
           badge={formatPercent(kpis.margen_ebitda)}
           highlight
-          description={KPI_INFO.ebitda.description}
-          badgeDescription={KPI_INFO.ebitda.marginDescription}
         />
         <StatCard
           title="Utilidad Neta"
@@ -951,8 +911,6 @@ export default function EstadoResultadosPage() {
           icon={<TrendingUp size={18} />}
           color="slate"
           badge={formatPercent(kpis.margen_neto)}
-          description={KPI_INFO.utilidadNeta.description}
-          badgeDescription={KPI_INFO.utilidadNeta.marginDescription}
         />
       </div>
 
@@ -1055,235 +1013,244 @@ export default function EstadoResultadosPage() {
       {vista === "detallada" && (
         <>
           <Card className="rounded-[2rem] shadow-2xl border-none overflow-hidden bg-white">
-            <div className="bg-slate-900 text-white px-8 py-5 flex justify-between items-center">
-              <div>
-                <h2 className="font-black text-lg uppercase tracking-widest">
-                  Estado de Resultados Integral (Matricial)
-                </h2>
-                <p className="text-slate-400 text-xs mt-1 font-medium">
-                  Análisis Horizontal Mes a Mes + Acumulado
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={expandAllSections}
-                  className="px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-300 border border-emerald-400/20 text-xs font-black hover:bg-emerald-500/20 transition-all"
-                >
-                  Expandir todo
-                </button>
-
-                <button
-                  type="button"
-                  onClick={collapseAllSections}
-                  className="px-3 py-2 rounded-xl bg-white/5 text-white border border-white/10 text-xs font-black hover:bg-white/10 transition-all"
-                >
-                  Contraer todo
-                </button>
-
-                <TableIcon size={30} className="text-emerald-400 opacity-60 ml-1" />
-              </div>
+          <div className="bg-slate-900 text-white px-8 py-5 flex justify-between items-center">
+            <div>
+              <h2 className="font-black text-lg uppercase tracking-widest">
+                Estado de Resultados Integral (Matricial)
+              </h2>
+              <p className="text-slate-400 text-xs mt-1 font-medium">
+                Análisis Horizontal Mes a Mes + Acumulado
+              </p>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[1000px]">
-                <thead>
-                  <tr className="bg-slate-100 text-slate-500 text-[10px] uppercase font-black tracking-widest border-b">
-                    <th className="py-4 px-6 text-left sticky left-0 bg-slate-100 z-10 w-[360px]">
-                      Concepto / Cuenta
-                    </th>
-                    {periodos.map((p) => (
-                      <th key={p} className="py-4 px-4 text-right">
-                        {p}
-                      </th>
-                    ))}
-                    <th className="py-4 px-6 text-right bg-emerald-50 text-emerald-800 border-l border-emerald-100">
-                      Total Acumulado
-                    </th>
-                  </tr>
-                </thead>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={expandAllSections}
+                className="px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-300 border border-emerald-400/20 text-xs font-black hover:bg-emerald-500/20 transition-all"
+              >
+                Expandir todo
+              </button>
 
-                <tbody className="divide-y divide-slate-100">
-                  <SectionHeader
-                    title="INGRESOS OPERACIONALES"
-                    colSpan={periodos.length + 2}
-                    expanded={openSections.ingOp}
-                    onToggle={() => toggleSection("ingOp")}
-                  />
-                  {openSections.ingOp &&
-                    ingOp.map((c) => (
-                      <RowCuenta
-                        key={c.cuenta}
-                        cuenta={c}
-                        isGasto={false}
-                        periodos={periodos}
-                        modoVisual={modoVisual}
-                      />
-                    ))}
-                  <RowTotal
-                    title="TOTAL INGRESOS OPERACIONALES"
-                    totalesMes={tIngOpMes}
-                    totalAcumulado={totalIngOp}
-                    periodos={periodos}
-                    modoVisual={modoVisual}
-                  />
+              <button
+                type="button"
+                onClick={collapseAllSections}
+                className="px-3 py-2 rounded-xl bg-white/5 text-white border border-white/10 text-xs font-black hover:bg-white/10 transition-all"
+              >
+                Contraer todo
+              </button>
 
-                  <SectionHeader
-                    title="COSTOS DE VENTA"
-                    colSpan={periodos.length + 2}
-                    white
-                    expanded={openSections.costos}
-                    onToggle={() => toggleSection("costos")}
-                  />
-                  {openSections.costos &&
-                    costos.map((c) => (
-                      <RowCuenta
-                        key={c.cuenta}
-                        cuenta={c}
-                        isGasto={true}
-                        periodos={periodos}
-                        modoVisual={modoVisual}
-                      />
-                    ))}
-                  <RowTotal
-                    title="TOTAL COSTOS DE VENTA"
-                    totalesMes={tCostosMes}
-                    totalAcumulado={totalCostos}
-                    isGasto
-                    periodos={periodos}
-                    modoVisual={modoVisual}
-                  />
-
-                  <ResultRow
-                    title="(=) Utilidad Bruta"
-                    values={ubMes}
-                    total={utilidadBruta}
-                    periodos={periodos}
-                    rowClass="bg-emerald-50"
-                    titleClass="text-emerald-800 bg-emerald-50"
-                    valueClass="text-emerald-800"
-                    totalClass="text-emerald-900 bg-emerald-100/50 border-l border-emerald-200"
-                  />
-
-                  <SectionHeader
-                    title="GASTOS OPERACIONALES"
-                    colSpan={periodos.length + 2}
-                    white
-                    expanded={openSections.gasOp}
-                    onToggle={() => toggleSection("gasOp")}
-                  />
-                  {openSections.gasOp &&
-                    gasOp.map((c) => (
-                      <RowCuenta
-                        key={c.cuenta}
-                        cuenta={c}
-                        isGasto={true}
-                        periodos={periodos}
-                        modoVisual={modoVisual}
-                      />
-                    ))}
-                  <RowTotal
-                    title="TOTAL GASTOS OPERACIONALES"
-                    totalesMes={tGasOpMes}
-                    totalAcumulado={totalGasOp}
-                    isGasto
-                    periodos={periodos}
-                    modoVisual={modoVisual}
-                  />
-
-                  <ResultRow
-                    title="(=) Utilidad Operativa"
-                    values={uoMes}
-                    total={utilidadOperativa}
-                    periodos={periodos}
-                    rowClass="bg-blue-50"
-                    titleClass="text-blue-800 bg-blue-50"
-                    valueClass="text-blue-800"
-                    totalClass="text-blue-900 bg-blue-100/50 border-l border-blue-200"
-                  />
-
-                  <SectionHeader
-                    title="INGRESOS NO OPERACIONALES"
-                    colSpan={periodos.length + 2}
-                    white
-                    expanded={openSections.ingNoOp}
-                    onToggle={() => toggleSection("ingNoOp")}
-                  />
-                  {openSections.ingNoOp &&
-                    ingNoOp.map((c) => (
-                      <RowCuenta
-                        key={c.cuenta}
-                        cuenta={c}
-                        isGasto={false}
-                        periodos={periodos}
-                        modoVisual={modoVisual}
-                      />
-                    ))}
-                  <RowTotal
-                    title="TOTAL INGRESOS NO OPERACIONALES"
-                    totalesMes={tIngNoOpMes}
-                    totalAcumulado={totalIngNoOp}
-                    periodos={periodos}
-                    modoVisual={modoVisual}
-                  />
-
-                  <SectionHeader
-                    title="GASTOS NO OPERACIONALES"
-                    colSpan={periodos.length + 2}
-                    white
-                    expanded={openSections.gasNoOp}
-                    onToggle={() => toggleSection("gasNoOp")}
-                  />
-                  {openSections.gasNoOp &&
-                    gasNoOp.map((c) => (
-                      <RowCuenta
-                        key={c.cuenta}
-                        cuenta={c}
-                        isGasto={true}
-                        periodos={periodos}
-                        modoVisual={modoVisual}
-                      />
-                    ))}
-                  <RowTotal
-                    title="TOTAL GASTOS NO OPERACIONALES"
-                    totalesMes={tGasNoOpMes}
-                    totalAcumulado={totalGasNoOp}
-                    isGasto
-                    periodos={periodos}
-                    modoVisual={modoVisual}
-                  />
-
-                  <ResultRow
-                    title="(=) Utilidad Antes de Impuestos"
-                    values={uaiMes}
-                    total={utilidadAntesImpuestos}
-                    periodos={periodos}
-                    rowClass="bg-amber-50"
-                    titleClass="text-amber-800 bg-amber-50"
-                    valueClass="text-amber-800"
-                    totalClass="text-amber-900 bg-amber-100/50 border-l border-amber-200"
-                  />
-
-                  <tr className="bg-slate-900 border-t-4 border-slate-900">
-                    <td className="py-5 px-6 font-black text-white text-base uppercase tracking-widest sticky left-0 bg-slate-900">
-                      (=) Utilidad Neta del Ejercicio
-                    </td>
-                    {periodos.map((p) => (
-                      <td
-                        key={p}
-                        className="py-5 px-4 text-right font-black text-emerald-400 text-sm"
-                      >
-                        {formatCurrency(unMes[p])}
-                      </td>
-                    ))}
-                    <td className="py-5 px-6 text-right font-black text-emerald-400 text-xl bg-slate-800 border-l border-slate-700">
-                      {formatCurrency(utilidadNeta)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+              <TableIcon size={30} className="text-emerald-400 opacity-60 ml-1" />
             </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[1000px]">
+              <thead>
+                <tr className="bg-slate-100 text-slate-500 text-[10px] uppercase font-black tracking-widest border-b">
+                  <th className="py-4 px-6 text-left sticky left-0 bg-slate-100 z-10 w-[360px]">
+                    Concepto / Cuenta
+                  </th>
+                  {periodos.map((p) => (
+                    <th key={p} className="py-4 px-4 text-right">
+                      {p}
+                    </th>
+                  ))}
+                  <th className="py-4 px-6 text-right bg-emerald-50 text-emerald-800 border-l border-emerald-100">
+                    Total Acumulado
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-slate-100">
+                {/* INGRESOS OPERACIONALES */}
+                <SectionHeader
+                  title="INGRESOS OPERACIONALES"
+                  colSpan={periodos.length + 2}
+                  expanded={openSections.ingOp}
+                  onToggle={() => toggleSection("ingOp")}
+                />
+                {openSections.ingOp &&
+                  ingOp.map((c) => (
+                    <RowCuenta
+                      key={c.cuenta}
+                      cuenta={c}
+                      isGasto={false}
+                      periodos={periodos}
+                      modoVisual={modoVisual}
+                    />
+                  ))}
+                <RowTotal
+                  title="TOTAL INGRESOS OPERACIONALES"
+                  totalesMes={tIngOpMes}
+                  totalAcumulado={totalIngOp}
+                  periodos={periodos}
+                  modoVisual={modoVisual}
+                />
+
+                {/* COSTOS */}
+                <SectionHeader
+                  title="COSTOS DE VENTA"
+                  colSpan={periodos.length + 2}
+                  white
+                  expanded={openSections.costos}
+                  onToggle={() => toggleSection("costos")}
+                />
+                {openSections.costos &&
+                  costos.map((c) => (
+                    <RowCuenta
+                      key={c.cuenta}
+                      cuenta={c}
+                      isGasto={true}
+                      periodos={periodos}
+                      modoVisual={modoVisual}
+                    />
+                  ))}
+                <RowTotal
+                  title="TOTAL COSTOS DE VENTA"
+                  totalesMes={tCostosMes}
+                  totalAcumulado={totalCostos}
+                  isGasto
+                  periodos={periodos}
+                  modoVisual={modoVisual}
+                />
+
+                {/* UTILIDAD BRUTA */}
+                <ResultRow
+                  title="(=) Utilidad Bruta"
+                  values={ubMes}
+                  total={utilidadBruta}
+                  periodos={periodos}
+                  rowClass="bg-emerald-50"
+                  titleClass="text-emerald-800 bg-emerald-50"
+                  valueClass="text-emerald-800"
+                  totalClass="text-emerald-900 bg-emerald-100/50 border-l border-emerald-200"
+                />
+
+                {/* GASTOS OPERACIONALES */}
+                <SectionHeader
+                  title="GASTOS OPERACIONALES"
+                  colSpan={periodos.length + 2}
+                  white
+                  expanded={openSections.gasOp}
+                  onToggle={() => toggleSection("gasOp")}
+                />
+                {openSections.gasOp &&
+                  gasOp.map((c) => (
+                    <RowCuenta
+                      key={c.cuenta}
+                      cuenta={c}
+                      isGasto={true}
+                      periodos={periodos}
+                      modoVisual={modoVisual}
+                    />
+                  ))}
+                <RowTotal
+                  title="TOTAL GASTOS OPERACIONALES"
+                  totalesMes={tGasOpMes}
+                  totalAcumulado={totalGasOp}
+                  isGasto
+                  periodos={periodos}
+                  modoVisual={modoVisual}
+                />
+
+                {/* UTILIDAD OPERATIVA */}
+                <ResultRow
+                  title="(=) Utilidad Operativa"
+                  values={uoMes}
+                  total={utilidadOperativa}
+                  periodos={periodos}
+                  rowClass="bg-blue-50"
+                  titleClass="text-blue-800 bg-blue-50"
+                  valueClass="text-blue-800"
+                  totalClass="text-blue-900 bg-blue-100/50 border-l border-blue-200"
+                />
+
+                {/* INGRESOS NO OPERACIONALES */}
+                <SectionHeader
+                  title="INGRESOS NO OPERACIONALES"
+                  colSpan={periodos.length + 2}
+                  white
+                  expanded={openSections.ingNoOp}
+                  onToggle={() => toggleSection("ingNoOp")}
+                />
+                {openSections.ingNoOp &&
+                  ingNoOp.map((c) => (
+                    <RowCuenta
+                      key={c.cuenta}
+                      cuenta={c}
+                      isGasto={false}
+                      periodos={periodos}
+                      modoVisual={modoVisual}
+                    />
+                  ))}
+                <RowTotal
+                  title="TOTAL INGRESOS NO OPERACIONALES"
+                  totalesMes={tIngNoOpMes}
+                  totalAcumulado={totalIngNoOp}
+                  periodos={periodos}
+                  modoVisual={modoVisual}
+                />
+
+                {/* GASTOS NO OPERACIONALES */}
+                <SectionHeader
+                  title="GASTOS NO OPERACIONALES"
+                  colSpan={periodos.length + 2}
+                  white
+                  expanded={openSections.gasNoOp}
+                  onToggle={() => toggleSection("gasNoOp")}
+                />
+                {openSections.gasNoOp &&
+                  gasNoOp.map((c) => (
+                    <RowCuenta
+                      key={c.cuenta}
+                      cuenta={c}
+                      isGasto={true}
+                      periodos={periodos}
+                      modoVisual={modoVisual}
+                    />
+                  ))}
+                <RowTotal
+                  title="TOTAL GASTOS NO OPERACIONALES"
+                  totalesMes={tGasNoOpMes}
+                  totalAcumulado={totalGasNoOp}
+                  isGasto
+                  periodos={periodos}
+                  modoVisual={modoVisual}
+                />
+
+                {/* UTILIDAD ANTES DE IMPUESTOS */}
+                <ResultRow
+                  title="(=) Utilidad Antes de Impuestos"
+                  values={uaiMes}
+                  total={utilidadAntesImpuestos}
+                  periodos={periodos}
+                  rowClass="bg-amber-50"
+                  titleClass="text-amber-800 bg-amber-50"
+                  valueClass="text-amber-800"
+                  totalClass="text-amber-900 bg-amber-100/50 border-l border-amber-200"
+                />
+
+                {/* UTILIDAD NETA */}
+                <tr className="bg-slate-900 border-t-4 border-slate-900">
+                  <td className="py-5 px-6 font-black text-white text-base uppercase tracking-widest sticky left-0 bg-slate-900">
+                    (=) Utilidad Neta del Ejercicio
+                  </td>
+                  {periodos.map((p) => (
+                    <td
+                      key={p}
+                      className="py-5 px-4 text-right font-black text-emerald-400 text-sm"
+                    >
+                      {formatCurrency(unMes[p])}
+                    </td>
+                  ))}
+                  <td className="py-5 px-6 text-right font-black text-emerald-400 text-xl bg-slate-800 border-l border-slate-700">
+                    {formatCurrency(utilidadNeta)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
           </Card>
 
           <Card className="rounded-[2rem] shadow-sm border bg-white mt-4">
@@ -1361,7 +1328,7 @@ export default function EstadoResultadosPage() {
               )}
             </CardContent>
           </Card>
-        </>
+        </>        
       )}
     </div>
   );
@@ -1370,42 +1337,6 @@ export default function EstadoResultadosPage() {
 // =========================================================
 // SUBCOMPONENTES
 // =========================================================
-const InfoHint = ({
-  text,
-  dark = false,
-  align = "right",
-}: {
-  text: string;
-  dark?: boolean;
-  align?: "left" | "right";
-}) => (
-  <div className="relative group/info inline-flex">
-    <button
-      type="button"
-      className={`inline-flex items-center justify-center w-4 h-4 rounded-full transition-all ${
-        dark
-          ? "bg-white/20 text-white hover:bg-white/30"
-          : "bg-slate-100 text-slate-500 hover:bg-slate-200"
-      }`}
-      aria-label="Ver explicación"
-    >
-      <HelpCircle size={11} />
-    </button>
-
-    <div
-      className={`pointer-events-none absolute top-6 z-50 w-64 rounded-2xl border px-3 py-3 text-[11px] leading-5 shadow-2xl opacity-0 scale-95 transition-all duration-200 group-hover/info:opacity-100 group-hover/info:scale-100 group-focus-within/info:opacity-100 group-focus-within/info:scale-100 ${
-        align === "left" ? "left-0" : "right-0"
-      } ${
-        dark
-          ? "border-slate-700 bg-slate-900 text-slate-100"
-          : "border-slate-200 bg-white text-slate-700"
-      }`}
-    >
-      {text}
-    </div>
-  </div>
-);
-
 const SectionHeader = ({
   title,
   colSpan,
@@ -1481,12 +1412,11 @@ const RowCuenta = ({
 
       let cls = "text-slate-800";
       if (modoVisual === "auditoria") {
-        cls =
-          valorReal < 0
-            ? "text-amber-700"
-            : isGasto
-            ? "text-rose-600"
-            : "text-slate-800";
+        cls = valorReal < 0
+          ? "text-amber-700"
+          : isGasto
+          ? "text-rose-600"
+          : "text-slate-800";
       } else {
         cls = isGasto ? "text-rose-600" : "text-slate-800";
       }
@@ -1547,12 +1477,11 @@ const RowTotal = ({
 
       let cls = "text-slate-900";
       if (modoVisual === "auditoria") {
-        cls =
-          valorReal < 0
-            ? "text-amber-700"
-            : isGasto
-            ? "text-rose-600"
-            : "text-slate-900";
+        cls = valorReal < 0
+          ? "text-amber-700"
+          : isGasto
+          ? "text-rose-600"
+          : "text-slate-900";
       } else {
         cls = isGasto ? "text-rose-600" : "text-slate-900";
       }
@@ -1630,8 +1559,6 @@ const StatCard = ({
   color,
   badge,
   highlight = false,
-  description,
-  badgeDescription,
 }: {
   title: string;
   value: number;
@@ -1639,8 +1566,6 @@ const StatCard = ({
   color: "emerald" | "blue" | "sky" | "indigo" | "slate";
   badge?: string;
   highlight?: boolean;
-  description: string;
-  badgeDescription?: string;
 }) => {
   const themes: Record<string, string> = {
     emerald: "text-emerald-600 bg-white border-slate-100",
@@ -1652,7 +1577,7 @@ const StatCard = ({
 
   return (
     <Card
-      className={`relative overflow-visible border shadow-lg rounded-[2rem] transition-all hover:scale-[1.01] ${
+      className={`relative overflow-hidden border shadow-lg rounded-[2rem] transition-all hover:scale-[1.01] ${
         highlight
           ? "bg-indigo-600 text-white shadow-indigo-200 border-none"
           : themes[color]
@@ -1663,43 +1588,26 @@ const StatCard = ({
           <div className={`p-2.5 rounded-2xl ${highlight ? "bg-white/20" : "bg-slate-50"}`}>
             {icon}
           </div>
-
           {badge && (
             <div
-              className={`text-[9px] font-black px-2 py-1 rounded-lg flex items-center gap-1.5 ${
+              className={`text-[9px] font-black px-2 py-1 rounded-lg flex items-center gap-1 ${
                 highlight
                   ? "bg-emerald-400 text-emerald-950"
                   : "bg-slate-100 text-slate-500"
               }`}
             >
-              <span>{badge} MARGEN</span>
-              {badgeDescription && (
-                <InfoHint
-                  text={badgeDescription}
-                  dark={false}
-                  align="right"
-                />
-              )}
+              {badge} MARGEN
             </div>
           )}
         </div>
 
-        <div className="flex items-center gap-2">
-          <p
-            className={`text-[9px] font-black uppercase tracking-widest ${
-              highlight ? "text-indigo-100" : "text-slate-400"
-            }`}
-          >
-            {title}
-          </p>
-
-          <InfoHint
-            text={description}
-            dark={highlight}
-            align="left"
-          />
-        </div>
-
+        <p
+          className={`text-[9px] font-black uppercase tracking-widest ${
+            highlight ? "text-indigo-100" : "text-slate-400"
+          }`}
+        >
+          {title}
+        </p>
         <p className="text-[1.9rem] leading-none font-black mt-1 tracking-tighter">
           {formatCurrency(value || 0)}
         </p>

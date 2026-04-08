@@ -5,7 +5,6 @@ import { useEffect, useMemo, useState } from "react";
 import { authFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Select, SelectItem } from "@/components/ui/select";
 import {
   ResponsiveContainer,
   BarChart,
@@ -16,23 +15,21 @@ import {
   Legend,
   CartesianGrid,
   LabelList,
-  LineChart,
   Line,
 } from "recharts";
-import { startOfMonth, endOfMonth, format } from "date-fns";
+import { format } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
-import { parseISO } from "date-fns";
 
 /* -------- tipos -------- */
 interface EvolucionMes {
   mes: string;
   ingresos: number;
-  ingresos_netos: number;     // 👈 obligatorio para evitar error TS
+  ingresos_netos: number;
   egresos: number;
   utilidad: number;
   margen: number;
-  utilidad_acumulada: number; // 👈 nuevo
-  nomina?: number;            // (opcional,
+  utilidad_acumulada: number;
+  nomina?: number;
 }
 
 interface KPIs {
@@ -61,13 +58,35 @@ function formatCurrency(valor: number): string {
 }
 
 function abreviar(valor: number): string {
-  if (valor >= 1_000_000_000) return `${(valor / 1_000_000).toFixed(1)}M`;
-  if (valor >= 1_000_000) return `${(valor / 1_000_000).toFixed(0)}M`;
-  if (valor >= 1_000) return `${(valor / 1_000).toFixed(0)}K`;
-  if (valor <= 1_000_000_000) return `${(valor / 1_000_000).toFixed(1)}M`;
-  if (valor <= 1_000_000) return `${(valor / 1_000_000).toFixed(0)}M`;
-  if (valor <= 1_000) return `${(valor / 1_000).toFixed(0)}K`;
-  return `${Math.round(valor)}`;
+  const n = Number(valor || 0);
+  const abs = Math.abs(n);
+
+  if (abs >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
+  if (abs >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
+  return `${Math.round(n)}`;
+}
+
+function getMesLabel(raw: string) {
+  try {
+    return formatInTimeZone(new Date(raw), "UTC", "MMM yyyy");
+  } catch {
+    return raw;
+  }
+}
+
+function getMesTooltip(raw: string) {
+  try {
+    const txt = String(raw);
+    const [year, month] = txt.split("-");
+    return `${month}-${year}`;
+  } catch {
+    return raw;
+  }
+}
+
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
 }
 
 /* -------- componente -------- */
@@ -82,13 +101,11 @@ export default function ReporteFinancieroConsolidadoPage() {
   const [fechaHasta, setFechaHasta] = useState<string>("");
   const [centroCostos, setCentroCostos] = useState<string>("");
 
-    // --- estados del modal ---
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTipo, setModalTipo] = useState<"ingresos" | "egresos" | null>(null);
   const [modalMes, setModalMes] = useState<string | null>(null);
   const [detalleFacturas, setDetalleFacturas] = useState<any[]>([]);
 
-  // Nuevos estados en el componente
   const [modalClienteOpen, setModalClienteOpen] = useState(false);
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string | null>(null);
 
@@ -103,11 +120,26 @@ export default function ReporteFinancieroConsolidadoPage() {
     return q.length ? `?${q.join("&")}` : "";
   }, [fechaDesde, fechaHasta, centroCostos]);
 
+  const cerrarModal = () => {
+    setModalOpen(false);
+    setModalClienteOpen(false);
+    setModalProveedorOpen(false);
+    setModalTipo(null);
+    setModalMes(null);
+    setClienteSeleccionado(null);
+    setProveedorSeleccionado(null);
+  };
+
+  const limpiarFiltros = () => {
+    setFechaDesde("");
+    setFechaHasta("");
+    setCentroCostos("");
+  };
+
   /* --- fetch data --- */
   useEffect(() => {
     const fetchData = async () => {
       try {
-        //console.log("🔍 Fetching reporte financiero con filtros:", queryParams);      // se puede ocultar despues para no mostrarlo en pagina
         const data = await authFetch(`/reportes/financiero/consolidado${queryParams}`);
         setKpis(data.kpis || null);
         setEvolucion(data.evolucion || []);
@@ -123,554 +155,776 @@ export default function ReporteFinancieroConsolidadoPage() {
   /* --- fetch centros --- */
   useEffect(() => {
     const fetchCentros = async () => {
-        try {
+      try {
         const data = await authFetch(`/catalogos/centros-costo-consolidado`);
         setCentros(data || []);
-        } catch (e) {
+      } catch (e) {
         console.error("Error cargando centros de costo", e);
-        }
+      }
     };
     fetchCentros();
   }, []);
 
+  /* --- manejar clic en barras --- */
+  const handleBarClick = async (tipo: "ingresos" | "egresos", data: any) => {
+    let d: Date;
 
+    if (typeof data.mes === "string") {
+      const isoFixed = data.mes.replace(" ", "T");
+      d = new Date(isoFixed);
+    } else if (data.mes instanceof Date) {
+      d = data.mes;
+    } else if (typeof data.mes === "number") {
+      d = new Date(data.mes);
+    } else {
+      console.error("handleBarClick: formato de mes inesperado:", data.mes);
+      return;
+    }
 
-    /* --- manejar clic en barras --- */
-    const handleBarClick = async (tipo: "ingresos" | "egresos", data: any) => {
-      console.log("🔍 clicked month data:", data.mes);
+    if (isNaN(d.getTime())) {
+      console.error("handleBarClick: fecha inválida calculada:", d);
+      return;
+    }
 
-      let d: Date;
-      if (typeof data.mes === "string") {
-        const isoFixed = data.mes.replace(" ", "T"); // 👈 solución clave
-        const withUTC = isoFixed.endsWith("Z") ? isoFixed : `${isoFixed}`;
-        d = new Date(withUTC);
-      } else if (data.mes instanceof Date) {
-        d = data.mes;
-      } else if (typeof data.mes === "number") {
-        d = new Date(data.mes);
+    const year = d.getUTCFullYear();
+    const month = d.getUTCMonth();
+    const firstOfMonthUTC = new Date(Date.UTC(year, month, 1));
+    const lastOfMonthUTC = new Date(Date.UTC(year, month + 1, 0));
+
+    const desdeMes = format(firstOfMonthUTC, "yyyy-MM-dd");
+    const hastaMes = format(lastOfMonthUTC, "yyyy-MM-dd");
+    const mes = format(firstOfMonthUTC, "yyyy-MM");
+
+    setModalTipo(tipo);
+    setModalMes(mes);
+    setModalOpen(true);
+
+    try {
+      const qs = new URLSearchParams({ desde: desdeMes, hasta: hastaMes });
+      if (centroCostos) qs.set("centro_costos", String(centroCostos));
+
+      if (tipo === "ingresos") {
+        const result = await authFetch(`/reportes/facturas_cliente?${qs.toString()}`);
+        setDetalleFacturas(result.rows || []);
       } else {
-        console.error("handleBarClick: formato de mes inesperado:", data.mes);
-        return;
+        const result = await authFetch(`/reportes/facturas_proveedor?${qs.toString()}`);
+        setDetalleFacturas(result.rows || []);
       }
+    } catch (err) {
+      console.error("Error cargando detalle", err);
+      setDetalleFacturas([]);
+    }
+  };
 
-      if (isNaN(d.getTime())) {
-        console.error("handleBarClick: fecha inválida calculada:", d);
-        return;
-      }
+  const handleClienteClick = async (nombre: string) => {
+    setClienteSeleccionado(nombre);
+    setModalClienteOpen(true);
 
+    const qs = new URLSearchParams();
+    if (fechaDesde) qs.set("desde", fechaDesde);
+    if (fechaHasta) qs.set("hasta", fechaHasta);
+    if (centroCostos) qs.set("centro_costos", centroCostos);
+    qs.set("cliente", nombre);
 
-      // Forzar primer día del mes en UTC
-      const year = d.getUTCFullYear();
-      const month = d.getUTCMonth(); // 0‑based
-      const firstOfMonthUTC = new Date(Date.UTC(year, month, 1));
-      const lastOfMonthUTC = new Date(Date.UTC(year, month + 1, 0));
+    try {
+      const res = await authFetch(`/reportes/facturas_cliente?${qs.toString()}`);
+      setDetalleFacturas(res.rows || []);
+    } catch (err) {
+      console.error("Error cargando facturas cliente", err);
+      setDetalleFacturas([]);
+    }
+  };
 
-      const desdeMes = format(firstOfMonthUTC, "yyyy-MM-dd");
-      const hastaMes = format(lastOfMonthUTC, "yyyy-MM-dd");
-      const mes = format(firstOfMonthUTC, "yyyy-MM");
+  const handleProveedorClick = async (nombre: string) => {
+    setProveedorSeleccionado(nombre);
+    setModalProveedorOpen(true);
 
-      setModalTipo(tipo);
-      setModalMes(mes);
-      setModalOpen(true);
+    const qs = new URLSearchParams();
+    if (fechaDesde) qs.set("desde", fechaDesde);
+    if (fechaHasta) qs.set("hasta", fechaHasta);
+    if (centroCostos) qs.set("centro_costos", centroCostos);
+    qs.set("proveedor", nombre);
 
-      try {
-        if (tipo === "ingresos") {
-          const qs = new URLSearchParams({ desde: desdeMes, hasta: hastaMes });
-          //if (centroCostos) qs.set("centro_costos", String(centroCostos));
-          if (centroCostos) qs.set("centro_costos", String(centroCostos));
+    try {
+      const res = await authFetch(`/reportes/facturas_proveedor?${qs.toString()}`);
+      setDetalleFacturas(res.rows || []);
+    } catch (err) {
+      console.error("Error cargando compras proveedor", err);
+      setDetalleFacturas([]);
+    }
+  };
 
-          const result = await authFetch(`/reportes/facturas_cliente?${qs.toString()}`);
-          setDetalleFacturas(result.rows || []);
-        } else {
-          const qs = new URLSearchParams({ desde: desdeMes, hasta: hastaMes });
-          //if (centroCostos) qs.set("centro_costos", String(centroCostos));
-          if (centroCostos) qs.set("centro_costos", String(centroCostos));
-
-          const result = await authFetch(`/reportes/facturas_proveedor?${qs.toString()}`);
-          setDetalleFacturas(result.rows || []);
-        }
-      } catch (err) {
-        console.error("Error cargando detalle", err);
-        setDetalleFacturas([]);
-      }
-    };
-
-
-
-    // Nuevas funciones para manejar clicks en los graficos de top clientes y proveedores
-    const handleClienteClick = async (nombre: string) => {
-        setClienteSeleccionado(nombre);
-        setModalClienteOpen(true);
-
-        const qs = new URLSearchParams();
-        if (fechaDesde) qs.set("desde", fechaDesde);
-        if (fechaHasta) qs.set("hasta", fechaHasta);
-        //if (centroCostos) qs.set("centro_costos", centroCostos); 
-        // 👈 IMPORTANTE: este parámetro debe llamarse centro_costos porque el backend lo espera así
-        if (centroCostos) qs.set("centro_costos", centroCostos);
-
-
-        qs.set("cliente", nombre);
-
-        try {
-            const res = await authFetch(`/reportes/facturas_cliente?${qs.toString()}`);
-            setDetalleFacturas(res.rows || []);
-        } catch (err) {
-            console.error("Error cargando facturas cliente", err);
-            setDetalleFacturas([]);
-        }
-    };
-
-    const handleProveedorClick = async (nombre: string) => {
-        setProveedorSeleccionado(nombre);
-        setModalProveedorOpen(true);
-
-        const qs = new URLSearchParams();
-        if (fechaDesde) qs.set("desde", fechaDesde);
-        if (fechaHasta) qs.set("hasta", fechaHasta);
-        //if (centroCostos) qs.set("centro_costos", centroCostos); 
-        if (centroCostos) qs.set("centro_costos", centroCostos);
-
-        qs.set("proveedor", nombre);
-
-        try {
-            const res = await authFetch(`/reportes/facturas_proveedor?${qs.toString()}`);
-            setDetalleFacturas(res.rows || []); // ✅ corregido: aseguramos extraer `rows`
-        } catch (err) {
-            console.error("Error cargando compras proveedor", err);
-            setDetalleFacturas([]);
-        }
-     };
-
-
+  const kpiCards = kpis
+    ? [
+        {
+          label: "Ingresos Netos",
+          value: formatCurrency(kpis.ingresos_netos),
+          accent: "from-emerald-500/15 to-emerald-400/5",
+          text: "text-emerald-700",
+          chip: "bg-emerald-100 text-emerald-700",
+        },
+        {
+          label: "Ingresos",
+          value: formatCurrency(kpis.ingresos),
+          accent: "from-green-500/15 to-green-400/5",
+          text: "text-green-700",
+          chip: "bg-green-100 text-green-700",
+        },
+        {
+          label: "Egresos",
+          value: formatCurrency(kpis.egresos),
+          accent: "from-rose-500/15 to-red-400/5",
+          text: "text-rose-700",
+          chip: "bg-rose-100 text-rose-700",
+        },
+        {
+          label: "Utilidad",
+          value: formatCurrency(kpis.utilidad),
+          accent: "from-violet-500/15 to-purple-400/5",
+          text: "text-violet-700",
+          chip: "bg-violet-100 text-violet-700",
+        },
+        {
+          label: "Margen",
+          value: `${kpis.margen}%`,
+          accent: "from-sky-500/15 to-indigo-400/5",
+          text: "text-sky-700",
+          chip: "bg-sky-100 text-sky-700",
+        },
+        {
+          label: "Fact. Venta",
+          value: `${kpis.facturas_venta}`,
+          accent: "from-teal-500/15 to-teal-300/5",
+          text: "text-teal-700",
+          chip: "bg-teal-100 text-teal-700",
+        },
+        {
+          label: "Fact. Compra",
+          value: `${kpis.facturas_compra}`,
+          accent: "from-orange-500/15 to-amber-400/5",
+          text: "text-orange-700",
+          chip: "bg-orange-100 text-orange-700",
+        },
+      ]
+    : [];
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">📊 Reporte Consolidado Ingresos vs Egresos</h1>
+    <div className="min-h-screen bg-slate-50">
+      <div className="space-y-4 p-3 md:p-4 lg:p-5">
+        {/* Header premium */}
+        <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(59,130,246,0.10),_transparent_30%),radial-gradient(circle_at_left,_rgba(16,185,129,0.12),_transparent_28%),linear-gradient(to_bottom_right,_rgba(255,255,255,1),_rgba(248,250,252,0.96))]" />
+          <div className="relative flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between md:p-5">
+            <div>
+              <div className="mb-1 inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Reporte financiero
+              </div>
+              <h1 className="text-xl font-bold tracking-tight text-slate-900 md:text-2xl">
+                Consolidado Ingresos vs Egresos
+              </h1>
+              <p className="mt-1 text-sm text-slate-600">
+                Vista ejecutiva compacta, moderna y optimizada para lectura rápida.
+              </p>
+            </div>
 
-      {/* Filtros */}
-      <div className="grid gap-2 md:grid-cols-3">
-        <div className="flex flex-col">
-          <label className="text-sm font-medium">Fecha desde</label>
-          <Input type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)} />
-        </div>
-        <div className="flex flex-col">
-          <label className="text-sm font-medium">Fecha hasta</label>
-          <Input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} />
-        </div>
-        <div className="flex flex-col">
-        <label className="text-sm font-medium">Centro de Costos</label>
-            <select
-                value={centroCostos}
-                onChange={(e) => setCentroCostos(e.target.value)}
-                className="border rounded p-2"
-            >
-                <option value="">Todos</option>
-                {centros.map((cc) => (
-                <option key={cc.id} value={cc.id}>
-                    {cc.nombre}
-                </option>
-                ))}
-            </select>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <div className="rounded-2xl border border-white/60 bg-white/80 px-3 py-2 shadow-sm backdrop-blur">
+                <div className="text-[11px] font-medium text-slate-500">Meses</div>
+                <div className="text-lg font-bold text-slate-900">{evolucion.length}</div>
+              </div>
+              <div className="rounded-2xl border border-white/60 bg-white/80 px-3 py-2 shadow-sm backdrop-blur">
+                <div className="text-[11px] font-medium text-slate-500">Clientes</div>
+                <div className="text-lg font-bold text-slate-900">{topClientes.length}</div>
+              </div>
+              <div className="rounded-2xl border border-white/60 bg-white/80 px-3 py-2 shadow-sm backdrop-blur">
+                <div className="text-[11px] font-medium text-slate-500">Proveedores</div>
+                <div className="text-lg font-bold text-slate-900">{topProveedores.length}</div>
+              </div>
+            </div>
+          </div>
         </div>
 
-      </div>
-
-      {/* KPIs */}
-      {kpis && (
-        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7">
-          {[
-            { label: "Ingresos Netos", value: formatCurrency(kpis.ingresos_netos), color: "text-emerald-600" },
-            { label: "Ingresos", value: formatCurrency(kpis.ingresos), color: "text-green-600" },
-            { label: "Egresos", value: formatCurrency(kpis.egresos), color: "text-red-600" },
-            { label: "Utilidad Acumulada", value: formatCurrency(kpis.utilidad), color: "text-purple-600" },
-            { label: "Margen", value: `${kpis.margen}%`, color: "text-purple-600" },
-            { label: "# Fact. Venta", value: kpis.facturas_venta, color: "text-green-600" },
-            { label: "# Fact. Compra", value: kpis.facturas_compra, color: "text-red-600" },
-          ].map((item, i) => (
-            <Card key={i} className="shadow-sm h-[85px] min-w-[130px]">
-              <CardContent className="p-0 flex flex-col items-center justify-center">
-                <div className="text-m font-bold text-black-600 tracking-tight text-center">
-                  {item.label}
+        {/* Filtros */}
+        <Card className="rounded-3xl border-slate-200 shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 flex-1">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Fecha desde
+                  </label>
+                  <Input
+                    type="date"
+                    value={fechaDesde}
+                    onChange={(e) => setFechaDesde(e.target.value)}
+                    className="h-10 rounded-xl border-slate-200 bg-white"
+                  />
                 </div>
-                <div className={`text-lg font-extrabold ${item.color} text-center`}>
-                  {item.value}
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Fecha hasta
+                  </label>
+                  <Input
+                    type="date"
+                    value={fechaHasta}
+                    onChange={(e) => setFechaHasta(e.target.value)}
+                    className="h-10 rounded-xl border-slate-200 bg-white"
+                  />
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
 
-      {/* Evolución mensual */}
-      <Card>
-        <CardHeader><CardTitle>Evolución Mensual</CardTitle></CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={400}>
-            <BarChart data={evolucion} margin={{ top: 30, bottom: 40, left: 40, right: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                dataKey="mes"
-                tickFormatter={(mes) =>
-                  formatInTimeZone(new Date(mes), "UTC", "MMM yyyy")
-                }
-                angle={-30}
-                textAnchor="end"
-                height={60}
-              />
-              <YAxis tickFormatter={(v: any) => abreviar(Number(v))}  // asi estaba: tickFormatter={(v) => formatCurrency(v)}
-              />
-              {/*<Tooltip
-                labelFormatter={(mes) => format(new Date(mes), "MM-yyyy")}
-                formatter={(v: number) => formatCurrency(v)}
-                />  "este es el viejo viejo tooltip"*/}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Centro de costos
+                  </label>
+                  <select
+                    value={centroCostos}
+                    onChange={(e) => setCentroCostos(e.target.value)}
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-slate-400"
+                  >
+                    <option value="">Todos</option>
+                    {centros.map((cc) => (
+                      <option key={cc.id} value={cc.id}>
+                        {cc.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
 
-              <Tooltip
-                content={({ payload }) => {
-                  if (!payload || payload.length === 0) return null;
+              <div className="flex gap-2">
+                <button
+                  onClick={limpiarFiltros}
+                  className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Limpiar
+                </button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-                  const row = payload[0].payload;
-
-                  // EXTRAER MES DIRECTO SIN new Date()
-                  // row.mes viene como: "2025-10-01T00:00:00Z"
-                  const raw = String(row.mes);
-                  const [year, month] = raw.split("-"); // ← evita desfase por zona horaria
-                  const fechaFormateada = `${month}-${year}`; // ejemplo: "10-2025"
-
-                  return (
-                    <div
-                      style={{
-                        background: "white",
-                        padding: "10px",
-                        border: "1px solid #ccc",
-                        borderRadius: "8px"
-                      }}
-                    >
-                      {/* FECHA */}
-                      <div style={{ fontWeight: "bold", marginBottom: "6px" }}>
-                        {fechaFormateada}
-                      </div>
-
-                      {/* INGRESOS NETOS */}
-                      <div style={{ color: "#059669" }}>
-                        <b>Ingresos Netos:</b> {formatCurrency(row.ingresos_netos)}
-                      </div>
-
-                      {/* INGRESOS */}
-                      <div style={{ color: "#16a34a" }}>
-                        <b>Ingresos:</b> {formatCurrency(row.ingresos)}
-                      </div>
-
-                      {/* EGRESOS */}
-                      <div style={{ color: "#dc2626" }}>
-                        <b>Egresos:</b> {formatCurrency(row.egresos)}
-                      </div>
-
-                      {/* UTILIDAD MENSUAL */}
-                      <div style={{ color: "#2563eb" }}>
-                        <b>Utilidad Mensual:</b> {formatCurrency(row.utilidad)}
-                      </div>
-
-                      {/* UTILIDAD ACUMULADA */}
-                      <div style={{ color: "#9333ea" }}>
-                        <b>Utilidad Acumulada:</b> {formatCurrency(row.utilidad_acumulada)}
-                      </div>
-                    </div>
-                  );
-                }}
-              />
-              <Legend />
-              <Bar
-                dataKey="ingresos"
-                name="Ingresos"
-                fill="#22c55e"
-                radius={[6, 6, 0, 0]}
-                onClick={(data) => handleBarClick("ingresos", data)}
+        {/* KPIs compactos premium */}
+        {kpis && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+            {kpiCards.map((item, i) => (
+              <Card
+                key={i}
+                className={cx(
+                  "group relative overflow-hidden rounded-3xl border border-slate-200 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md",
+                  "bg-gradient-to-br",
+                  item.accent
+                )}
               >
-                <LabelList dataKey="ingresos" position="top" formatter={(v: any) => abreviar(Number(v))} />
-              </Bar>
-              <Bar
-                dataKey="egresos"
-                name="Egresos"
-                fill="#ef4444"
-                radius={[6, 6, 0, 0]}
-                onClick={(data) => handleBarClick("egresos", data)}
-              >
-                <LabelList dataKey="egresos" position="top" formatter={(v: any) => abreviar(Number(v))} />
-              </Bar>
-              <Line type="monotone" dataKey="utilidad" name="Utilidad Mensual" stroke="#2563eb" >
-                <LabelList
+                <div className="absolute inset-0 bg-white/85 backdrop-blur-[1px]" />
+                <CardContent className="relative flex h-[92px] flex-col justify-between p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="line-clamp-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      {item.label}
+                    </span>
+                    <span className={cx("rounded-full px-2 py-0.5 text-[10px] font-bold", item.chip)}>
+                      KPI
+                    </span>
+                  </div>
+                  <div className={cx("text-base font-extrabold leading-tight md:text-lg", item.text)}>
+                    {item.value}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {/* Evolución mensual */}
+        <Card className="rounded-3xl border-slate-200 shadow-sm">
+          <CardHeader className="pb-2">
+            <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+              <CardTitle className="text-base font-bold text-slate-900">
+                Evolución mensual
+              </CardTitle>
+              <div className="text-xs text-slate-500">
+                Clic en las barras para abrir detalle de facturas
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="pt-1">
+            <ResponsiveContainer width="100%" height={315}>
+              <BarChart data={evolucion} margin={{ top: 18, bottom: 28, left: 8, right: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis
+                  dataKey="mes"
+                  tickFormatter={(mes) => getMesLabel(mes)}
+                  angle={-25}
+                  textAnchor="end"
+                  height={50}
+                  tick={{ fill: "#64748b", fontSize: 11 }}
+                  axisLine={{ stroke: "#cbd5e1" }}
+                  tickLine={{ stroke: "#cbd5e1" }}
+                />
+                <YAxis
+                  tickFormatter={(v: any) => abreviar(Number(v))}
+                  tick={{ fill: "#64748b", fontSize: 11 }}
+                  axisLine={{ stroke: "#cbd5e1" }}
+                  tickLine={{ stroke: "#cbd5e1" }}
+                />
+                <Tooltip
+                  content={({ payload }) => {
+                    if (!payload || payload.length === 0) return null;
+
+                    const row = payload[0].payload;
+
+                    return (
+                      <div className="min-w-[220px] rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-xl backdrop-blur">
+                        <div className="mb-2 text-sm font-bold text-slate-800">
+                          {getMesTooltip(String(row.mes))}
+                        </div>
+
+                        <div className="space-y-1.5 text-sm">
+                          <div className="flex items-center justify-between gap-4 text-emerald-700">
+                            <span className="font-medium">Ingresos Netos</span>
+                            <span className="font-bold">{formatCurrency(row.ingresos_netos)}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-4 text-green-700">
+                            <span className="font-medium">Ingresos</span>
+                            <span className="font-bold">{formatCurrency(row.ingresos)}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-4 text-rose-700">
+                            <span className="font-medium">Egresos</span>
+                            <span className="font-bold">{formatCurrency(row.egresos)}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-4 text-blue-700">
+                            <span className="font-medium">Utilidad Mensual</span>
+                            <span className="font-bold">{formatCurrency(row.utilidad)}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-4 text-violet-700">
+                            <span className="font-medium">Utilidad Acumulada</span>
+                            <span className="font-bold">{formatCurrency(row.utilidad_acumulada)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
+                <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "4px" }} />
+                <Bar
+                  dataKey="ingresos"
+                  name="Ingresos"
+                  fill="#22c55e"
+                  radius={[8, 8, 0, 0]}
+                  onClick={(data) => handleBarClick("ingresos", data)}
+                >
+                  <LabelList
+                    dataKey="ingresos"
+                    position="top"
+                    formatter={(v: any) => abreviar(Number(v))}
+                    style={{ fontSize: 10, fill: "#166534", fontWeight: 700 }}
+                  />
+                </Bar>
+
+                <Bar
+                  dataKey="egresos"
+                  name="Egresos"
+                  fill="#ef4444"
+                  radius={[8, 8, 0, 0]}
+                  onClick={(data) => handleBarClick("egresos", data)}
+                >
+                  <LabelList
+                    dataKey="egresos"
+                    position="top"
+                    formatter={(v: any) => abreviar(Number(v))}
+                    style={{ fontSize: 10, fill: "#991b1b", fontWeight: 700 }}
+                  />
+                </Bar>
+
+                <Line type="monotone" dataKey="utilidad" name="Utilidad Mensual" stroke="#2563eb" strokeWidth={2}>
+                  <LabelList
                     dataKey="utilidad"
                     position="bottom"
                     formatter={(v: any) => abreviar(Number(v))}
-                    style={{ fontSize: 13, fill: "#555" }} 
-                    />
-              </Line>
-              <Line type="monotone" dataKey="utilidad_acumulada" name="Utilidad Acumulada" stroke="#9333ea" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 6 }} >
-    
-                <LabelList
+                    style={{ fontSize: 10, fill: "#1e3a8a", fontWeight: 700 }}
+                  />
+                </Line>
+
+                <Line
+                  type="monotone"
+                  dataKey="utilidad_acumulada"
+                  name="Utilidad Acumulada"
+                  stroke="#9333ea"
+                  strokeWidth={2.5}
+                  dot={{ r: 3 }}
+                  activeDot={{ r: 6 }}
+                >
+                  <LabelList
                     dataKey="utilidad_acumulada"
                     position="top"
                     formatter={(v: any) => abreviar(Number(v))}
-                    style={{ fontSize: 13, fill: "#555" }} 
+                    style={{ fontSize: 10, fill: "#6b21a8", fontWeight: 700 }}
+                  />
+                </Line>
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Top clientes, nómina y proveedores */}
+        <div className="grid gap-4 xl:grid-cols-3">
+          {/* Top Clientes */}
+          <Card className="rounded-3xl border-slate-200 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-bold text-slate-900">Top 10 Clientes</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[290px] pt-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  layout="vertical"
+                  data={topClientes}
+                  margin={{ top: 8, bottom: 8, left: 0, right: 24 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis
+                    type="number"
+                    tickFormatter={(v) => abreviar(Number(v))}
+                    tick={{ fill: "#64748b", fontSize: 11 }}
+                    axisLine={{ stroke: "#cbd5e1" }}
+                    tickLine={{ stroke: "#cbd5e1" }}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="nombre"
+                    width={175}
+                    tick={{ fontSize: 11, fill: "#334155" }}
+                    axisLine={{ stroke: "#cbd5e1" }}
+                    tickLine={{ stroke: "#cbd5e1" }}
+                  />
+                  <Tooltip
+                    formatter={(v: number) => formatCurrency(v)}
+                    contentStyle={{
+                      borderRadius: "14px",
+                      border: "1px solid #e2e8f0",
+                      boxShadow: "0 10px 30px rgba(15,23,42,.12)",
+                    }}
+                  />
+                  <Bar
+                    dataKey="total"
+                    fill="#22c55e"
+                    radius={[0, 8, 8, 0]}
+                    onClick={async (data) => {
+                      const nombre = data?.payload?.nombre;
+                      if (nombre) await handleClienteClick(nombre);
+                    }}
+                  >
+                    <LabelList
+                      dataKey="total"
+                      position="right"
+                      formatter={(v: any) => abreviar(Number(v))}
+                      style={{ fontSize: 10, fill: "#166534", fontWeight: 700 }}
                     />
- 
-              </Line>
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
 
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
-    {/* === MODAL DETALLE FACTURAS === */}
-    {(modalOpen || modalClienteOpen || modalProveedorOpen) && (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white p-6 rounded-lg shadow-lg max-w-6xl w-full max-h-[80vh] overflow-y-auto">
-        <h2 className="text-xl font-bold mb-4">
-            {modalOpen && modalTipo === "ingresos" && `Facturas de Venta - ${modalMes}`}
-            {modalOpen && modalTipo === "egresos" && `Facturas de Compra - ${modalMes}`}
-            {modalClienteOpen && `Facturas de ${clienteSeleccionado}`}
-            {modalProveedorOpen && `Compras a ${proveedorSeleccionado}`}
-        </h2>
-
-
-            <button
-                onClick={() => {
-                    setModalOpen(false);
-                    setModalClienteOpen(false);
-                    setModalProveedorOpen(false);
-                }}
-                className="absolute top-2 right-2 text-red-500 hover:text-black"
+          {/* Nómina */}
+          <Card className="rounded-3xl border-slate-200 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-bold text-slate-900">Costos x Nómina</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[290px] pt-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={evolucion}
+                  layout="vertical"
+                  margin={{ top: 8, bottom: 8, left: 0, right: 18 }}
                 >
-                ✖
-            </button>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis type="number" hide />
+                  <YAxis
+                    type="category"
+                    dataKey="mes"
+                    tickFormatter={(mes) => getMesLabel(mes)}
+                    width={95}
+                    tick={{ fontSize: 11, fill: "#334155" }}
+                    axisLine={{ stroke: "#cbd5e1" }}
+                    tickLine={{ stroke: "#cbd5e1" }}
+                  />
+                  <Tooltip
+                    formatter={(v: number) => formatCurrency(v)}
+                    contentStyle={{
+                      borderRadius: "14px",
+                      border: "1px solid #e2e8f0",
+                      boxShadow: "0 10px 30px rgba(15,23,42,.12)",
+                    }}
+                  />
+                  <Bar dataKey="nomina" fill="#f97316" radius={[0, 8, 8, 0]}>
+                    <LabelList
+                      dataKey="nomina"
+                      position="right"
+                      formatter={(v: any) => abreviar(Number(v))}
+                      style={{ fontSize: 10, fill: "#9a3412", fontWeight: 700 }}
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
 
-
-        <table className="w-full border-collapse border text-sm">
-            <thead>
-            <tr className="bg-gray-100">
-                {(modalTipo === "ingresos" || modalClienteOpen) ? (
-                <>
-                    <th className="border p-2">Factura</th>
-                    <th className="border p-2">Cliente</th>
-                    <th className="border p-2">Fecha</th>
-                    <th className="border p-2">Vencimiento</th>
-                    <th className="border p-2">Estado</th>
-                    <th className="border p-2">Centro de Costo</th>
-                    <th className="border p-2">Total</th>
-                    <th className="border p-2">Pagado</th>
-                    <th className="border p-2">Pendiente</th>
-                    <th className="border p-2">Link</th>
-                </>
-                ) : (
-                <>
-                    <th className="border p-2">Proveedor</th>
-                    <th className="border p-2">Factura</th>
-                    <th className="border p-2">Fecha</th>
-                    <th className="border p-2">Vencimiento</th>
-                    <th className="border p-2">Estado</th>
-                    <th className="border p-2">Centro de Costo</th>
-                    <th className="border p-2">Total</th>
-                    <th className="border p-2">Saldo</th>
-                </>
-                )}
-            </tr>
-            </thead>
-            <tbody>
-            {Array.isArray(detalleFacturas) && detalleFacturas.length === 0 ? (
-                <tr>
-                <td colSpan={10} className="text-center p-4">
-                    No hay facturas encontradas
-                </td>
-                </tr>
-            ) : (
-                Array.isArray(detalleFacturas) && detalleFacturas.map((f, i) => {
-                if (modalTipo === "ingresos" || modalClienteOpen) {
-                    const isVencido = (f.estado_cartera || "").toLowerCase() === "vencido";
-                    return (
-                    <tr
-                        key={i}
-                        className={`hover:bg-gray-50 ${isVencido ? "text-red-600 font-bold" : ""}`}
-                    >
-                        <td className="border p-2">{f.idfactura}</td>
-                        <td className="border p-2">{f.cliente_nombre}</td>
-                        <td className="border p-2">{format(new Date(f.fecha), "dd-MM-yyyy")}</td>
-                        <td className="border p-2">{format(new Date(f.vencimiento), "dd-MM-yyyy")}</td>
-                        <td className="border p-2">{f.estado_cartera}</td>
-                        <td className="border p-2">{f.centro_costo_nombre || "—"}</td>
-                        <td className="border p-2">{formatCurrency(f.total)}</td>
-                        <td className="border p-2">{formatCurrency(f.pagado)}</td>
-                        <td className="border p-2">{formatCurrency(f.pendiente)}</td>
-                        <td className="border p-2">
-                        <a
-                            href={f.public_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-blue-600 underline"
-                        >
-                            Ver
-                        </a>
-                        </td>
-                    </tr>
-                    );
-                } else {
-                    const proveedor =
-                    f.proveedor_nombre ??
-                    f.proveedor ??
-                    f.nombre_proveedor ??
-                    f.razon_social ??
-                    "Sin proveedor";
-
-                    const isNoPagada = (f.estado || "").toLowerCase() === "no pagada";
-
-                    return (
-                    <tr
-                        key={i}
-                        className={`hover:bg-gray-50 ${isNoPagada ? "text-red-600 font-bold" : ""}`}
-                    >
-                        <td className="border p-2">{proveedor}</td>
-                        <td className="border p-2">{f.factura_proveedor}</td>
-                        <td className="border p-2">{format(new Date(f.fecha), "dd-MM-yyyy")}</td>
-                        <td className="border p-2">{format(new Date(f.vencimiento), "dd-MM-yyyy")}</td>
-                        <td className="border p-2">{f.estado}</td>
-                        <td className="border p-2">{f.centro_costo_nombre || "—"}</td>
-                        <td className="border p-2">{formatCurrency(f.total)}</td>
-                        <td className="border p-2">{formatCurrency(f.saldo)}</td>
-                    </tr>
-                    );
-                }
-                })
-            )}
-            </tbody>
-        </table>
-
-            <div className="flex justify-end mt-4">
-                <button
-                onClick={() => {
-                    setModalOpen(false);
-                    setModalClienteOpen(false);
-                    setModalProveedorOpen(false);
-                }}
-                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+          {/* Top Proveedores */}
+          <Card className="rounded-3xl border-slate-200 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-bold text-slate-900">Top 10 Proveedores</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[290px] pt-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  layout="vertical"
+                  data={topProveedores}
+                  margin={{ top: 8, bottom: 8, left: 0, right: 24 }}
                 >
-                Cerrar
-                </button>
-            </div>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis
+                    type="number"
+                    tickFormatter={(v) => abreviar(Number(v))}
+                    tick={{ fill: "#64748b", fontSize: 11 }}
+                    axisLine={{ stroke: "#cbd5e1" }}
+                    tickLine={{ stroke: "#cbd5e1" }}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="nombre"
+                    width={175}
+                    tick={{ fontSize: 11, fill: "#334155" }}
+                    axisLine={{ stroke: "#cbd5e1" }}
+                    tickLine={{ stroke: "#cbd5e1" }}
+                  />
+                  <Tooltip
+                    formatter={(v: number) => formatCurrency(v)}
+                    contentStyle={{
+                      borderRadius: "14px",
+                      border: "1px solid #e2e8f0",
+                      boxShadow: "0 10px 30px rgba(15,23,42,.12)",
+                    }}
+                  />
+                  <Bar
+                    dataKey="total"
+                    fill="#ef4444"
+                    radius={[0, 8, 8, 0]}
+                    onClick={async (data) => {
+                      const nombre = data?.payload?.nombre;
+                      if (nombre) await handleProveedorClick(nombre);
+                    }}
+                  >
+                    <LabelList
+                      dataKey="total"
+                      position="right"
+                      formatter={(v: any) => abreviar(Number(v))}
+                      style={{ fontSize: 10, fill: "#991b1b", fontWeight: 700 }}
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
         </div>
-    </div>
-    )}
 
+        {/* Modal detalle */}
+        {(modalOpen || modalClienteOpen || modalProveedorOpen) && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-3 backdrop-blur-sm">
+            <div className="relative max-h-[88vh] w-full max-w-7xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+              <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 px-5 py-4">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">
+                    {modalOpen && modalTipo === "ingresos" && `Facturas de Venta - ${modalMes}`}
+                    {modalOpen && modalTipo === "egresos" && `Facturas de Compra - ${modalMes}`}
+                    {modalClienteOpen && `Facturas de ${clienteSeleccionado}`}
+                    {modalProveedorOpen && `Compras a ${proveedorSeleccionado}`}
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Detalle transaccional según los filtros seleccionados.
+                  </p>
+                </div>
 
-
-      {/* Top clientes, nómina y proveedores en una sola fila */}
-      <div className="grid gap-4 md:grid-cols-3">
-        {/* Top 10 Clientes */}
-        <Card>
-          <CardHeader><CardTitle>Top 10 Clientes</CardTitle></CardHeader>
-          <CardContent className="h-[350px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                layout="vertical"
-                data={topClientes}
-                margin={{ top: 10, bottom: 10, left: 5, right: 25 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" tickFormatter={(v) => abreviar(v)} />
-                <YAxis type="category" dataKey="nombre" width={220} tick={{ fontSize: 12 }} />
-                <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                <Bar
-                  dataKey="total"
-                  fill="#22c55e"
-                  radius={[0, 6, 6, 0]}
-                  onClick={async (data) => {
-                    const nombre = data?.payload?.nombre;
-                    if (nombre) await handleClienteClick(nombre);
-                  }}
+                <button
+                  onClick={cerrarModal}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
                 >
-                  <LabelList
-                    dataKey="total"
-                    position="right"
-                    formatter={(v: any) => abreviar(Number(v))}
-                  />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+                  Cerrar
+                </button>
+              </div>
 
-        {/* Nómina */}
-        <Card>
-          <CardHeader><CardTitle>Costos x Nómina</CardTitle></CardHeader>
-          <CardContent className="h-[350px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={evolucion}
-                layout="vertical"
-                margin={{ left: 10, right: 10 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" hide />
-                <YAxis
-                  type="category"
-                  dataKey="mes"
-                  tickFormatter={(mes) =>
-                    formatInTimeZone(new Date(mes), "UTC", "MMM yyyy")
-                  }
-                  width={100}
-                  tick={{ fontSize: 12 }}
-                />
-                <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                <Bar dataKey="nomina" fill="#eb612bff" radius={[0, 6, 6, 0]}>
-                  <LabelList
-                    dataKey="nomina"
-                    position="right"
-                    formatter={(v: any) => abreviar(Number(v))}
-                  />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+              <div className="max-h-[72vh] overflow-auto p-4">
+                <table className="w-full border-separate border-spacing-0 overflow-hidden text-sm">
+                  <thead className="sticky top-0 z-10 bg-slate-100">
+                    <tr className="text-left text-slate-700">
+                      {(modalTipo === "ingresos" || modalClienteOpen) ? (
+                        <>
+                          <th className="border-b border-slate-200 px-3 py-3">Factura</th>
+                          <th className="border-b border-slate-200 px-3 py-3">Cliente</th>
+                          <th className="border-b border-slate-200 px-3 py-3">Fecha</th>
+                          <th className="border-b border-slate-200 px-3 py-3">Vencimiento</th>
+                          <th className="border-b border-slate-200 px-3 py-3">Estado</th>
+                          <th className="border-b border-slate-200 px-3 py-3">Centro de Costo</th>
+                          <th className="border-b border-slate-200 px-3 py-3">Total</th>
+                          <th className="border-b border-slate-200 px-3 py-3">Pagado</th>
+                          <th className="border-b border-slate-200 px-3 py-3">Pendiente</th>
+                          <th className="border-b border-slate-200 px-3 py-3">Link</th>
+                        </>
+                      ) : (
+                        <>
+                          <th className="border-b border-slate-200 px-3 py-3">Proveedor</th>
+                          <th className="border-b border-slate-200 px-3 py-3">Factura</th>
+                          <th className="border-b border-slate-200 px-3 py-3">Fecha</th>
+                          <th className="border-b border-slate-200 px-3 py-3">Vencimiento</th>
+                          <th className="border-b border-slate-200 px-3 py-3">Estado</th>
+                          <th className="border-b border-slate-200 px-3 py-3">Centro de Costo</th>
+                          <th className="border-b border-slate-200 px-3 py-3">Total</th>
+                          <th className="border-b border-slate-200 px-3 py-3">Saldo</th>
+                        </>
+                      )}
+                    </tr>
+                  </thead>
 
-        {/* Top 10 Proveedores */}
-        <Card>
-          <CardHeader><CardTitle>Top 10 Proveedores</CardTitle></CardHeader>
-          <CardContent className="h-[350px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                layout="vertical"
-                data={topProveedores}
-                margin={{ top: 10, bottom: 10, left: 5, right: 20 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" tickFormatter={(v) => abreviar(v)} />
-                <YAxis type="category" dataKey="nombre" width={220} tick={{ fontSize: 12 }} />
-                <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                <Bar
-                  dataKey="total"
-                  fill="#d44540ff"
-                  radius={[0, 6, 6, 0]}
-                  onClick={async (data) => {
-                    const nombre = data?.payload?.nombre;
-                    if (nombre) await handleProveedorClick(nombre);
-                  }}
-                >
-                  <LabelList
-                    dataKey="total"
-                    position="right"
-                    formatter={(v: any) => abreviar(Number(v))}
-                  />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+                  <tbody>
+                    {Array.isArray(detalleFacturas) && detalleFacturas.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={10}
+                          className="rounded-b-2xl px-4 py-8 text-center text-sm text-slate-500"
+                        >
+                          No hay facturas encontradas
+                        </td>
+                      </tr>
+                    ) : (
+                      Array.isArray(detalleFacturas) &&
+                      detalleFacturas.map((f, i) => {
+                        if (modalTipo === "ingresos" || modalClienteOpen) {
+                          const isVencido =
+                            (f.estado_cartera || "").toLowerCase() === "vencido";
+
+                          return (
+                            <tr
+                              key={i}
+                              className={cx(
+                                "transition hover:bg-slate-50",
+                                isVencido && "bg-red-50/40"
+                              )}
+                            >
+                              <td className="border-b border-slate-100 px-3 py-3 font-medium text-slate-800">
+                                {f.idfactura}
+                              </td>
+                              <td className="border-b border-slate-100 px-3 py-3 text-slate-700">
+                                {f.cliente_nombre}
+                              </td>
+                              <td className="border-b border-slate-100 px-3 py-3 text-slate-700">
+                                {format(new Date(f.fecha), "dd-MM-yyyy")}
+                              </td>
+                              <td className="border-b border-slate-100 px-3 py-3 text-slate-700">
+                                {format(new Date(f.vencimiento), "dd-MM-yyyy")}
+                              </td>
+                              <td className="border-b border-slate-100 px-3 py-3">
+                                <span
+                                  className={cx(
+                                    "rounded-full px-2.5 py-1 text-xs font-bold",
+                                    isVencido
+                                      ? "bg-red-100 text-red-700"
+                                      : "bg-emerald-100 text-emerald-700"
+                                  )}
+                                >
+                                  {f.estado_cartera}
+                                </span>
+                              </td>
+                              <td className="border-b border-slate-100 px-3 py-3 text-slate-700">
+                                {f.centro_costo_nombre || "—"}
+                              </td>
+                              <td className="border-b border-slate-100 px-3 py-3 font-semibold text-slate-800">
+                                {formatCurrency(f.total)}
+                              </td>
+                              <td className="border-b border-slate-100 px-3 py-3 text-slate-700">
+                                {formatCurrency(f.pagado)}
+                              </td>
+                              <td className="border-b border-slate-100 px-3 py-3 text-slate-700">
+                                {formatCurrency(f.pendiente)}
+                              </td>
+                              <td className="border-b border-slate-100 px-3 py-3">
+                                {f.public_url ? (
+                                  <a
+                                    href={f.public_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="font-semibold text-blue-600 underline-offset-2 hover:underline"
+                                  >
+                                    Ver
+                                  </a>
+                                ) : (
+                                  <span className="text-slate-400">—</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        const proveedor =
+                          f.proveedor_nombre ??
+                          f.proveedor ??
+                          f.nombre_proveedor ??
+                          f.razon_social ??
+                          "Sin proveedor";
+
+                        const isNoPagada = (f.estado || "").toLowerCase() === "no pagada";
+
+                        return (
+                          <tr
+                            key={i}
+                            className={cx(
+                              "transition hover:bg-slate-50",
+                              isNoPagada && "bg-red-50/40"
+                            )}
+                          >
+                            <td className="border-b border-slate-100 px-3 py-3 font-medium text-slate-800">
+                              {proveedor}
+                            </td>
+                            <td className="border-b border-slate-100 px-3 py-3 text-slate-700">
+                              {f.factura_proveedor}
+                            </td>
+                            <td className="border-b border-slate-100 px-3 py-3 text-slate-700">
+                              {format(new Date(f.fecha), "dd-MM-yyyy")}
+                            </td>
+                            <td className="border-b border-slate-100 px-3 py-3 text-slate-700">
+                              {format(new Date(f.vencimiento), "dd-MM-yyyy")}
+                            </td>
+                            <td className="border-b border-slate-100 px-3 py-3">
+                              <span
+                                className={cx(
+                                  "rounded-full px-2.5 py-1 text-xs font-bold",
+                                  isNoPagada
+                                    ? "bg-red-100 text-red-700"
+                                    : "bg-amber-100 text-amber-700"
+                                )}
+                              >
+                                {f.estado}
+                              </span>
+                            </td>
+                            <td className="border-b border-slate-100 px-3 py-3 text-slate-700">
+                              {f.centro_costo_nombre || "—"}
+                            </td>
+                            <td className="border-b border-slate-100 px-3 py-3 font-semibold text-slate-800">
+                              {formatCurrency(f.total)}
+                            </td>
+                            <td className="border-b border-slate-100 px-3 py-3 text-slate-700">
+                              {formatCurrency(f.saldo)}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-
-                        
-
-
-
     </div>
   );
 }

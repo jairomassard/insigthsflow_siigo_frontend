@@ -99,6 +99,17 @@ type KpiRow = {
   tipo: "currency" | "percent";
 };
 
+type WaterfallPoint = {
+  id: string;
+  label: string;
+  shortLabel: string;
+  start: number;
+  end: number;
+  delta: number;
+  kind: "total" | "delta" | "other";
+  favorable?: boolean;
+};
+
 // =========================================================
 // HELPERS
 // =========================================================
@@ -289,6 +300,19 @@ function getImpactClasses(favorable: boolean) {
     : "bg-rose-50 text-rose-700 border border-rose-100";
 }
 
+function shortDriverLabel(row: DriverRow) {
+  const cleanName = row.nombre.length > 18 ? `${row.nombre.slice(0, 18)}…` : row.nombre;
+  return `${row.cuenta}`;
+}
+
+function abreviarMonto(valor: number) {
+  const abs = Math.abs(valor || 0);
+  if (abs >= 1_000_000_000) return `${valor < 0 ? "-" : ""}$${(abs / 1_000_000_000).toFixed(1)}B`;
+  if (abs >= 1_000_000) return `${valor < 0 ? "-" : ""}$${(abs / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `${valor < 0 ? "-" : ""}$${(abs / 1_000).toFixed(0)}K`;
+  return formatSignedCurrency(valor);
+}
+
 const KPI_INFO: Record<string, string> = {
   ingresos_totales:
     "Representa el total de ingresos del período o rango comparado, incluyendo componentes operacionales y no operacionales.",
@@ -327,6 +351,8 @@ const BLOCK_INFO = {
     "Presenta la comparación cuantitativa de los KPIs principales entre la base y el período comparado.",
   drivers:
     "Lista las cuentas contables con mayor impacto absoluto en la variación del resultado.",
+  waterfall:
+    "Este puente visual parte de la utilidad base, muestra los principales factores que suman o restan al resultado, y termina en la utilidad comparada.",
 };
 
 // =========================================================
@@ -695,6 +721,74 @@ export default function AnalisisVariacionInteligentePage() {
     return "El principal punto a vigilar es la sostenibilidad del margen: el crecimiento en ingresos debe traducirse de forma proporcional en rentabilidad.";
   }, [aggComparacion.gastos_operacionales, kpiRows]);
 
+  const waterfallData = useMemo<WaterfallPoint[]>(() => {
+    if (!readyToCompare) return [];
+
+    const selectedDrivers = topDrivers.slice(0, 6);
+
+    const points: WaterfallPoint[] = [];
+    const baseUtility = aggBase.utilidad_neta;
+    const targetUtility = aggComparacion.utilidad_neta;
+
+    points.push({
+      id: "base",
+      label: `Utilidad base (${baseLabel})`,
+      shortLabel: "Base",
+      start: 0,
+      end: baseUtility,
+      delta: baseUtility,
+      kind: "total",
+    });
+
+    let running = baseUtility;
+
+    selectedDrivers.forEach((driver, idx) => {
+      const utilityImpact = driver.favorable ? driver.impacto : -driver.impacto;
+      const start = running;
+      const end = running + utilityImpact;
+
+      points.push({
+        id: `driver-${idx}`,
+        label: `${driver.cuenta} - ${driver.nombre}`,
+        shortLabel: shortDriverLabel(driver),
+        start,
+        end,
+        delta: utilityImpact,
+        kind: "delta",
+        favorable: utilityImpact >= 0,
+      });
+
+      running = end;
+    });
+
+    const otros = targetUtility - running;
+    if (Math.abs(otros) > 1) {
+      points.push({
+        id: "otros",
+        label: "Otros impactos",
+        shortLabel: "Otros",
+        start: running,
+        end: running + otros,
+        delta: otros,
+        kind: "other",
+        favorable: otros >= 0,
+      });
+      running += otros;
+    }
+
+    points.push({
+      id: "final",
+      label: `Utilidad comparada (${comparacionLabel})`,
+      shortLabel: "Comparación",
+      start: 0,
+      end: targetUtility,
+      delta: targetUtility,
+      kind: "total",
+    });
+
+    return points;
+  }, [readyToCompare, topDrivers, aggBase.utilidad_neta, aggComparacion.utilidad_neta, baseLabel, comparacionLabel]);
+
   return (
     <div className="space-y-4 p-5 bg-slate-50 min-h-screen">
       {/* HEADER */}
@@ -998,6 +1092,32 @@ export default function AnalisisVariacionInteligentePage() {
               description={KPI_INFO.utilidad_neta}
             />
           </div>
+
+          {/* WATERFALL */}
+          <Card className="rounded-[2rem] shadow-xl border-none bg-white p-2">
+            <CardHeader className="pb-0">
+              <CardTitle className="text-sm font-black text-slate-500 uppercase tracking-tight flex justify-between items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span>🌊 Puente de Variación de Utilidad</span>
+                  <InfoHint text={BLOCK_INFO.waterfall} />
+                </div>
+                <div className="flex gap-4 text-[10px]">
+                  <span className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full bg-indigo-600"></div> Totales
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500"></div> Suma
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full bg-rose-500"></div> Resta
+                  </span>
+                </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <WaterfallMiniChart data={waterfallData} />
+            </CardContent>
+          </Card>
 
           {/* NARRATIVA */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -1517,5 +1637,179 @@ const ExecutiveStripCard = ({
         </div>
       </CardContent>
     </Card>
+  );
+};
+
+const WaterfallMiniChart = ({ data }: { data: WaterfallPoint[] }) => {
+  if (!data.length) return null;
+
+  const width = Math.max(920, data.length * 120);
+  const height = 360;
+  const paddingLeft = 70;
+  const paddingRight = 30;
+  const paddingTop = 28;
+  const paddingBottom = 70;
+
+  const values = data.flatMap((d) => [d.start, d.end, 0]);
+  const rawMin = Math.min(...values);
+  const rawMax = Math.max(...values);
+  const spread = Math.max(rawMax - rawMin, 1);
+  const minVal = rawMin - spread * 0.12;
+  const maxVal = rawMax + spread * 0.12;
+
+  const plotHeight = height - paddingTop - paddingBottom;
+  const plotWidth = width - paddingLeft - paddingRight;
+  const step = plotWidth / data.length;
+  const barWidth = Math.min(64, step * 0.58);
+
+  const y = (value: number) => {
+    const ratio = (value - minVal) / (maxVal - minVal || 1);
+    return height - paddingBottom - ratio * plotHeight;
+  };
+
+  const zeroY = y(0);
+
+  const gridLines = 4;
+  const axisTicks = Array.from({ length: gridLines + 1 }, (_, i) => {
+    const val = minVal + ((maxVal - minVal) / gridLines) * i;
+    return { value: val, y: y(val) };
+  });
+
+  const getFill = (point: WaterfallPoint) => {
+    if (point.kind === "total") return "#4f46e5";
+    if (point.delta >= 0) return "#10b981";
+    return "#f43f5e";
+  };
+
+  return (
+    <div className="w-full overflow-x-auto">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="w-full min-w-[920px] h-[360px]"
+        role="img"
+        aria-label="Gráfico waterfall de variación de utilidad"
+      >
+        {axisTicks.map((tick, idx) => (
+          <g key={idx}>
+            <line
+              x1={paddingLeft}
+              x2={width - paddingRight}
+              y1={tick.y}
+              y2={tick.y}
+              stroke="#e2e8f0"
+              strokeDasharray="4 4"
+            />
+            <text
+              x={paddingLeft - 10}
+              y={tick.y + 4}
+              textAnchor="end"
+              fontSize="10"
+              fontWeight="700"
+              fill="#64748b"
+            >
+              {abreviarMonto(tick.value)}
+            </text>
+          </g>
+        ))}
+
+        <line
+          x1={paddingLeft}
+          x2={width - paddingRight}
+          y1={zeroY}
+          y2={zeroY}
+          stroke="#94a3b8"
+          strokeWidth="1.5"
+        />
+
+        {data.map((point, idx) => {
+          const x = paddingLeft + idx * step + (step - barWidth) / 2;
+          const barTop = Math.min(y(point.start), y(point.end));
+          const barBottom = Math.max(y(point.start), y(point.end));
+          const barHeight = Math.max(barBottom - barTop, 3);
+          const centerX = x + barWidth / 2;
+
+          const labelY =
+            point.kind === "total"
+              ? y(point.end) - 10
+              : point.delta >= 0
+              ? y(point.end) - 10
+              : y(point.end) + 18;
+
+          return (
+            <g key={point.id}>
+              {idx < data.length - 1 && point.kind !== "total" && (
+                <line
+                  x1={centerX + barWidth / 2}
+                  x2={paddingLeft + (idx + 1) * step + step / 2}
+                  y1={y(point.end)}
+                  y2={y(point.end)}
+                  stroke="#94a3b8"
+                  strokeDasharray="4 4"
+                />
+              )}
+
+              <rect
+                x={x}
+                y={barTop}
+                width={barWidth}
+                height={barHeight}
+                rx={12}
+                fill={getFill(point)}
+              />
+
+              <text
+                x={centerX}
+                y={labelY}
+                textAnchor="middle"
+                fontSize="11"
+                fontWeight="900"
+                fill="#334155"
+              >
+                {point.kind === "total" ? abreviarMonto(point.end) : abreviarMonto(point.delta)}
+              </text>
+
+              <text
+                x={centerX}
+                y={height - 34}
+                textAnchor="middle"
+                fontSize="10"
+                fontWeight="900"
+                fill="#475569"
+              >
+                {point.shortLabel}
+              </text>
+
+              <text
+                x={centerX}
+                y={height - 20}
+                textAnchor="middle"
+                fontSize="9"
+                fill="#94a3b8"
+              >
+                {point.kind === "total"
+                  ? point.id === "base"
+                    ? "Inicio"
+                    : "Final"
+                  : point.kind === "other"
+                  ? "Ajuste"
+                  : "Driver"}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+
+      <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="rounded-2xl border bg-slate-50 px-4 py-3 text-sm text-slate-700">
+          <span className="font-black text-slate-900">Base:</span> utilidad del período o rango inicial.
+        </div>
+        <div className="rounded-2xl border bg-slate-50 px-4 py-3 text-sm text-slate-700">
+          <span className="font-black text-slate-900">Drivers:</span> cuentas con mayor impacto explicativo.
+        </div>
+        <div className="rounded-2xl border bg-slate-50 px-4 py-3 text-sm text-slate-700">
+          <span className="font-black text-slate-900">Comparación:</span> utilidad final del período o rango comparado.
+        </div>
+      </div>
+    </div>
   );
 };

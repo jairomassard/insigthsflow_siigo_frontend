@@ -301,8 +301,8 @@ function getImpactClasses(favorable: boolean) {
 }
 
 function shortDriverLabel(row: DriverRow) {
-  const cleanName = row.nombre.length > 12 ? `${row.nombre.slice(0, 12)}…` : row.nombre;
-  return `${row.cuenta} · ${cleanName}`;
+  const cleanName = row.nombre.length > 16 ? `${row.nombre.slice(0, 16)}…` : row.nombre;
+  return `${row.cuenta}`;
 }
 
 function abreviarMonto(valor: number) {

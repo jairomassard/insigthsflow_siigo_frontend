@@ -52,7 +52,7 @@ function formatCurrency(valor: number | null | undefined): string {
 
 function abreviarMoneda(valor: number | null | undefined): string {
   const n = Number(valor || 0);
-  if (Math.abs(n) >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(1)}B`;
+  if (Math.abs(n) >= 1_000_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
   if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
   if (Math.abs(n) >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
   return formatCurrency(n);

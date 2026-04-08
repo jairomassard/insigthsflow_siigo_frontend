@@ -25,7 +25,6 @@ import {
   Layers3,
   TrendingDown,
   BarChart3,
-  HelpCircle,
 } from "lucide-react";
 
 type BalanceItem = {
@@ -134,37 +133,6 @@ function getLastDayOfPreviousMonth(dateStr: string) {
   return prevMonthLastDay.toISOString().slice(0, 10);
 }
 
-const BALANCE_INFO: Record<string, string> = {
-  activos_totales:
-    "Representa el total de bienes, derechos y recursos controlados por la empresa al corte seleccionado.",
-  pasivos_totales:
-    "Representa el total de obligaciones con terceros al corte del balance.",
-  patrimonio_total:
-    "Corresponde a la participación de los propietarios en la empresa después de restar los pasivos a los activos.",
-  capital_trabajo:
-    "Es la diferencia entre activo corriente y pasivo corriente. Indica el colchón financiero operativo disponible en el corto plazo.",
-  razon_corriente:
-    "Mide la capacidad de la empresa para cubrir sus obligaciones de corto plazo con sus activos corrientes.",
-  nivel_endeudamiento_pct:
-    "Mide qué porcentaje de los activos está financiado con deuda. Entre más alto, mayor dependencia de recursos de terceros.",
-  autonomia_financiera_pct:
-    "Mide qué porcentaje de los activos está respaldado con patrimonio propio. Entre más alto, mayor independencia financiera.",
-  cuadratura:
-    "Verifica la ecuación contable del balance: Activos = Pasivos + Patrimonio.",
-  activo_no_corriente_bruto:
-    "Corresponde al valor base de los activos no corrientes antes de depreciaciones, amortizaciones o ajustes acumulados.",
-  activo_no_corriente_contra:
-    "Corresponde a depreciaciones, amortizaciones y demás contra cuentas que reducen el valor neto del activo no corriente.",
-  activo_no_corriente_neto:
-    "Es el valor final del activo no corriente después de restar depreciaciones y ajustes acumulados.",
-  patrimonio_explicito:
-    "Corresponde al patrimonio reportado directamente en cuentas contables de clase 3.",
-  patrimonio_calculado:
-    "Es el patrimonio complementario o calculado automáticamente por el sistema con base en utilidades acumuladas y ajustes.",
-  patrimonio_total_mix:
-    "Es la suma del patrimonio explícito reportado y el patrimonio calculado por el sistema cuando aplica.",
-};
-
 function ValueCell({
   value,
   emphasizeNegative = false,
@@ -242,44 +210,6 @@ function ModeBadge({
   return null;
 }
 
-function InfoHint({
-  text,
-  dark = false,
-  align = "right",
-}: {
-  text: string;
-  dark?: boolean;
-  align?: "left" | "right";
-}) {
-  return (
-    <div className="relative group/info inline-flex">
-      <button
-        type="button"
-        className={`inline-flex items-center justify-center w-4 h-4 rounded-full transition-all ${
-          dark
-            ? "bg-white/20 text-white hover:bg-white/30"
-            : "bg-slate-100 text-slate-500 hover:bg-slate-200"
-        }`}
-        aria-label="Ver explicación"
-      >
-        <HelpCircle size={11} />
-      </button>
-
-      <div
-        className={`pointer-events-none absolute top-6 z-50 w-64 rounded-2xl border px-3 py-3 text-[11px] leading-5 shadow-2xl opacity-0 scale-95 transition-all duration-200 group-hover/info:opacity-100 group-hover/info:scale-100 group-focus-within/info:opacity-100 group-focus-within/info:scale-100 ${
-          align === "left" ? "left-0" : "right-0"
-        } ${
-          dark
-            ? "border-slate-700 bg-slate-900 text-slate-100"
-            : "border-slate-200 bg-white text-slate-700"
-        }`}
-      >
-        {text}
-      </div>
-    </div>
-  );
-}
-
 function StatCardBalance({
   title,
   value,
@@ -287,7 +217,6 @@ function StatCardBalance({
   color = "slate",
   badge,
   highlight = false,
-  description,
 }: {
   title: string;
   value: string;
@@ -295,7 +224,6 @@ function StatCardBalance({
   color?: "emerald" | "blue" | "sky" | "indigo" | "slate" | "amber";
   badge?: string;
   highlight?: boolean;
-  description: string;
 }) {
   const themes: Record<string, string> = {
     emerald: "text-emerald-600 bg-white border-slate-100",
@@ -308,7 +236,7 @@ function StatCardBalance({
 
   return (
     <Card
-      className={`relative overflow-visible border shadow-lg rounded-[2rem] transition-all hover:scale-[1.01] ${
+      className={`relative overflow-hidden border shadow-lg rounded-[2rem] transition-all hover:scale-[1.01] ${
         highlight
           ? "bg-indigo-600 text-white shadow-indigo-200 border-none"
           : themes[color]
@@ -320,21 +248,17 @@ function StatCardBalance({
             {icon}
           </div>
 
-          <div className="flex items-center gap-1.5">
-            {badge && (
-              <div
-                className={`text-[9px] font-black px-2 py-1 rounded-lg ${
-                  highlight
-                    ? "bg-emerald-400 text-emerald-950"
-                    : "bg-slate-100 text-slate-500"
-                }`}
-              >
-                {badge}
-              </div>
-            )}
-
-            <InfoHint text={description} dark={highlight} align="right" />
-          </div>
+          {badge && (
+            <div
+              className={`text-[9px] font-black px-2 py-1 rounded-lg ${
+                highlight
+                  ? "bg-emerald-400 text-emerald-950"
+                  : "bg-slate-100 text-slate-500"
+              }`}
+            >
+              {badge}
+            </div>
+          )}
         </div>
 
         <p
@@ -378,11 +302,11 @@ function SectionTable({
     showComparison && totalAnterior !== 0
       ? (variacionAbs! / totalAnterior) * 100
       : showComparison
-      ? 0
-      : null;
+        ? 0
+        : null;
 
   return (
-    <Card className="rounded-[2rem] shadow-2xl border-none overflow-hidden bg-white">
+    <Card className="rounded-[2rem] shadow-xl border-none overflow-hidden bg-white">
       <div className="bg-slate-900 text-white px-6 py-5 flex justify-between items-center">
         <div>
           <h2 className="font-black text-lg uppercase tracking-widest">{title}</h2>
@@ -549,50 +473,41 @@ function SoftBreakdownCard({
   subtitle,
   icon,
   rows,
-  description,
 }: {
   title: string;
   subtitle: string;
   icon: React.ReactNode;
-  rows: { label: string; value: number; emphasize?: boolean; negativeStyle?: boolean; info?: string }[];
-  description: string;
+  rows: { label: string; value: number; emphasize?: boolean; negativeStyle?: boolean }[];
 }) {
   return (
     <Card className="rounded-[2rem] shadow-sm border bg-white overflow-hidden">
       <CardContent className="p-5 space-y-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <div className="p-2.5 rounded-2xl bg-slate-50 border border-slate-100">
-              {icon}
-            </div>
+        <div className="flex items-start gap-3">
+          <div className="p-2.5 rounded-2xl bg-slate-50 border border-slate-100">
+            {icon}
+          </div>
 
-            <div>
-              <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide flex items-center gap-2">
-                {title}
-                <InfoHint text={description} align="right" />
-              </h3>
-              <p className="text-xs text-slate-500 mt-1">{subtitle}</p>
-            </div>
+          <div>
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide">
+              {title}
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">{subtitle}</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {rows.map((row, idx) => (
             <div key={idx} className="rounded-2xl border bg-slate-50 p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  {row.label}
-                </div>
-                {row.info && <InfoHint text={row.info} align="right" />}
+              <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                {row.label}
               </div>
-
               <div
                 className={`text-2xl font-black tracking-tight ${
                   row.negativeStyle && row.value < 0
                     ? "text-amber-700"
                     : row.emphasize
-                    ? "text-indigo-700"
-                    : "text-slate-900"
+                      ? "text-indigo-700"
+                      : "text-slate-900"
                 }`}
               >
                 {formatCurrency(row.value)}
@@ -833,7 +748,6 @@ export default function BalanceGeneralPage() {
 
   return (
     <div className="space-y-4 p-5 bg-slate-50 min-h-screen">
-      {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-[2rem] border shadow-sm">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
@@ -888,7 +802,6 @@ export default function BalanceGeneralPage() {
         </div>
       </div>
 
-      {/* FILTROS */}
       <Card className="rounded-[2rem] border shadow-sm bg-white">
         <CardContent className="p-5 space-y-4">
           <div className="flex flex-wrap gap-4 items-end justify-between">
@@ -987,7 +900,6 @@ export default function BalanceGeneralPage() {
         </Card>
       )}
 
-      {/* KPIS PRINCIPALES */}
       {cards && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
@@ -996,7 +908,6 @@ export default function BalanceGeneralPage() {
               value={formatCurrency(cards.activos_totales)}
               icon={<Wallet size={18} />}
               color="emerald"
-              description={BALANCE_INFO.activos_totales}
             />
 
             <StatCardBalance
@@ -1004,7 +915,6 @@ export default function BalanceGeneralPage() {
               value={formatCurrency(cards.pasivos_totales)}
               icon={<Landmark size={18} />}
               color="blue"
-              description={BALANCE_INFO.pasivos_totales}
             />
 
             <StatCardBalance
@@ -1013,11 +923,6 @@ export default function BalanceGeneralPage() {
               icon={<Building2 size={18} />}
               color="sky"
               badge={patrimonioCalculado ? "MIXTO" : "REPORTADO"}
-              description={
-                patrimonioCalculado
-                  ? BALANCE_INFO.patrimonio_total_mix
-                  : BALANCE_INFO.patrimonio_total
-              }
             />
 
             <StatCardBalance
@@ -1026,18 +931,15 @@ export default function BalanceGeneralPage() {
               icon={<BadgeDollarSign size={18} />}
               color="indigo"
               highlight
-              description={BALANCE_INFO.capital_trabajo}
             />
           </div>
 
-          {/* KPIS SECUNDARIOS */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <StatCardBalance
               title="Razón Corriente"
               value={formatNumber(cards.razon_corriente)}
               icon={<Scale size={18} />}
               color="slate"
-              description={BALANCE_INFO.razon_corriente}
             />
 
             <StatCardBalance
@@ -1045,7 +947,6 @@ export default function BalanceGeneralPage() {
               value={`${formatNumber(cards.nivel_endeudamiento_pct)}%`}
               icon={<Activity size={18} />}
               color="amber"
-              description={BALANCE_INFO.nivel_endeudamiento_pct}
             />
 
             <StatCardBalance
@@ -1053,16 +954,14 @@ export default function BalanceGeneralPage() {
               value={`${formatNumber(cards.autonomia_financiera_pct)}%`}
               icon={<ShieldCheck size={18} />}
               color="blue"
-              description={BALANCE_INFO.autonomia_financiera_pct}
             />
 
-            <Card className="rounded-[2rem] border shadow-lg bg-white overflow-visible">
+            <Card className="rounded-[2rem] border shadow-lg bg-white overflow-hidden">
               <CardContent className="p-4">
                 <div className="flex justify-between items-center mb-3">
                   <div className="p-2.5 rounded-2xl bg-slate-50">
                     <Calculator size={18} className="text-slate-700" />
                   </div>
-                  <InfoHint text={BALANCE_INFO.cuadratura} align="right" />
                 </div>
 
                 <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
@@ -1084,7 +983,6 @@ export default function BalanceGeneralPage() {
         </>
       )}
 
-      {/* LECTURA EJECUTIVA */}
       {data?.resumen?.narrativa?.length ? (
         <Card className="rounded-[2rem] shadow-sm border bg-white overflow-hidden">
           <div className="bg-slate-900 text-white px-6 py-5 flex items-center gap-3">
@@ -1113,7 +1011,6 @@ export default function BalanceGeneralPage() {
         </Card>
       ) : null}
 
-      {/* ALERTAS */}
       {data?.resumen?.alertas?.length ? (
         <CollapsibleAlerts
           alerts={data.resumen.alertas}
@@ -1122,7 +1019,6 @@ export default function BalanceGeneralPage() {
         />
       ) : null}
 
-      {/* DESGLOSES */}
       {cards && (
         <Card className="rounded-[2rem] shadow-sm border bg-white">
           <CardContent className="p-6 space-y-5">
@@ -1146,24 +1042,20 @@ export default function BalanceGeneralPage() {
                 title="Activo No Corriente Neto"
                 subtitle="Separación entre activo base, depreciaciones/ajustes acumulados y neto final."
                 icon={<TrendingDown size={18} className="text-blue-700" />}
-                description={BALANCE_INFO.activo_no_corriente_neto}
                 rows={[
                   {
                     label: "Activo no corriente base",
                     value: activoNoCorrienteBruto,
-                    info: BALANCE_INFO.activo_no_corriente_bruto,
                   },
                   {
                     label: "Depreciaciones / ajustes acumulados",
                     value: activoNoCorrienteContra,
                     negativeStyle: true,
-                    info: BALANCE_INFO.activo_no_corriente_contra,
                   },
                   {
                     label: "Activo no corriente neto",
                     value: activoNoCorrienteNeto,
                     emphasize: true,
-                    info: BALANCE_INFO.activo_no_corriente_neto,
                   },
                 ]}
               />
@@ -1172,23 +1064,19 @@ export default function BalanceGeneralPage() {
                 title="Desglose de Patrimonio"
                 subtitle="Diferencia entre patrimonio reportado explícitamente y patrimonio calculado por el sistema."
                 icon={<BarChart3 size={18} className="text-emerald-700" />}
-                description={BALANCE_INFO.patrimonio_total_mix}
                 rows={[
                   {
                     label: "Patrimonio reportado",
                     value: patrimonioExplicitoTotal,
-                    info: BALANCE_INFO.patrimonio_explicito,
                   },
                   {
                     label: "Patrimonio calculado",
                     value: patrimonioCalculadoTotal,
-                    info: BALANCE_INFO.patrimonio_calculado,
                   },
                   {
                     label: "Patrimonio total",
                     value: patrimonioTotal,
                     emphasize: true,
-                    info: BALANCE_INFO.patrimonio_total_mix,
                   },
                 ]}
               />
@@ -1197,7 +1085,6 @@ export default function BalanceGeneralPage() {
         </Card>
       )}
 
-      {/* SECCIONES */}
       {data && (
         <div className="space-y-4">
           <SectionTable

@@ -223,7 +223,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           ? [
               {
                 href: "/reportes/estado-resultados",
-                label: "Estado de Resultados",
+                label: "Estado de Resultados (P&L)",
                 icon: <FileBarChart2 className="w-4 h-4" />,
               },
             ]

@@ -258,7 +258,7 @@ export default function ClientHome() {
             {tiene("ver_reporte_estado_resultados") && (
               <FeatureCard
                 icon="📑"
-                title="Estado de Resultados"
+                title="Estado de Resultados (P&L)"
                 href="/reportes/estado-resultados"
                 description="Consulta ingresos, costos, gastos y utilidad del período en un solo reporte."
               />

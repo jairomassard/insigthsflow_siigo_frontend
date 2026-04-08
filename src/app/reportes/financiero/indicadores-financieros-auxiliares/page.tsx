@@ -48,20 +48,47 @@ function abreviarMoneda(valor: number | null | undefined): string {
 
 function colorSemaforo(key: string, valor: number | null): string {
   if (valor === null) return "bg-slate-50 border-slate-200";
+
   switch (key) {
     case "liquidez":
-      return valor < 1 ? "bg-red-50 border-red-200" : valor < 2 ? "bg-yellow-50 border-yellow-200" : "bg-green-50 border-green-200";
+      return valor < 1
+        ? "bg-red-50 border-red-200"
+        : valor < 2
+          ? "bg-yellow-50 border-yellow-200"
+          : "bg-green-50 border-green-200";
+
     case "apalancamiento":
-      return valor > 0.8 ? "bg-red-50 border-red-200" : valor > 0.6 ? "bg-yellow-50 border-yellow-200" : "bg-green-50 border-green-200";
+      return valor > 0.8
+        ? "bg-red-50 border-red-200"
+        : valor > 0.6
+          ? "bg-yellow-50 border-yellow-200"
+          : "bg-green-50 border-green-200";
+
     case "rentabilidad":
-      return valor < 0 ? "bg-red-50 border-red-200" : valor < 0.1 ? "bg-yellow-50 border-yellow-200" : "bg-green-50 border-green-200";
+      return valor < 0
+        ? "bg-red-50 border-red-200"
+        : valor < 0.1
+          ? "bg-yellow-50 border-yellow-200"
+          : "bg-green-50 border-green-200";
+
     case "autonomia":
-      return valor < 0.3 ? "bg-red-50 border-red-200" : valor < 0.5 ? "bg-yellow-50 border-yellow-200" : "bg-green-50 border-green-200";
+      return valor < 0.3
+        ? "bg-red-50 border-red-200"
+        : valor < 0.5
+          ? "bg-yellow-50 border-yellow-200"
+          : "bg-green-50 border-green-200";
+
     case "solvencia":
     case "cobertura_activo_pasivo":
-      return valor < 1 ? "bg-red-50 border-red-200" : valor < 1.5 ? "bg-yellow-50 border-yellow-200" : "bg-green-50 border-green-200";
+      return valor < 1
+        ? "bg-red-50 border-red-200"
+        : valor < 1.5
+          ? "bg-yellow-50 border-yellow-200"
+          : "bg-green-50 border-green-200";
+
     case "capital_trabajo":
       return valor < 0 ? "bg-red-50 border-red-200" : "bg-green-50 border-green-200";
+
     default:
       return "bg-slate-50 border-slate-200";
   }
@@ -69,6 +96,7 @@ function colorSemaforo(key: string, valor: number | null): string {
 
 function iconoSemaforo(key: string, valor: number | null): string {
   if (valor === null) return "⚪";
+
   switch (key) {
     case "liquidez":
       return valor < 1 ? "🔴" : valor < 2 ? "🟡" : "🟢";
@@ -79,6 +107,7 @@ function iconoSemaforo(key: string, valor: number | null): string {
     case "autonomia":
       return valor < 0.3 ? "🔴" : valor < 0.5 ? "🟡" : "🟢";
     case "solvencia":
+    case "cobertura_activo_pasivo":
       return valor < 1 ? "🔴" : valor < 1.5 ? "🟡" : "🟢";
     case "capital_trabajo":
       return valor < 0 ? "🔴" : "🟢";
@@ -89,6 +118,7 @@ function iconoSemaforo(key: string, valor: number | null): string {
 
 function diagCorto(key: string, valor: number | null): string {
   if (valor === null) return "Sin datos";
+
   switch (key) {
     case "liquidez":
       return valor > 3 ? "Exceso de liquidez" : valor >= 1 ? "Liquidez saludable" : "Riesgo de iliquidez";
@@ -104,6 +134,12 @@ function diagCorto(key: string, valor: number | null): string {
       return valor < 0 ? "Capital de trabajo negativo" : "Colchón operativo positivo";
     case "cobertura_activo_pasivo":
       return valor < 1 ? "Activos insuficientes para cubrir pasivos" : "Cobertura adecuada";
+    case "porcentaje_pasivo_corto":
+      return valor > 0.7 ? "Alta presión de corto plazo" : valor > 0.4 ? "Estructura equilibrada" : "Predomina deuda de largo plazo";
+    case "porcentaje_activo_no_corriente":
+      return valor > 0.7 ? "Alto peso de activos fijos" : valor > 0.4 ? "Composición balanceada" : "Predominio de activos corrientes";
+    case "endeudamiento_largo_plazo":
+      return valor === null ? "Sin datos" : valor > 1 ? "Presión alta a largo plazo" : "Presión razonable a largo plazo";
     default:
       return "";
   }
@@ -128,6 +164,8 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
   const [conclusiones, setConclusiones] = useState<string[]>([]);
   const [evolucionMensual, setEvolucionMensual] = useState<any[]>([]);
   const [meta, setMeta] = useState<any>(null);
+  const [metaBalance, setMetaBalance] = useState<any>(null);
+  const [resumenBalance, setResumenBalance] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
   const cargar = async () => {
@@ -144,6 +182,8 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
       setConclusiones(data.conclusiones || []);
       setEvolucionMensual(data.evolucion_mensual || []);
       setMeta(data.meta || null);
+      setMetaBalance(data.meta_balance || null);
+      setResumenBalance(data.resumen_balance || null);
     } catch (e) {
       console.error("Error cargando indicadores desde auxiliares:", e);
     } finally {
@@ -162,7 +202,21 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
 
     const hojaIndicadores = XLSX.utils.json_to_sheet(
       Object.entries(indicadores)
-        .filter(([k]) => !["activo_total", "pasivo_total", "patrimonio", "ingresos", "costos", "gastos", "utilidad_neta"].includes(k))
+        .filter(([k]) =>
+          ![
+            "activo_total",
+            "pasivo_total",
+            "patrimonio",
+            "ingresos",
+            "costos",
+            "gastos",
+            "utilidad_neta",
+            "activo_corriente",
+            "activo_no_corriente",
+            "pasivo_corto",
+            "pasivo_largo",
+          ].includes(k)
+        )
         .map(([k, v]) => ({
           Indicador: k.replace(/_/g, " ").toUpperCase(),
           Valor: typeof v === "number" && isFinite(v) ? v.toFixed(2) : "—",
@@ -183,11 +237,33 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
       }))
     );
 
+    const hojaLecturaEjecutiva = XLSX.utils.json_to_sheet(
+      (resumenBalance?.narrativa || []).map((c: string, i: number) => ({
+        N: i + 1,
+        Lectura_Ejecutiva: c,
+      }))
+    );
+
+    const hojaAlertas = XLSX.utils.json_to_sheet(
+      (resumenBalance?.alertas || []).map((c: string, i: number) => ({
+        N: i + 1,
+        Alerta: c,
+      }))
+    );
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, hojaResumen, "Resumen_Tecnico");
     XLSX.utils.book_append_sheet(wb, hojaIndicadores, "Indicadores");
     XLSX.utils.book_append_sheet(wb, hojaConclusiones, "Conclusiones");
     XLSX.utils.book_append_sheet(wb, hojaEvolucion, "Evolucion_Mensual");
+
+    if ((resumenBalance?.narrativa || []).length > 0) {
+      XLSX.utils.book_append_sheet(wb, hojaLecturaEjecutiva, "Lectura_Ejecutiva");
+    }
+
+    if ((resumenBalance?.alertas || []).length > 0) {
+      XLSX.utils.book_append_sheet(wb, hojaAlertas, "Alertas_Balance");
+    }
 
     const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
     saveAs(
@@ -212,21 +288,21 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
         key: "activo_total",
         titulo: "Activo total",
         valor: indicadores["activo_total"] ?? null,
-        detalle: "Total de recursos controlados por la empresa",
+        detalle: "Total de recursos controlados por la empresa al corte final",
         emoji: "💼",
       },
       {
         key: "pasivo_total",
         titulo: "Pasivo total",
         valor: indicadores["pasivo_total"] ?? null,
-        detalle: "Obligaciones acumuladas con terceros",
+        detalle: "Obligaciones acumuladas con terceros al corte final",
         emoji: "📌",
       },
       {
         key: "patrimonio",
         titulo: "Patrimonio",
         valor: indicadores["patrimonio"] ?? null,
-        detalle: "Base patrimonial o capital propio",
+        detalle: "Base patrimonial o capital propio al corte final",
         emoji: "🏛️",
       },
       {
@@ -254,14 +330,14 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-bold tracking-tight">📈 Indicadores Financieros desde Auxiliares</h1>
         <p className="text-sm text-muted-foreground">
-          Este módulo reconstruye la situación financiera a partir de movimientos del auxiliar contable,
-          usando la lógica del balance general y del estado de resultados.
+          Este módulo combina el balance general acumulado al corte final seleccionado y el estado
+          de resultados del período analizado, para entregar una lectura financiera clara y ejecutiva.
         </p>
       </div>
 
       <Card className="border-slate-200 bg-gradient-to-r from-slate-50 to-white">
         <CardHeader>
-          <CardTitle>Seleccionar periodo de análisis</CardTitle>
+          <CardTitle>Seleccionar período de análisis</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-3">
@@ -289,10 +365,11 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
           </div>
 
           {meta && (
-            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 leading-6">
               <strong>Fuente:</strong> Auxiliar contable &nbsp;|&nbsp;
-              <strong>Desde:</strong> {meta.fecha_desde} &nbsp;|&nbsp;
-              <strong>Hasta:</strong> {meta.fecha_hasta}
+              <strong>P&amp;L desde:</strong> {meta.fecha_desde} &nbsp;|&nbsp;
+              <strong>P&amp;L hasta:</strong> {meta.fecha_hasta} &nbsp;|&nbsp;
+              <strong>Balance al corte:</strong> {meta.fecha_corte_balance || meta.fecha_hasta}
             </div>
           )}
         </CardContent>
@@ -304,32 +381,76 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
         </CardHeader>
         <CardContent className="space-y-3 text-sm leading-6 text-slate-700">
           <p>
-            Los indicadores de balance se toman de la reconstrucción del balance general desde auxiliares,
-            mientras que la utilidad y la rentabilidad se calculan con base en el P&amp;L del período.
+            Esta página combina dos lógicas contables distintas para evitar confusiones:
           </p>
           <div className="grid gap-3 md:grid-cols-3">
             <div className="rounded-xl border border-amber-200 bg-white p-4">
-              <p className="font-semibold">Balance reconstruido</p>
+              <p className="font-semibold">Balance al corte final</p>
               <p className="text-slate-600">
-                Activo, pasivo y patrimonio se calculan con la misma lógica del balance general, incluyendo
-                patrimonio calculado cuando Siigo no trae cuenta 3 útil.
+                Activo, pasivo, patrimonio, liquidez, solvencia, autonomía y capital de trabajo
+                se calculan con la lógica del balance general acumulado hasta la fecha final seleccionada.
               </p>
             </div>
             <div className="rounded-xl border border-amber-200 bg-white p-4">
               <p className="font-semibold">Resultado del período</p>
               <p className="text-slate-600">
-                Ingresos, costos, gastos y utilidad neta provienen del mismo motor del Estado de Resultados.
+                Ingresos, costos, gastos, utilidad neta y rentabilidad se calculan solo con los movimientos
+                del período elegido.
               </p>
             </div>
             <div className="rounded-xl border border-amber-200 bg-white p-4">
               <p className="font-semibold">Consistencia</p>
               <p className="text-slate-600">
-                Los indicadores compartidos con Balance General deberían coincidir para el mismo corte.
+                Los indicadores compartidos con Balance General deben coincidir para el mismo corte.
+                La evolución mensual, por ahora, refleja el comportamiento del P&amp;L.
               </p>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {resumenBalance?.narrativa?.length > 0 && (
+        <Card className="border-slate-200 overflow-hidden">
+          <div className="bg-slate-900 px-6 py-5 text-white">
+            <h3 className="text-base font-bold tracking-wide">🧾 Lectura ejecutiva del balance al corte</h3>
+            <p className="mt-1 text-xs text-slate-300">
+              Interpretación automática del estado de situación financiera al cierre seleccionado.
+            </p>
+          </div>
+          <CardContent className="p-6">
+            <div className="rounded-xl border bg-slate-50 p-4">
+              <ul className="space-y-2 text-sm text-slate-800">
+                {resumenBalance.narrativa.map((txt: string, i: number) => (
+                  <li key={i} className="flex gap-2">
+                    <span>•</span>
+                    <span>{txt}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {resumenBalance?.alertas?.length > 0 && (
+        <Card className="border-amber-200 bg-amber-50/50">
+          <CardHeader>
+            <CardTitle>⚠ Alertas y observaciones del balance</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-xl border border-amber-200 bg-white p-4">
+              <ul className="space-y-2 text-sm text-slate-800">
+                {resumenBalance.alertas.map((txt: string, i: number) => (
+                  <li key={i} className="flex gap-2">
+                    <span>•</span>
+                    <span>{txt}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         {tarjetasEjecutivas.map((item) => (
@@ -358,6 +479,7 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
               {kpisPrincipales.map((k) => {
                 const v = indicadores[k];
                 const num = typeof v === "number" ? v : null;
+
                 return (
                   <div
                     key={k}
@@ -393,6 +515,7 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
               {kpisComplementarios.map((k) => {
                 const v = indicadores[k];
                 const num = typeof v === "number" ? v : null;
+
                 return (
                   <div
                     key={k}
@@ -411,7 +534,14 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
                         : fmt2(v)}
                     </p>
 
+                    <p className="mt-2 text-sm font-medium text-slate-700">{diagCorto(k, num)}</p>
                     <p className="mt-2 text-xs text-slate-500">{explicaciones[k]}</p>
+
+                    {interpretaciones[k] && (
+                      <div className="mt-3 rounded-lg bg-white/80 p-3 text-xs text-slate-700">
+                        {interpretaciones[k]}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -470,8 +600,9 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
           </div>
 
           <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-            La evolución mensual de esta página muestra por ahora el comportamiento de utilidad neta y rentabilidad
-            del período. Los indicadores de balance del encabezado corresponden al corte final seleccionado.
+            La evolución mensual de esta página muestra, por ahora, el comportamiento de utilidad neta
+            y rentabilidad del período. Los indicadores de balance del encabezado corresponden al corte
+            final seleccionado, no a cada mes individual.
           </div>
         </CardContent>
       </Card>
@@ -521,6 +652,49 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
                   </li>
                 ))}
               </ul>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {metaBalance && (
+        <Card className="border-slate-200 bg-slate-50/70">
+          <CardHeader>
+            <CardTitle>🧩 Notas técnicas del balance reconstruido</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-slate-700 leading-6">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-xl border bg-white p-4">
+                <p className="font-semibold">Patrimonio reconstruido</p>
+                <p className="mt-2">
+                  <strong>Patrimonio reportado:</strong>{" "}
+                  {formatCurrency(metaBalance?.patrimonio?.patrimonio_explicito_total || 0)}
+                </p>
+                <p>
+                  <strong>Patrimonio calculado:</strong>{" "}
+                  {formatCurrency(metaBalance?.patrimonio?.patrimonio_calculado_total || 0)}
+                </p>
+                <p>
+                  <strong>Patrimonio total:</strong>{" "}
+                  {formatCurrency(metaBalance?.patrimonio?.patrimonio_total || 0)}
+                </p>
+              </div>
+
+              <div className="rounded-xl border bg-white p-4">
+                <p className="font-semibold">Activo no corriente</p>
+                <p className="mt-2">
+                  <strong>Bruto:</strong>{" "}
+                  {formatCurrency(metaBalance?.activo_no_corriente?.bruto_total || 0)}
+                </p>
+                <p>
+                  <strong>Contra cuentas / ajustes:</strong>{" "}
+                  {formatCurrency(metaBalance?.activo_no_corriente?.contra_total || 0)}
+                </p>
+                <p>
+                  <strong>Neto:</strong>{" "}
+                  {formatCurrency(metaBalance?.activo_no_corriente?.neto_total || 0)}
+                </p>
+              </div>
             </div>
           </CardContent>
         </Card>

@@ -301,8 +301,8 @@ function getImpactClasses(favorable: boolean) {
 }
 
 function shortDriverLabel(row: DriverRow) {
-  const cleanName = row.nombre.length > 18 ? `${row.nombre.slice(0, 18)}…` : row.nombre;
-  return `${row.cuenta}`;
+  const cleanName = row.nombre.length > 12 ? `${row.nombre.slice(0, 12)}…` : row.nombre;
+  return `${row.cuenta} · ${cleanName}`;
 }
 
 function abreviarMonto(valor: number) {
@@ -352,7 +352,7 @@ const BLOCK_INFO = {
   drivers:
     "Lista las cuentas contables con mayor impacto absoluto en la variación del resultado.",
   waterfall:
-    "Este puente visual parte de la utilidad base, muestra los principales factores que suman o restan al resultado, y termina en la utilidad comparada.",
+    "Este puente visual parte de la utilidad neta del periodo base, muestra los principales factores que suman o restan al resultado, y termina en la utilidad neta del período comparado.",
 };
 
 // =========================================================
@@ -1093,31 +1093,6 @@ export default function AnalisisVariacionInteligentePage() {
             />
           </div>
 
-          {/* WATERFALL */}
-          <Card className="rounded-[2rem] shadow-xl border-none bg-white p-2">
-            <CardHeader className="pb-0">
-              <CardTitle className="text-sm font-black text-slate-500 uppercase tracking-tight flex justify-between items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <span>🌊 Puente de Variación de Utilidad</span>
-                  <InfoHint text={BLOCK_INFO.waterfall} />
-                </div>
-                <div className="flex gap-4 text-[10px]">
-                  <span className="flex items-center gap-1">
-                    <div className="w-2 h-2 rounded-full bg-indigo-600"></div> Totales
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500"></div> Suma
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <div className="w-2 h-2 rounded-full bg-rose-500"></div> Resta
-                  </span>
-                </div>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4">
-              <WaterfallMiniChart data={waterfallData} />
-            </CardContent>
-          </Card>
 
           {/* NARRATIVA */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -1243,6 +1218,34 @@ export default function AnalisisVariacionInteligentePage() {
               description="Resume las cuentas con mayor efecto desfavorable o de presión sobre el resultado frente al período base."
             />
           </div>
+
+
+          {/* WATERFALL */}
+          <Card className="rounded-[2rem] shadow-xl border-none bg-white p-2">
+            <CardHeader className="pb-0">
+              <CardTitle className="text-sm font-black text-slate-500 uppercase tracking-tight flex justify-between items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span>🌊 Puente de Variación de Utilidad Neta</span>
+                  <InfoHint text={BLOCK_INFO.waterfall} />
+                </div>
+                <div className="flex gap-4 text-[10px]">
+                  <span className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full bg-indigo-600"></div> Totales
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500"></div> Suma
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full bg-rose-500"></div> Resta
+                  </span>
+                </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <WaterfallMiniChart data={waterfallData} />
+            </CardContent>
+          </Card>
+
 
           {/* TABLA DRIVERS */}
           <Card className="rounded-[2rem] shadow-sm border bg-white">
@@ -1687,7 +1690,7 @@ const WaterfallMiniChart = ({ data }: { data: WaterfallPoint[] }) => {
         viewBox={`0 0 ${width} ${height}`}
         className="w-full min-w-[920px] h-[360px]"
         role="img"
-        aria-label="Gráfico waterfall de variación de utilidad"
+        aria-label="Gráfico waterfall de variación de utilidad neta"
       >
         {axisTicks.map((tick, idx) => (
           <g key={idx}>

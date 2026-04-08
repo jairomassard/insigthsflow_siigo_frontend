@@ -20,7 +20,6 @@ import {
   Sparkles,
   TriangleAlert,
   Target,
-  HelpCircle,
 } from "lucide-react";
 
 // =========================================================
@@ -143,6 +142,12 @@ function slicePeriodos(periodos: string[], from: string, to: string) {
   const end = Math.max(idxFrom, idxTo);
 
   return periodos.slice(start, end + 1);
+}
+
+function tendenciaVerbo(actual: number, anterior: number, up = "aumentó", down = "disminuyó") {
+  if (actual > anterior) return up;
+  if (actual < anterior) return down;
+  return "se mantuvo estable";
 }
 
 function seccionTipo(seccion?: string) {
@@ -288,46 +293,6 @@ function getImpactClasses(favorable: boolean) {
     ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
     : "bg-rose-50 text-rose-700 border border-rose-100";
 }
-
-const KPI_INFO: Record<string, string> = {
-  ingresos_totales:
-    "Representa el total de ingresos del período o rango comparado, incluyendo componentes operacionales y no operacionales.",
-  utilidad_bruta:
-    "Es el resultado luego de restar a los ingresos operacionales los costos de venta. Mide la rentabilidad directa del negocio.",
-  utilidad_operativa:
-    "Es la utilidad después de restar los gastos operacionales a la utilidad bruta. Refleja el desempeño del negocio en su operación normal.",
-  ebitda:
-    "Corresponde a la utilidad antes de intereses, impuestos, depreciaciones y amortizaciones. Sirve para medir la capacidad operativa del negocio.",
-  utilidad_neta:
-    "Es el resultado final después de considerar costos, gastos y componentes no operacionales del período.",
-  margen_bruto:
-    "Indica qué porcentaje de los ingresos totales se convierte en utilidad bruta.",
-  margen_operativo:
-    "Indica qué porcentaje de los ingresos totales se convierte en utilidad operativa.",
-  margen_ebitda:
-    "Indica qué porcentaje de los ingresos totales se convierte en EBITDA.",
-  margen_neto:
-    "Indica qué porcentaje de los ingresos totales se convierte en utilidad neta.",
-};
-
-const BLOCK_INFO = {
-  explicacion:
-    "Resume qué cambió entre el período base y el período comparado en ingresos, utilidades y magnitudes principales.",
-  diagnostico:
-    "Interpreta por qué cambió el resultado, señalando presión en costos, gastos o partidas no operacionales.",
-  recomendacion:
-    "Propone focos de revisión o decisión gerencial con base en los cambios detectados.",
-  mayorMejora:
-    "Muestra la cuenta con mayor impacto positivo sobre el resultado frente al período base.",
-  mayorPresion:
-    "Muestra la cuenta con mayor impacto negativo o mayor presión sobre el resultado frente al período base.",
-  puntoCritico:
-    "Resume el aspecto más sensible o prioritario a revisar en la comparación actual.",
-  variacionKpis:
-    "Presenta la comparación cuantitativa de los KPIs principales entre la base y el período comparado.",
-  drivers:
-    "Lista las cuentas contables con mayor impacto absoluto en la variación del resultado.",
-};
 
 // =========================================================
 // PAGE
@@ -495,6 +460,9 @@ export default function AnalisisVariacionInteligentePage() {
     const nombreBase = formatPeriodoNarrativo(labelsBase, modoComparacion);
     const nombreComp = formatPeriodoNarrativo(labelsComparacion, modoComparacion);
 
+    // =========================================================
+    // EXPLICACIÓN
+    // =========================================================
     explicacion.push(
       `Frente a ${nombreBase}, ${nombreComp} registra ingresos por ${formatCurrency(
         compIng
@@ -507,6 +475,9 @@ export default function AnalisisVariacionInteligentePage() {
       )}), mientras la utilidad operativa alcanza ${formatCurrency(compUo)}.`
     );
 
+    // =========================================================
+    // DIAGNÓSTICO
+    // =========================================================
     if (deltaIng > 0 && deltaUb < 0) {
       diagnostico.push(
         "Aunque los ingresos crecen, el margen bruto se reduce. Esto indica presión en costos de venta, devoluciones o una mezcla comercial menos rentable."
@@ -554,6 +525,9 @@ export default function AnalisisVariacionInteligentePage() {
       );
     }
 
+    // =========================================================
+    // RECOMENDACIONES
+    // =========================================================
     if (pctIng !== null && pctIng <= -15) {
       recomendaciones.push(
         "Prioridad alta: revisar ventas, devoluciones y ritmo comercial, porque la caída de ingresos frente al período base es material."
@@ -694,7 +668,7 @@ export default function AnalisisVariacionInteligentePage() {
 
     return "El principal punto a vigilar es la sostenibilidad del margen: el crecimiento en ingresos debe traducirse de forma proporcional en rentabilidad.";
   }, [aggComparacion.gastos_operacionales, kpiRows]);
-
+  
   return (
     <div className="space-y-4 p-5 bg-slate-50 min-h-screen">
       {/* HEADER */}
@@ -915,12 +889,9 @@ export default function AnalisisVariacionInteligentePage() {
         {readyToCompare && (
           <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <div>
-              <div className="flex items-center gap-2">
-                <p className="text-[11px] font-black uppercase tracking-widest text-indigo-700">
-                  Lectura del comparativo
-                </p>
-                <InfoHint text="Resume la lógica de comparación activa: si estás comparando un mes contra otro, o un rango acumulado contra otro rango." />
-              </div>
+              <p className="text-[11px] font-black uppercase tracking-widest text-indigo-700">
+                Lectura del comparativo
+              </p>
               <p className="text-sm font-bold text-slate-800 mt-1">
                 {descripcionComparacion}
               </p>
@@ -962,7 +933,6 @@ export default function AnalisisVariacionInteligentePage() {
               comparacion={aggComparacion.ingresos_totales}
               icon={<TrendingUp size={18} />}
               tipo="currency"
-              description={KPI_INFO.ingresos_totales}
             />
             <CompareStatCard
               title="Utilidad Bruta"
@@ -970,7 +940,6 @@ export default function AnalisisVariacionInteligentePage() {
               comparacion={aggComparacion.utilidad_bruta}
               icon={<DollarSign size={18} />}
               tipo="currency"
-              description={KPI_INFO.utilidad_bruta}
             />
             <CompareStatCard
               title="Utilidad Operativa"
@@ -978,7 +947,6 @@ export default function AnalisisVariacionInteligentePage() {
               comparacion={aggComparacion.utilidad_operativa}
               icon={<Landmark size={18} />}
               tipo="currency"
-              description={KPI_INFO.utilidad_operativa}
             />
             <CompareStatCard
               title="EBITDA"
@@ -987,7 +955,6 @@ export default function AnalisisVariacionInteligentePage() {
               icon={<Activity size={18} />}
               tipo="currency"
               highlight
-              description={KPI_INFO.ebitda}
             />
             <CompareStatCard
               title="Utilidad Neta"
@@ -995,7 +962,6 @@ export default function AnalisisVariacionInteligentePage() {
               comparacion={aggComparacion.utilidad_neta}
               icon={<TrendingUp size={18} />}
               tipo="currency"
-              description={KPI_INFO.utilidad_neta}
             />
           </div>
 
@@ -1007,7 +973,6 @@ export default function AnalisisVariacionInteligentePage() {
               icon={<Brain size={16} />}
               items={narrativa.explicacion}
               tone="slate"
-              description={BLOCK_INFO.explicacion}
             />
             <InsightBlock
               title="Diagnóstico"
@@ -1015,7 +980,6 @@ export default function AnalisisVariacionInteligentePage() {
               icon={<Search size={16} />}
               items={narrativa.diagnostico}
               tone="indigo"
-              description={BLOCK_INFO.diagnostico}
             />
             <InsightBlock
               title="Recomendación"
@@ -1023,7 +987,6 @@ export default function AnalisisVariacionInteligentePage() {
               icon={<Lightbulb size={16} />}
               items={narrativa.recomendaciones}
               tone="amber"
-              description={BLOCK_INFO.recomendacion}
             />
           </div>
 
@@ -1034,30 +997,26 @@ export default function AnalisisVariacionInteligentePage() {
               icon={<Sparkles size={16} />}
               tone="emerald"
               text={mayorMejora}
-              description={BLOCK_INFO.mayorMejora}
             />
             <ExecutiveStripCard
               title="Mayor presión"
               icon={<TriangleAlert size={16} />}
               tone="rose"
               text={mayorPresion}
-              description={BLOCK_INFO.mayorPresion}
             />
             <ExecutiveStripCard
               title="Punto crítico a revisar"
               icon={<Target size={16} />}
               tone="amber"
               text={puntoCritico}
-              description={BLOCK_INFO.puntoCritico}
             />
           </div>
 
           {/* TABLA KPIs */}
           <Card className="rounded-[2rem] shadow-sm border bg-white">
             <CardHeader className="pb-0">
-              <CardTitle className="text-sm font-black text-slate-700 uppercase tracking-wide flex items-center gap-2">
+              <CardTitle className="text-sm font-black text-slate-700 uppercase tracking-wide">
                 Variación de KPIs
-                <InfoHint text={BLOCK_INFO.variacionKpis} />
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4 overflow-x-auto">
@@ -1114,22 +1073,19 @@ export default function AnalisisVariacionInteligentePage() {
               title="Factores que mejoran el resultado"
               tone="emerald"
               rows={resumenDrivers.positivos}
-              description="Resume las cuentas con mayor efecto favorable sobre el resultado frente al período base."
             />
             <DriverSummaryCard
               title="Factores que presionan el resultado"
               tone="rose"
               rows={resumenDrivers.negativos}
-              description="Resume las cuentas con mayor efecto desfavorable o de presión sobre el resultado frente al período base."
             />
           </div>
 
           {/* TABLA DRIVERS */}
           <Card className="rounded-[2rem] shadow-sm border bg-white">
             <CardHeader className="pb-0">
-              <CardTitle className="text-sm font-black text-slate-700 uppercase tracking-wide flex items-center gap-2">
+              <CardTitle className="text-sm font-black text-slate-700 uppercase tracking-wide">
                 Top drivers contables de la variación
-                <InfoHint text={BLOCK_INFO.drivers} />
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4 overflow-x-auto">
@@ -1202,42 +1158,6 @@ export default function AnalisisVariacionInteligentePage() {
 // =========================================================
 // SUBCOMPONENTES
 // =========================================================
-const InfoHint = ({
-  text,
-  dark = false,
-  align = "right",
-}: {
-  text: string;
-  dark?: boolean;
-  align?: "left" | "right";
-}) => (
-  <div className="relative group/info inline-flex">
-    <button
-      type="button"
-      className={`inline-flex items-center justify-center w-4 h-4 rounded-full transition-all ${
-        dark
-          ? "bg-white/20 text-white hover:bg-white/30"
-          : "bg-slate-100 text-slate-500 hover:bg-slate-200"
-      }`}
-      aria-label="Ver explicación"
-    >
-      <HelpCircle size={11} />
-    </button>
-
-    <div
-      className={`pointer-events-none absolute top-6 z-50 w-64 rounded-2xl border px-3 py-3 text-[11px] leading-5 shadow-2xl opacity-0 scale-95 transition-all duration-200 group-hover/info:opacity-100 group-hover/info:scale-100 group-focus-within/info:opacity-100 group-focus-within/info:scale-100 ${
-        align === "left" ? "left-0" : "right-0"
-      } ${
-        dark
-          ? "border-slate-700 bg-slate-900 text-slate-100"
-          : "border-slate-200 bg-white text-slate-700"
-      }`}
-    >
-      {text}
-    </div>
-  </div>
-);
-
 const BadgeInfo = ({ label, value }: { label: string; value: string }) => (
   <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 shadow-sm">
     <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
@@ -1254,7 +1174,6 @@ const CompareStatCard = ({
   icon,
   tipo,
   highlight = false,
-  description,
 }: {
   title: string;
   base: number;
@@ -1262,14 +1181,13 @@ const CompareStatCard = ({
   icon: React.ReactNode;
   tipo: "currency" | "percent";
   highlight?: boolean;
-  description: string;
 }) => {
   const delta = comparacion - base;
   const pct = porcentajeCambio(comparacion, base);
 
   return (
     <Card
-      className={`relative overflow-visible border shadow-lg rounded-[2rem] transition-all hover:scale-[1.01] ${
+      className={`relative overflow-hidden border shadow-lg rounded-[2rem] transition-all hover:scale-[1.01] ${
         highlight
           ? "bg-indigo-600 text-white shadow-indigo-200 border-none"
           : "bg-white border-slate-100"
@@ -1281,21 +1199,18 @@ const CompareStatCard = ({
             {icon}
           </div>
 
-          <div className="flex items-center gap-1.5">
-            <div
-              className={`text-[9px] font-black px-2 py-1 rounded-lg flex items-center gap-1 ${
-                highlight
-                  ? "bg-emerald-400 text-emerald-950"
-                  : delta > 0
-                  ? "bg-emerald-50 text-emerald-700"
-                  : delta < 0
-                  ? "bg-rose-50 text-rose-700"
-                  : "bg-slate-100 text-slate-500"
-              }`}
-            >
-              {pct === null ? "N/A" : formatSignedPercent(pct)}
-            </div>
-            <InfoHint text={description} dark={highlight} />
+          <div
+            className={`text-[9px] font-black px-2 py-1 rounded-lg flex items-center gap-1 ${
+              highlight
+                ? "bg-emerald-400 text-emerald-950"
+                : delta > 0
+                ? "bg-emerald-50 text-emerald-700"
+                : delta < 0
+                ? "bg-rose-50 text-rose-700"
+                : "bg-slate-100 text-slate-500"
+            }`}
+          >
+            {pct === null ? "N/A" : formatSignedPercent(pct)}
           </div>
         </div>
 
@@ -1344,14 +1259,12 @@ const InsightBlock = ({
   icon,
   items,
   tone,
-  description,
 }: {
   title: string;
   subtitle: string;
   icon: React.ReactNode;
   items: string[];
   tone: "slate" | "indigo" | "amber";
-  description: string;
 }) => {
   const toneMap = {
     slate: {
@@ -1380,17 +1293,14 @@ const InsightBlock = ({
   return (
     <Card className={`rounded-[2rem] shadow-sm border ${toneMap.border} ${toneMap.bg}`}>
       <CardContent className="p-5 space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-white">{icon}</div>
-            <div>
-              <h3 className={`text-sm font-black uppercase tracking-wide ${toneMap.title}`}>
-                {title}
-              </h3>
-              <p className={`text-xs font-medium ${toneMap.subtitle}`}>{subtitle}</p>
-            </div>
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-xl bg-white">{icon}</div>
+          <div>
+            <h3 className={`text-sm font-black uppercase tracking-wide ${toneMap.title}`}>
+              {title}
+            </h3>
+            <p className={`text-xs font-medium ${toneMap.subtitle}`}>{subtitle}</p>
           </div>
-          <InfoHint text={description} />
         </div>
 
         <div className="space-y-2">
@@ -1409,12 +1319,10 @@ const DriverSummaryCard = ({
   title,
   tone,
   rows,
-  description,
 }: {
   title: string;
   tone: "emerald" | "rose";
   rows: { texto: string; valor: number }[];
-  description: string;
 }) => {
   const styles =
     tone === "emerald"
@@ -1434,12 +1342,9 @@ const DriverSummaryCard = ({
   return (
     <Card className={`rounded-[2rem] shadow-sm border ${styles.card}`}>
       <CardContent className="p-5">
-        <div className="flex items-center justify-between gap-3 mb-4">
-          <h3 className={`text-sm font-black uppercase tracking-wide ${styles.title}`}>
-            {title}
-          </h3>
-          <InfoHint text={description} />
-        </div>
+        <h3 className={`text-sm font-black uppercase tracking-wide mb-4 ${styles.title}`}>
+          {title}
+        </h3>
 
         <div className="space-y-2">
           {rows.length === 0 ? (
@@ -1470,13 +1375,11 @@ const ExecutiveStripCard = ({
   icon,
   tone,
   text,
-  description,
 }: {
   title: string;
   icon: React.ReactNode;
   tone: "emerald" | "rose" | "amber";
   text: string;
-  description: string;
 }) => {
   const styles =
     tone === "emerald"
@@ -1500,16 +1403,13 @@ const ExecutiveStripCard = ({
   return (
     <Card className={`rounded-[2rem] shadow-sm border ${styles.card}`}>
       <CardContent className="p-5 space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-white">{icon}</div>
-            <div>
-              <h3 className={`text-sm font-black uppercase tracking-wide ${styles.title}`}>
-                {title}
-              </h3>
-            </div>
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-xl bg-white">{icon}</div>
+          <div>
+            <h3 className={`text-sm font-black uppercase tracking-wide ${styles.title}`}>
+              {title}
+            </h3>
           </div>
-          <InfoHint text={description} />
         </div>
 
         <div className={`rounded-xl px-3 py-3 text-sm leading-6 ${styles.box}`}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { authFetch } from "@/lib/api";
 import useAuthGuard from "@/hooks/useAuthGuard";
 
@@ -47,7 +47,7 @@ type Proyeccion = {
     cliente_nombre: string;
     saldo: number;
     public_url: string | null;
-    dias_vencidos: number;
+    dias_vencidos: number; // ✅ agregar esta línea
   }[];
 };
 
@@ -60,7 +60,6 @@ export default function ReporteCxCPage() {
   const [error, setError] = useState("");
   const [selectedBar, setSelectedBar] = useState<Proyeccion | null>(null);
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
-  const [mostrarTabla, setMostrarTabla] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -100,10 +99,12 @@ export default function ReporteCxCPage() {
     return () => window.removeEventListener("keydown", handleEscape);
   }, []);
 
+
+  // función auxiliar para rango por barra
   const obtenerRangoBarra = (entry: Proyeccion): string | null => {
     if (!entry.vencido || entry.facturas.length === 0) return null;
 
-    const diasMax = Math.max(...entry.facturas.map((f) => f.dias_vencidos ?? 0));
+    const diasMax = Math.max(...entry.facturas.map(f => f.dias_vencidos ?? 0));
 
     if (diasMax <= 30) return "Vencido 1-30";
     if (diasMax <= 60) return "Vencido 31-60";
@@ -111,35 +112,7 @@ export default function ReporteCxCPage() {
     return "Vencido 91+";
   };
 
-  const totalPorVencer = useMemo(
-    () => clientes.reduce((acc, c) => acc + Number(c.aging?.por_vencer || 0), 0),
-    [clientes]
-  );
-
-  const total1_30 = useMemo(
-    () => clientes.reduce((acc, c) => acc + Number(c.aging?.["1_30"] || 0), 0),
-    [clientes]
-  );
-
-  const total31_60 = useMemo(
-    () => clientes.reduce((acc, c) => acc + Number(c.aging?.["31_60"] || 0), 0),
-    [clientes]
-  );
-
-  const total61_90 = useMemo(
-    () => clientes.reduce((acc, c) => acc + Number(c.aging?.["61_90"] || 0), 0),
-    [clientes]
-  );
-
-  const total91Mas = useMemo(
-    () => clientes.reduce((acc, c) => acc + Number(c.aging?.["91_mas"] || 0), 0),
-    [clientes]
-  );
-
-  const totalGeneral = useMemo(
-    () => clientes.reduce((acc, c) => acc + Number(c.total || 0), 0),
-    [clientes]
-  );
+  const [mostrarTabla, setMostrarTabla] = useState(false);
 
   return (
     <div className="space-y-6">
@@ -152,165 +125,75 @@ export default function ReporteCxCPage() {
 
       {!loading && !error && (
         <>
+          {/* Resumen Global */}
           <div className="grid gap-2 md:grid-cols-4 xl:grid-cols-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Facturas vivas</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-xl font-bold">{resumen.facturas_vivas}</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Total CxC</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-xl font-bold text-blue-600">
-                  {resumen.total_global}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Total vencido</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-xl font-bold text-red-600">
-                  {resumen.total_vencido}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>% vencido</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-xl font-bold text-orange-500">
-                  {resumen.pct_vencido}%
-                </p>
-              </CardContent>
-            </Card>
+            <Card><CardHeader><CardTitle>Facturas vivas</CardTitle></CardHeader><CardContent><p className="text-xl font-bold">{resumen.facturas_vivas}</p></CardContent></Card>
+            <Card><CardHeader><CardTitle>Total CxC</CardTitle></CardHeader><CardContent><p className="text-xl font-bold text-blue-600">{resumen.total_global}</p></CardContent></Card>
+            <Card><CardHeader><CardTitle>Total vencido</CardTitle></CardHeader><CardContent><p className="text-xl font-bold text-red-600">{resumen.total_vencido}</p></CardContent></Card>
+            <Card><CardHeader><CardTitle>% vencido</CardTitle></CardHeader><CardContent><p className="text-xl font-bold text-orange-500">{resumen.pct_vencido}%</p></CardContent></Card>
           </div>
 
           <div className="grid gap-2 md:grid-cols-4 xl:grid-cols-5">
-            <Card>
-              <CardHeader>
-                <CardTitle>Total por Vencer</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-xl font-bold text-green-600">
-                  {resumen.total_por_vencer}
-                </p>
-              </CardContent>
-            </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Vencido 1-30</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-xl font-bold" style={{ color: "#f87171" }}>
-                  {fmt(resumen.total_1_30)}
-                </p>
-              </CardContent>
-            </Card>
+            <Card><CardHeader><CardTitle>Total por Vencer</CardTitle></CardHeader><CardContent><p className="text-xl font-bold text-green-600">{resumen.total_por_vencer}</p></CardContent></Card>
+            <Card><CardHeader><CardTitle>Vencido 1-30</CardTitle></CardHeader><CardContent><p className="text-xl font-bold" style={{ color: "#f87171" }}>{fmt(resumen.total_1_30)}</p></CardContent></Card>
+            <Card><CardHeader><CardTitle>Vencido 31-60</CardTitle></CardHeader><CardContent><p className="text-xl font-bold" style={{ color: "#ef4444" }}>{fmt(resumen.total_31_60)}</p></CardContent></Card>
+            <Card><CardHeader><CardTitle>Vencido 61-90</CardTitle></CardHeader><CardContent><p className="text-xl font-bold" style={{ color: "#dc2626" }}>{fmt(resumen.total_61_90)}</p></CardContent></Card>
+            <Card><CardHeader><CardTitle>Vencido 91+</CardTitle></CardHeader><CardContent><p className="text-xl font-bold" style={{ color: "#b91c1c" }}>{fmt(resumen.total_91_mas)}</p></CardContent></Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Vencido 31-60</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-xl font-bold" style={{ color: "#ef4444" }}>
-                  {fmt(resumen.total_31_60)}
-                </p>
-              </CardContent>
-            </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Vencido 61-90</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-xl font-bold" style={{ color: "#dc2626" }}>
-                  {fmt(resumen.total_61_90)}
-                </p>
-              </CardContent>
-            </Card>
+         </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Vencido 91+</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-xl font-bold" style={{ color: "#b91c1c" }}>
-                  {fmt(resumen.total_91_mas)}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
+          {/* Proyección por fecha */}
           <Card>
             <CardHeader>
               <CardTitle className="text-md">
                 📅 Proyección de cobros por fecha
               </CardTitle>
             </CardHeader>
-
             <CardContent>
-              <ResponsiveContainer width="100%" height={350}>
-                <BarChart data={proyeccion}>
-                  <XAxis dataKey="fecha" tick={{ fontSize: 12 }} />
-                  <YAxis tickFormatter={(v) => `$${(v / 1_000_000).toFixed(0)}M`} />
+            <ResponsiveContainer width="100%" height={350}>
+            <BarChart data={proyeccion}>
+                <XAxis dataKey="fecha" tick={{ fontSize: 12 }} />
+                <YAxis
+                tickFormatter={(v) => `$${(v / 1_000_000).toFixed(0)}M`}
+                />
+                <Tooltip
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload || payload.length === 0) return null;
 
-                  <Tooltip
-                    content={({ active, payload, label }) => {
-                      if (!active || !payload || payload.length === 0) return null;
+                    const entry = payload[0].payload as Proyeccion;
+                    const rango = obtenerRangoBarra(entry);
+                    const totalFormatted = entry.total_str;
+                    return (
+                      <div className="bg-white border rounded shadow p-2 text-sm">
+                        {rango && <div className="font-semibold text-gray-700 mb-1">{rango}</div>}
+                        <div><strong>Vencimiento:</strong> {label}</div>
+                        <div><strong>Total:</strong> {totalFormatted}</div>
+                      </div>
+                    );
+                  }}
+                />
 
-                      const entry = payload[0].payload as Proyeccion;
-                      const rango = obtenerRangoBarra(entry);
-                      const totalFormatted = entry.total_str;
-
-                      return (
-                        <div className="bg-white border rounded shadow p-2 text-sm">
-                          {rango && (
-                            <div className="font-semibold text-gray-700 mb-1">
-                              {rango}
-                            </div>
-                          )}
-                          <div>
-                            <strong>Vencimiento:</strong> {label}
-                          </div>
-                          <div>
-                            <strong>Total:</strong> {totalFormatted}
-                          </div>
-                        </div>
-                      );
-                    }}
-                  />
-
-                  <Bar
+                <Bar
                     dataKey="total"
                     radius={[6, 6, 0, 0]}
                     onClick={(data) => {
-                      if (data && data.payload) {
+                        if (data && data.payload) {
                         setSelectedBar(data.payload as Proyeccion);
-                      }
+                        }
                     }}
-                  >
+                    >
+                    {/* Pintar verde o rojo según vencimiento */}
                     {proyeccion.map((entry: Proyeccion, index) => {
                       let diasMax = 0;
 
                       if (entry.vencido && entry.facturas.length > 0) {
-                        diasMax = Math.max(
-                          ...entry.facturas.map((f) => f.dias_vencidos ?? 0)
-                        );
+                        diasMax = Math.max(...entry.facturas.map(f => f.dias_vencidos ?? 0));
+
                       }
 
-                      let color = "#16a34a";
+                      let color = "#16a34a"; // verde por defecto (por vencer)
 
                       if (entry.vencido) {
                         if (diasMax <= 30) color = "#f87171";
@@ -322,172 +205,140 @@ export default function ReporteCxCPage() {
                       return <Cell key={`cell-${index}`} fill={color} />;
                     })}
 
+
+                    {/* Etiquetas arriba de cada barra */}
                     <LabelList
-                      dataKey="total"
-                      position="top"
-                      content={(props) => {
+                        dataKey="total"
+                        position="top"
+                        content={(props) => {
                         const { x, y, value } = props;
                         if (value == null) return null;
 
                         let displayValue = "";
                         const v = Number(value);
-
-                        if (v >= 1_000_000_000) {
-                          displayValue = (v / 1_000_000_000).toFixed(1) + "B";
-                        } else if (v >= 1_000_000) {
-                          displayValue = (v / 1_000_000).toFixed(0) + "M";
-                        } else if (v >= 1_000) {
-                          displayValue = (v / 1_000).toFixed(0) + "K";
-                        } else {
-                          displayValue = v.toString();
-                        }
+                        if (v >= 1_000_000_000) displayValue = (v / 1_000_000_000).toFixed(1) + "B";
+                        else if (v >= 1_000_000) displayValue = (v / 1_000_000).toFixed(0) + "M";
+                        else if (v >= 1_000) displayValue = (v / 1_000).toFixed(0) + "K";
+                        else displayValue = v.toString();
 
                         return (
-                          <text
+                            <text
                             x={x}
                             y={y}
                             dy={-4}
                             fill="#333"
                             fontSize={12}
                             textAnchor="middle"
-                          >
+                            >
                             {displayValue}
-                          </text>
+                            </text>
                         );
-                      }}
+                        }}
                     />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+                </Bar>
 
-              <div className="mt-6 mb-4">
-                <div className="text-right">
-                  <button
-                    onClick={() => setMostrarTabla((prev) => !prev)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm transition"
-                  >
-                    {mostrarTabla ? "Ocultar tabla de aging" : "Mostrar tabla de aging"}
-                  </button>
-                </div>
+            </BarChart>
+            </ResponsiveContainer>
 
-                {mostrarTabla && (
-                  <div className="mt-4 overflow-x-auto">
-                    <table className="min-w-[980px] w-full text-sm border border-gray-300 rounded-lg shadow-sm">
-                      <thead className="bg-gray-100 text-gray-700 sticky top-0">
-                        <tr>
-                          <th className="p-2 text-left">Cliente</th>
-                          <th className="p-2 text-right">Por vencer</th>
-                          <th className="p-2 text-right">1-30</th>
-                          <th className="p-2 text-right">31-60</th>
-                          <th className="p-2 text-right">61-90</th>
-                          <th className="p-2 text-right">91+</th>
-                          <th className="p-2 text-right">Total</th>
-                        </tr>
-                      </thead>
-
-                      <tbody>
-                        {clientes.map((c, i) => (
-                          <tr
-                            key={i}
-                            className={`border-b hover:bg-gray-50 ${
-                              c.total === 0 ? "text-gray-400" : ""
-                            }`}
-                          >
-                            <td className="p-2 whitespace-nowrap">{c.cliente_nombre}</td>
-
-                            <td className="p-2 text-right text-green-600">
-                              <div>{fmt(c.aging.por_vencer)}</div>
-                              <div className="text-[11px] text-gray-500">
-                                {fmtPct(pct(c.aging.por_vencer, totalPorVencer))}
-                              </div>
-                            </td>
-
-                            <td className="p-2 text-right text-orange-500">
-                              <div>{fmt(c.aging["1_30"])}</div>
-                              <div className="text-[11px] text-gray-500">
-                                {fmtPct(pct(c.aging["1_30"], total1_30))}
-                              </div>
-                            </td>
-
-                            <td className="p-2 text-right text-orange-600">
-                              <div>{fmt(c.aging["31_60"])}</div>
-                              <div className="text-[11px] text-gray-500">
-                                {fmtPct(pct(c.aging["31_60"], total31_60))}
-                              </div>
-                            </td>
-
-                            <td className="p-2 text-right text-red-600">
-                              <div>{fmt(c.aging["61_90"])}</div>
-                              <div className="text-[11px] text-gray-500">
-                                {fmtPct(pct(c.aging["61_90"], total61_90))}
-                              </div>
-                            </td>
-
-                            <td className="p-2 text-right text-red-800">
-                              <div>{fmt(c.aging["91_mas"])}</div>
-                              <div className="text-[11px] text-gray-500">
-                                {fmtPct(pct(c.aging["91_mas"], total91Mas))}
-                              </div>
-                            </td>
-
-                            <td className="p-2 text-right font-semibold">
-                              <div>{fmt(c.total)}</div>
-                              <div className="text-[11px] text-gray-500">
-                                {fmtPct(pct(c.total, totalGeneral))}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-
-                        <tr className="bg-gray-100 font-semibold border-t-2 border-gray-300">
-                          <td className="p-2 text-left">Totales</td>
-
-                          <td className="p-2 text-right text-green-600">
-                            <div>{fmt(totalPorVencer)}</div>
-                            <div className="text-[11px] text-gray-500">100,0%</div>
-                          </td>
-
-                          <td className="p-2 text-right text-orange-500">
-                            <div>{fmt(total1_30)}</div>
-                            <div className="text-[11px] text-gray-500">100,0%</div>
-                          </td>
-
-                          <td className="p-2 text-right text-orange-600">
-                            <div>{fmt(total31_60)}</div>
-                            <div className="text-[11px] text-gray-500">100,0%</div>
-                          </td>
-
-                          <td className="p-2 text-right text-red-600">
-                            <div>{fmt(total61_90)}</div>
-                            <div className="text-[11px] text-gray-500">100,0%</div>
-                          </td>
-
-                          <td className="p-2 text-right text-red-800">
-                            <div>{fmt(total91Mas)}</div>
-                            <div className="text-[11px] text-gray-500">100,0%</div>
-                          </td>
-
-                          <td className="p-2 text-right font-bold">
-                            <div>{fmt(totalGeneral)}</div>
-                            <div className="text-[11px] text-gray-500">100,0%</div>
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+              
+            {/* Toggle tabla debajo del gráfico */}
+            <div className="mt-6 mb-4">
+              <div className="text-right">
+                <button
+                  onClick={() => setMostrarTabla((prev) => !prev)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm transition"
+                >
+                  {mostrarTabla ? "Ocultar tabla de aging" : "Mostrar tabla de aging"}
+                </button>
               </div>
 
+              {mostrarTabla && (
+                <div className="mt-4 overflow-x-auto">
+                  <table className="min-w-[850px] w-full text-sm border border-gray-300 rounded-lg shadow-sm">
+                    <thead className="bg-gray-100 text-gray-700 sticky top-0">
+                      <tr>
+                        <th className="p-2 text-left">Cliente</th>
+                        <th className="p-2 text-right">Por vencer</th>
+                        <th className="p-2 text-right">1-30</th>
+                        <th className="p-2 text-right">31-60</th>
+                        <th className="p-2 text-right">61-90</th>
+                        <th className="p-2 text-right">91+</th>
+                        <th className="p-2 text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {clientes.map((c, i) => (
+                        <tr
+                          key={i}
+                          className={`border-b hover:bg-gray-50 ${
+                            c.total === 0 ? "text-gray-400" : ""
+                          }`}
+                        >
+                          <td className="p-2 whitespace-nowrap">{c.cliente_nombre}</td>
+                          <td className="p-2 text-right text-green-600">
+                            {fmt(c.aging.por_vencer)}
+                          </td>
+                          <td className="p-2 text-right text-orange-500">
+                            {fmt(c.aging["1_30"])}
+                          </td>
+                          <td className="p-2 text-right text-orange-600">
+                            {fmt(c.aging["31_60"])}
+                          </td>
+                          <td className="p-2 text-right text-red-600">
+                            {fmt(c.aging["61_90"])}
+                          </td>
+                          <td className="p-2 text-right text-red-800">
+                            {fmt(c.aging["91_mas"])}
+                          </td>
+                          <td className="p-2 text-right font-semibold">
+                            {fmt(c.total)}
+                          </td>
+                        </tr>
+                      ))}
+
+                      {/* Fila de totales generales */}
+                      <tr className="bg-gray-100 font-semibold border-t-2 border-gray-300">
+                        <td className="p-2 text-left">Totales</td>
+                        <td className="p-2 text-right text-green-600">
+                          {fmt(clientes.reduce((acc, c) => acc + c.aging.por_vencer, 0))}
+                        </td>
+                        <td className="p-2 text-right text-orange-500">
+                          {fmt(clientes.reduce((acc, c) => acc + c.aging["1_30"], 0))}
+                        </td>
+                        <td className="p-2 text-right text-orange-600">
+                          {fmt(clientes.reduce((acc, c) => acc + c.aging["31_60"], 0))}
+                        </td>
+                        <td className="p-2 text-right text-red-600">
+                          {fmt(clientes.reduce((acc, c) => acc + c.aging["61_90"], 0))}
+                        </td>
+                        <td className="p-2 text-right text-red-800">
+                          {fmt(clientes.reduce((acc, c) => acc + c.aging["91_mas"], 0))}
+                        </td>
+                        <td className="p-2 text-right font-bold">
+                          {fmt(clientes.reduce((acc, c) => acc + c.total, 0))}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+
+
+
+
+
+              {/* Panel fijo de facturas */}
               {selectedBar && (
                 <div className="mt-4 p-4 border rounded-lg shadow-md bg-white max-h-96 overflow-auto">
                   <div className="flex justify-between items-center mb-3">
                     <div>
-                      {obtenerRangoBarra(selectedBar) && (
+                        {obtenerRangoBarra(selectedBar) && (
                         <p className="text-sm font-semibold text-gray-700">
                           {obtenerRangoBarra(selectedBar)}
                         </p>
                       )}
-
                       <p className="font-semibold">
                         Vencimiento: {selectedBar.fecha}
                       </p>
@@ -496,7 +347,6 @@ export default function ReporteCxCPage() {
                         Total día: {selectedBar.total_str}
                       </p>
                     </div>
-
                     <button
                       onClick={() => setSelectedBar(null)}
                       className="px-3 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600"
@@ -512,11 +362,12 @@ export default function ReporteCxCPage() {
                         className="border p-2 rounded bg-gray-50 text-sm"
                       >
                         <p className="font-medium">{f.cliente_nombre}</p>
-                        <p className="text-xs text-gray-600">Factura: {f.idfactura}</p>
+                        <p className="text-xs text-gray-600">
+                          Factura: {f.idfactura}
+                        </p>
                         <p className="text-xs text-gray-600">
                           Valor: ${Number(f.saldo).toLocaleString("es-CO")}
                         </p>
-
                         {f.public_url && (
                           <a
                             href={f.public_url}
@@ -535,6 +386,7 @@ export default function ReporteCxCPage() {
             </CardContent>
           </Card>
 
+          {/* Clientes */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {clientes.map((cliente, idx) => (
               <ClienteCard
@@ -580,23 +432,15 @@ export default function ReporteCxCPage() {
   );
 }
 
+
+
+// ✅ Formateador general
 function fmt(n: any) {
-  return typeof n === "number"
-    ? `$ ${n.toLocaleString("es-CO", { maximumFractionDigits: 0 })}`
-    : n;
+    return typeof n === "number"
+        ? `$ ${n.toLocaleString("es-CO", { maximumFractionDigits: 0 })}`
+        : n;
 }
 
-function pct(part: number, total: number) {
-  if (!total || total <= 0) return 0;
-  return (Number(part || 0) / total) * 100;
-}
-
-function fmtPct(value: number) {
-  return `${value.toLocaleString("es-CO", {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  })}%`;
-}
 
 type ClienteCardProps = {
   cliente: Cliente;
@@ -604,9 +448,7 @@ type ClienteCardProps = {
 };
 
 function ClienteCard({ cliente, onAmpliar }: ClienteCardProps) {
-  const [ordenFacturas, setOrdenFacturas] = useState<"fecha" | "vencimiento">(
-    "fecha"
-  );
+  const [ordenFacturas, setOrdenFacturas] = useState<"fecha" | "vencimiento">("fecha");
 
   const calcularRango = (dias_vencidos: number) => {
     if (dias_vencidos <= 0) return "Por vencer";
@@ -621,14 +463,20 @@ function ClienteCard({ cliente, onAmpliar }: ClienteCardProps) {
 
     const texto = String(valor).trim();
 
+    // Soporta YYYY-MM-DD
     if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) {
       return new Date(`${texto}T00:00:00`).getTime();
     }
 
+    // Soporta DD/MM/YYYY o DD-MM-YYYY
     const match = texto.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
     if (match) {
       const [, dd, mm, yyyy] = match;
-      return new Date(Number(yyyy), Number(mm) - 1, Number(dd)).getTime();
+      return new Date(
+        Number(yyyy),
+        Number(mm) - 1,
+        Number(dd)
+      ).getTime();
     }
 
     const intento = new Date(texto).getTime();
@@ -640,11 +488,14 @@ function ClienteCard({ cliente, onAmpliar }: ClienteCardProps) {
       const diasA = Number(a.dias_vencidos ?? 0);
       const diasB = Number(b.dias_vencidos ?? 0);
 
+      // Más vencidas primero
       if (diasB !== diasA) return diasB - diasA;
 
+      // Desempate por fecha de vencimiento más próxima
       return parseFecha(a.vencimiento) - parseFecha(b.vencimiento);
     }
 
+    // Orden por fecha de emisión más reciente primero
     return parseFecha(b.fecha) - parseFecha(a.fecha);
   });
 
@@ -684,8 +535,9 @@ function ClienteCard({ cliente, onAmpliar }: ClienteCardProps) {
           >
             <XAxis dataKey="bucket" />
             <YAxis hide />
-            <Tooltip formatter={(v: number) => `$ ${v.toLocaleString("es-CO")}`} />
-
+            <Tooltip
+              formatter={(v: number) => `$ ${v.toLocaleString("es-CO")}`}
+            />
             <Bar dataKey="monto" radius={[6, 6, 0, 0]}>
               {[
                 cliente.aging.por_vencer,
@@ -696,7 +548,9 @@ function ClienteCard({ cliente, onAmpliar }: ClienteCardProps) {
               ].map((_, i) => (
                 <Cell
                   key={`cell-${i}`}
-                  fill={["#2563eb", "#f87171", "#ef4444", "#dc2626", "#b91c1c"][i]}
+                  fill={
+                    ["#2563eb", "#f87171", "#ef4444", "#dc2626", "#b91c1c"][i]
+                  }
                 />
               ))}
 
@@ -710,15 +564,10 @@ function ClienteCard({ cliente, onAmpliar }: ClienteCardProps) {
                   let displayValue = "";
                   const v = Number(value);
 
-                  if (v >= 1_000_000_000) {
-                    displayValue = (v / 1_000_000_000).toFixed(1) + "B";
-                  } else if (v >= 1_000_000) {
-                    displayValue = (v / 1_000_000).toFixed(0) + "M";
-                  } else if (v >= 1_000) {
-                    displayValue = (v / 1_000).toFixed(0) + "K";
-                  } else {
-                    displayValue = v.toString();
-                  }
+                  if (v >= 1_000_000_000) displayValue = (v / 1_000_000_000).toFixed(1) + "B";
+                  else if (v >= 1_000_000) displayValue = (v / 1_000_000).toFixed(0) + "M";
+                  else if (v >= 1_000) displayValue = (v / 1_000).toFixed(0) + "K";
+                  else displayValue = v.toString();
 
                   return (
                     <text
@@ -743,7 +592,6 @@ function ClienteCard({ cliente, onAmpliar }: ClienteCardProps) {
             <AccordionTrigger className="text-sm font-medium">
               Ver detalle de facturas
             </AccordionTrigger>
-
             <AccordionContent>
               <div className="mb-3 flex items-center justify-between gap-2">
                 <span className="text-sm font-medium text-gray-700">
@@ -789,7 +637,6 @@ function ClienteCard({ cliente, onAmpliar }: ClienteCardProps) {
                       <th className="p-2">Link</th>
                     </tr>
                   </thead>
-
                   <tbody>
                     {facturasOrdenadas.map((f: any, i: number) => {
                       const rango = calcularRango(f.dias_vencidos);

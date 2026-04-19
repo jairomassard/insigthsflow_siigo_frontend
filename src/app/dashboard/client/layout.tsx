@@ -16,7 +16,7 @@ import {
   Briefcase,
   FileBarChart2,
   BarChartBig,
-  LogOut,
+  LayoutDashboard,
 } from "lucide-react";
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
@@ -51,15 +51,26 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const navSections: { title: string; items: NavItem[] }[] = [
     {
       title: "Navegación",
-      items: tiene("ver_dashboard")
-        ? [
-            {
-              href: "/dashboard/client",
-              label: "Inicio",
-              icon: <Home className="w-4 h-4" />,
-            },
-          ]
-        : [],
+      items: [
+        ...(tiene("ver_resumen_ejecutivo")
+          ? [
+              {
+                href: "/dashboard/client/resumen-ejecutivo",
+                label: "Dashboard Ejecutivo",
+                icon: <LayoutDashboard className="w-4 h-4" />,
+              },
+            ]
+          : []),
+        ...(tiene("ver_dashboard")
+          ? [
+              {
+                href: "/dashboard/client",
+                label: "Inicio",
+                icon: <Home className="w-4 h-4" />,
+              },
+            ]
+          : []),
+      ],
     },
     {
       title: "Consulta y Configuración",

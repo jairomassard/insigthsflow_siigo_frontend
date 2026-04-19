@@ -221,7 +221,8 @@ export default function ClientHome() {
           </Section>
         )}
 
-        {(tiene("ver_reporte_consolidado") ||
+        {(tiene("ver_resumen_ejecutivo") ||
+          tiene("ver_reporte_consolidado") ||
           tiene("ver_reporte_cruceivas") ||
           tiene("ver_reporte_retenciones") ||
           tiene("ver_reporte_estado_resultados") ||
@@ -231,6 +232,14 @@ export default function ClientHome() {
           tiene("ver_reporte_balance") ||
           tiene("ver_reporte_indicadores")) && (
           <Section title="🌟 Reportes Especiales" color="bg-green-50">
+            {tiene("ver_resumen_ejecutivo") && (
+              <FeatureCard
+                icon="✨"
+                title="Dashboard Ejecutivo"
+                href="/dashboard/client/resumen-ejecutivo"
+                description="Resumen Ejecutivo Inteligente con KPIs estrella, eficiencia operativa, caja disponible, cash runway y alertas gerenciales."
+              />
+            )}
             {tiene("ver_reporte_consolidado") && (
               <FeatureCard
                 icon="📚"

@@ -270,42 +270,35 @@ export default function DashboardResumenEjecutivoPage() {
 
   async function cargarDashboard() {
     try {
-      setLoading(true);
-      setError("");
+        setLoading(true);
+        setError("");
 
-      const qs = new URLSearchParams({
+        const qs = new URLSearchParams({
         desde: fechaDesde,
         hasta: fechaHasta,
-      });
+        });
 
-      if (centroCostos) qs.set("centro_costos", centroCostos);
+        if (centroCostos) qs.set("centro_costos", centroCostos);
 
-      const res = await authFetch(`/dashboard/resumen-ejecutivo?${qs.toString()}`);
-      const json = await res.json();
+        const json = await authFetch(`/dashboard/resumen-ejecutivo?${qs.toString()}`);
 
-      if (!res.ok) {
-        throw new Error(json?.detalle || json?.error || "No fue posible cargar el dashboard");
-      }
-
-      setData(json);
+        setData(json);
     } catch (err: any) {
-      setError(err?.message || "Error cargando dashboard");
+        setError(err?.message || "Error cargando dashboard");
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
   }
 
-  async function cargarCentros() {
+    async function cargarCentros() {
     try {
-      const res = await authFetch("/siigo/centros-costo");
-      if (!res.ok) return;
-      const json = await res.json();
-      const rows = Array.isArray(json) ? json : json?.rows || json?.data || [];
-      setCentros(rows);
-    } catch {
-      setCentros([]);
+        const data = await authFetch(`/catalogos/centros-costo-consolidado`);
+        setCentros(data || []);
+    } catch (e) {
+        console.error("Error cargando centros de costo", e);
+        setCentros([]);
     }
-  }
+    }
 
   useEffect(() => {
     cargarDashboard();

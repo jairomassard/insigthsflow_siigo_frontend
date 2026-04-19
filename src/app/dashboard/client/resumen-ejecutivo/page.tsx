@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { authFetch } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -25,7 +25,6 @@ import {
   Wallet,
   Banknote,
   Activity,
-  BriefcaseBusiness,
   TriangleAlert,
   Target,
   RefreshCcw,
@@ -104,6 +103,11 @@ type DashboardResponse = {
     anterior_desde: string;
     anterior_hasta: string;
   };
+  metadata?: {
+    hay_datos_auxiliar_actual: boolean;
+    ultima_fecha_auxiliar?: string | null;
+    mensaje_contexto?: string | null;
+  };
   kpis: Kpis;
   series: {
     mensual: SerieMensual[];
@@ -119,6 +123,12 @@ type DashboardResponse = {
 type CentroCosto = {
   id: string | number;
   nombre: string;
+};
+
+type DashboardMetadata = {
+  ultima_fecha_auxiliar?: string | null;
+  desde_sugerido?: string | null;
+  hasta_sugerido?: string | null;
 };
 
 /* =========================================================
@@ -208,9 +218,7 @@ function KpiCard({
             </div>
           </div>
 
-          <div className={cx("rounded-2xl p-3 shadow-sm", chip)}>
-            {icon}
-          </div>
+          <div className={cx("rounded-2xl p-3 shadow-sm", chip)}>{icon}</div>
         </div>
 
         <div className="text-2xl font-black tracking-tight text-slate-900 md:text-3xl">
@@ -267,44 +275,72 @@ export default function DashboardResumenEjecutivoPage() {
   const [fechaHasta, setFechaHasta] = useState(defaults.hasta);
   const [centroCostos, setCentroCostos] = useState<string>("");
   const [centros, setCentros] = useState<CentroCosto[]>([]);
+  const [initReady, setInitReady] = useState(false);
 
-  async function cargarDashboard() {
+  async function cargarFechasSugeridas() {
     try {
-        setLoading(true);
-        setError("");
+      const meta: DashboardMetadata = await authFetch("/dashboard/resumen-ejecutivo/metadata");
 
-        const qs = new URLSearchParams({
-        desde: fechaDesde,
-        hasta: fechaHasta,
-        });
-
-        if (centroCostos) qs.set("centro_costos", centroCostos);
-
-        const json = await authFetch(`/dashboard/resumen-ejecutivo?${qs.toString()}`);
-
-        setData(json);
-    } catch (err: any) {
-        setError(err?.message || "Error cargando dashboard");
+      if (meta?.desde_sugerido && meta?.hasta_sugerido) {
+        setFechaDesde(meta.desde_sugerido);
+        setFechaHasta(meta.hasta_sugerido);
+      }
+    } catch (e) {
+      console.error("Error cargando metadata del dashboard", e);
     } finally {
-        setLoading(false);
+      setInitReady(true);
     }
   }
 
-    async function cargarCentros() {
+  async function cargarDashboard() {
     try {
-        const data = await authFetch(`/catalogos/centros-costo-consolidado`);
-        setCentros(data || []);
+      setLoading(true);
+      setError("");
+
+      const qs = new URLSearchParams({
+        desde: fechaDesde,
+        hasta: fechaHasta,
+      });
+
+      if (centroCostos) qs.set("centro_costos", centroCostos);
+
+      const json: DashboardResponse = await authFetch(
+        `/dashboard/resumen-ejecutivo?${qs.toString()}`
+      );
+
+      setData(json);
+    } catch (err: any) {
+      setError(err?.message || "Error cargando dashboard");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function cargarCentros() {
+    try {
+      const data = await authFetch(`/catalogos/centros-costo-consolidado`);
+      setCentros(data || []);
     } catch (e) {
-        console.error("Error cargando centros de costo", e);
-        setCentros([]);
+      console.error("Error cargando centros de costo", e);
+      setCentros([]);
     }
-    }
+  }
 
   useEffect(() => {
-    cargarDashboard();
-    cargarCentros();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    async function init() {
+      await cargarFechasSugeridas();
+      await cargarCentros();
+    }
+    init();
   }, []);
+
+  useEffect(() => {
+    if (!initReady || !fechaDesde || !fechaHasta) return;
+    cargarDashboard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initReady, fechaDesde, fechaHasta]);
+
+  const hayAuxiliar = data?.metadata?.hay_datos_auxiliar_actual ?? true;
 
   const kpiCards = useMemo(() => {
     if (!data?.kpis) return [];
@@ -318,27 +354,39 @@ export default function DashboardResumenEjecutivoPage() {
     return [
       {
         label: "Eficiencia Operativa",
-        value: formatPercent(ef.actual),
-        description: `De cada $100 vendidos, quedan $${ef.actual.toFixed(1)} como EBITDA`,
-        delta: `${diffLabel(ef.diff, " pts")} vs período anterior`,
+        value: hayAuxiliar ? formatPercent(ef.actual) : "Sin datos",
+        description: hayAuxiliar
+          ? `De cada $100 vendidos, quedan $${ef.actual.toFixed(1)} como EBITDA`
+          : "No hay auxiliar contable cargado para el período seleccionado.",
+        delta: hayAuxiliar
+          ? `${diffLabel(ef.diff, " pts")} vs período anterior`
+          : `Último auxiliar: ${data?.metadata?.ultima_fecha_auxiliar || "N/D"}`,
         accent: "from-indigo-500/15 to-violet-400/5",
         chip: "bg-indigo-50 text-indigo-700 border border-indigo-100",
         icon: <Target size={18} />,
       },
       {
         label: "EBITDA",
-        value: formatCurrency(ebitda.actual),
-        description: "Resultado operativo antes de impuestos, intereses, depreciaciones y amortizaciones.",
-        delta: `${diffLabel(ebitda.pct, "%")} vs período anterior`,
+        value: hayAuxiliar ? formatCurrency(ebitda.actual) : "Sin datos",
+        description: hayAuxiliar
+          ? "Resultado operativo antes de impuestos, intereses, depreciaciones y amortizaciones."
+          : "El auxiliar contable no tiene datos para este período.",
+        delta: hayAuxiliar
+          ? `${diffLabel(ebitda.pct, "%")} vs período anterior`
+          : "Pendiente de carga contable",
         accent: "from-emerald-500/15 to-green-400/5",
         chip: "bg-emerald-50 text-emerald-700 border border-emerald-100",
         icon: <TrendingUp size={18} />,
       },
       {
         label: "Ventas Netas",
-        value: formatCurrency(ventas.actual),
-        description: "Ingresos operacionales del período analizado.",
-        delta: `${diffLabel(ventas.pct, "%")} vs período anterior`,
+        value: hayAuxiliar ? formatCurrency(ventas.actual) : "Sin datos",
+        description: hayAuxiliar
+          ? "Ingresos operacionales del período analizado."
+          : "No hay ventas contables disponibles en el auxiliar del período.",
+        delta: hayAuxiliar
+          ? `${diffLabel(ventas.pct, "%")} vs período anterior`
+          : "Pendiente de carga contable",
         accent: "from-sky-500/15 to-blue-400/5",
         chip: "bg-sky-50 text-sky-700 border border-sky-100",
         icon: <Banknote size={18} />,
@@ -362,7 +410,7 @@ export default function DashboardResumenEjecutivoPage() {
         icon: <Activity size={18} />,
       },
     ];
-  }, [data]);
+  }, [data, hayAuxiliar]);
 
   const eficienciaComparativos = useMemo(() => {
     if (!data?.kpis?.eficiencia_operativa) return [];
@@ -371,7 +419,7 @@ export default function DashboardResumenEjecutivoPage() {
     return [
       {
         label: "Período actual",
-        value: `${ef.actual.toFixed(1)}%`,
+        value: hayAuxiliar ? `${ef.actual.toFixed(1)}%` : "Sin datos",
         accent: "bg-indigo-50 text-indigo-700 border-indigo-100",
       },
       {
@@ -390,7 +438,7 @@ export default function DashboardResumenEjecutivoPage() {
         accent: "bg-amber-50 text-amber-700 border-amber-100",
       },
     ];
-  }, [data]);
+  }, [data, hayAuxiliar]);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -486,7 +534,7 @@ export default function DashboardResumenEjecutivoPage() {
 
               <div className="flex gap-2">
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     const d = getDefaultDates();
                     setFechaDesde(d.desde);
                     setFechaHasta(d.hasta);
@@ -513,6 +561,22 @@ export default function DashboardResumenEjecutivoPage() {
           <Card className="rounded-[2rem] border border-rose-200 bg-rose-50 shadow-sm">
             <CardContent className="p-4 text-sm font-medium text-rose-700">
               {error}
+            </CardContent>
+          </Card>
+        )}
+
+        {data?.metadata && !data.metadata.hay_datos_auxiliar_actual && (
+          <Card className="rounded-[2rem] border border-amber-200 bg-amber-50 shadow-sm">
+            <CardContent className="p-4">
+              <div className="text-sm font-semibold text-amber-800">
+                {data.metadata.mensaje_contexto ||
+                  "No hay información de auxiliar contable para el período seleccionado."}
+              </div>
+              {data.metadata.ultima_fecha_auxiliar && (
+                <div className="mt-1 text-xs text-amber-700">
+                  Última fecha disponible en auxiliar: {data.metadata.ultima_fecha_auxiliar}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -545,7 +609,9 @@ export default function DashboardResumenEjecutivoPage() {
                     Lectura ejecutiva
                   </div>
                   <div className="mt-1 text-2xl font-black text-white">
-                    {formatPercent(data.kpis.eficiencia_operativa.actual)}
+                    {hayAuxiliar
+                      ? formatPercent(data.kpis.eficiencia_operativa.actual)
+                      : "Sin datos"}
                   </div>
                 </div>
               </div>
@@ -556,10 +622,7 @@ export default function DashboardResumenEjecutivoPage() {
                 {eficienciaComparativos.map((item, i) => (
                   <div
                     key={i}
-                    className={cx(
-                      "rounded-3xl border p-4",
-                      item.accent
-                    )}
+                    className={cx("rounded-3xl border p-4", item.accent)}
                   >
                     <div className="text-[11px] font-black uppercase tracking-[0.16em]">
                       {item.label}
@@ -572,12 +635,18 @@ export default function DashboardResumenEjecutivoPage() {
               <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-5">
                 <p className="text-sm leading-7 text-slate-700">
                   <span className="font-black text-slate-900">Interpretación:</span>{" "}
-                  de cada <span className="font-black">$100 vendidos</span>, la empresa
-                  está convirtiendo aproximadamente{" "}
-                  <span className="font-black">
-                    ${data.kpis.eficiencia_operativa.actual.toFixed(1)}
-                  </span>{" "}
-                  en EBITDA.
+                  {hayAuxiliar ? (
+                    <>
+                      de cada <span className="font-black">$100 vendidos</span>, la empresa
+                      está convirtiendo aproximadamente{" "}
+                      <span className="font-black">
+                        ${data.kpis.eficiencia_operativa.actual.toFixed(1)}
+                      </span>{" "}
+                      en EBITDA.
+                    </>
+                  ) : (
+                    <>No hay información del auxiliar para calcular la eficiencia operativa del período seleccionado.</>
+                  )}
                 </p>
               </div>
             </CardContent>
@@ -680,35 +749,41 @@ export default function DashboardResumenEjecutivoPage() {
                 subtitle="Dónde se está yendo más dinero en el período."
               />
 
-              <div className="h-[320px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={(data?.top_gastos || []).map((g) => ({
-                      nombre: g.nombre.length > 18 ? `${g.nombre.slice(0, 18)}…` : g.nombre,
-                      valor: g.valor,
-                    }))}
-                    layout="vertical"
-                    margin={{ top: 10, right: 20, left: 20, bottom: 10 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis type="number" tickFormatter={abreviar} tick={{ fontSize: 12, fill: "#475569" }} />
-                    <YAxis
-                      type="category"
-                      dataKey="nombre"
-                      width={110}
-                      tick={{ fontSize: 12, fill: "#475569" }}
-                    />
-                    <Tooltip formatter={(value: any) => formatCurrency(Number(value))} />
-                    <Bar dataKey="valor" radius={[0, 14, 14, 0]} fill="#f59e0b">
-                      <LabelList
-                        dataKey="valor"
-                        position="right"
-                        formatter={(value) => abreviar(Number(value ?? 0))}
+              {!data?.metadata?.hay_datos_auxiliar_actual || !(data?.top_gastos || []).length ? (
+                <div className="flex h-[320px] items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-500">
+                  No hay gastos operacionales del auxiliar para el período seleccionado.
+                </div>
+              ) : (
+                <div className="h-[320px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={(data?.top_gastos || []).map((g) => ({
+                        nombre: g.nombre.length > 18 ? `${g.nombre.slice(0, 18)}…` : g.nombre,
+                        valor: g.valor,
+                      }))}
+                      layout="vertical"
+                      margin={{ top: 10, right: 20, left: 20, bottom: 10 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                      <XAxis type="number" tickFormatter={abreviar} tick={{ fontSize: 12, fill: "#475569" }} />
+                      <YAxis
+                        type="category"
+                        dataKey="nombre"
+                        width={110}
+                        tick={{ fontSize: 12, fill: "#475569" }}
                       />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+                      <Tooltip formatter={(value: any) => formatCurrency(Number(value))} />
+                      <Bar dataKey="valor" radius={[0, 14, 14, 0]} fill="#f59e0b">
+                        <LabelList
+                          dataKey="valor"
+                          position="right"
+                          formatter={(value: ReactNode) => abreviar(Number(value ?? 0))}
+                        />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </CardContent>
           </Card>
 

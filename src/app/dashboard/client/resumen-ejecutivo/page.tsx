@@ -216,33 +216,89 @@ function truncate(text: string, size = 22) {
   return text.length > size ? `${text.slice(0, size)}…` : text;
 }
 
+function getSerieLabel(name?: string, dataKey?: string) {
+  const raw = String(name || dataKey || "").toLowerCase();
+
+  if (
+    raw === "ventas" ||
+    raw === "venta" ||
+    raw === "ingresos_operacionales"
+  ) {
+    return "Ventas";
+  }
+
+  if (raw === "ebitda") {
+    return "EBITDA";
+  }
+
+  if (
+    raw === "eficiencia_operativa" ||
+    raw === "eficiencia operativa" ||
+    raw === "margen_ebitda"
+  ) {
+    return "Eficiencia operativa";
+  }
+
+  return String(name || dataKey || "");
+}
+
 /* =========================================================
  * COMPONENTES PEQUEÑOS
  * ========================================================= */
-function InfoTip({ text }: { text: string }) {
-  return (
-    <div className="group relative inline-flex items-center">
-      <HelpCircle size={14} className="cursor-help text-slate-400 transition group-hover:text-slate-600" />
-      <div className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 hidden w-72 -translate-x-1/2 rounded-2xl border border-slate-200 bg-slate-900 px-3 py-2 text-xs font-medium leading-5 text-white shadow-2xl group-hover:block">
-        {text}
-      </div>
+const InfoHint = ({
+  text,
+  dark = false,
+  align = "right",
+}: {
+  text: string;
+  dark?: boolean;
+  align?: "left" | "right";
+}) => (
+  <div className="group/info relative inline-flex">
+    <button
+      type="button"
+      className={cx(
+        "inline-flex h-4 w-4 items-center justify-center rounded-full transition-all",
+        dark
+          ? "bg-white/20 text-white hover:bg-white/30"
+          : "bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-500"
+      )}
+      aria-label="Ver explicación"
+    >
+      <HelpCircle size={11} />
+    </button>
+
+    <div
+      className={cx(
+        "pointer-events-none absolute top-6 z-50 w-64 rounded-2xl border px-3 py-3 text-[11px] leading-5 shadow-2xl opacity-0 scale-95 transition-all duration-200 group-hover/info:opacity-100 group-hover/info:scale-100 group-focus-within/info:opacity-100 group-focus-within/info:scale-100",
+        align === "left" ? "left-0" : "right-0",
+        dark
+          ? "border-slate-700 bg-slate-900 text-slate-100"
+          : "border-slate-200 bg-white text-slate-700"
+      )}
+    >
+      {text}
     </div>
-  );
-}
+  </div>
+);
 
 function TitleWithInfo({
   children,
   info,
   className = "",
+  dark = false,
+  align = "right",
 }: {
   children: ReactNode;
   info?: string;
   className?: string;
+  dark?: boolean;
+  align?: "left" | "right";
 }) {
   return (
     <div className={cx("flex items-center gap-2", className)}>
       <span>{children}</span>
-      {info ? <InfoTip text={info} /> : null}
+      {info ? <InfoHint text={info} dark={dark} align={align} /> : null}
     </div>
   );
 }
@@ -283,6 +339,7 @@ function KpiCard({
             <TitleWithInfo
               info={info}
               className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500"
+              align="right"
             >
               {label}
             </TitleWithInfo>
@@ -331,6 +388,7 @@ function SectionTitle({
       <TitleWithInfo
         info={info}
         className="text-lg font-black tracking-tight text-slate-900 md:text-xl"
+        align="right"
       >
         {title}
       </TitleWithInfo>
@@ -338,6 +396,69 @@ function SectionTitle({
     </div>
   );
 }
+
+const CustomQueCambioTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-2xl">
+      <p className="mb-2 border-b border-slate-100 pb-2 text-sm font-black text-slate-800">
+        {label}
+      </p>
+
+      <div className="space-y-1.5 text-sm">
+        {payload.map((entry: any, idx: number) => {
+          const serie = getSerieLabel(entry.name, entry.dataKey);
+          const isPct =
+            entry.dataKey === "eficiencia_operativa" ||
+            String(entry.name || "").toLowerCase().includes("eficiencia");
+
+          return (
+            <div key={idx} className="flex items-center justify-between gap-4">
+              <span style={{ color: entry.color }} className="font-bold">
+                {serie}
+              </span>
+              <span className="font-bold text-slate-800">
+                {isPct
+                  ? `${Number(entry.value || 0).toFixed(1)}%`
+                  : formatCurrency(Number(entry.value || 0))}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const CustomVentasEbitdaTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-2xl">
+      <p className="mb-2 border-b border-slate-100 pb-2 text-sm font-black text-slate-800">
+        {label}
+      </p>
+
+      <div className="space-y-1.5 text-sm">
+        {payload.map((entry: any, idx: number) => {
+          const serie = getSerieLabel(entry.name, entry.dataKey);
+
+          return (
+            <div key={idx} className="flex items-center justify-between gap-4">
+              <span style={{ color: entry.color }} className="font-bold">
+                {serie}
+              </span>
+              <span className="font-bold text-slate-800">
+                {formatCurrency(Number(entry.value || 0))}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 
 /* =========================================================
  * PÁGINA
@@ -425,8 +546,10 @@ export default function DashboardResumenEjecutivoPage() {
   const hayAuxiliar = data?.metadata?.hay_datos_auxiliar_actual ?? true;
   const caja = data?.kpis?.caja_disponible;
   const runway = data?.kpis?.cash_runway;
-  const cajaDisponibleConfigurada = isConfiguredNumber(caja?.actual) && !caja?.requiere_parametrizacion;
-  const runwayConfigurado = isConfiguredNumber(runway?.actual) && !runway?.requiere_parametrizacion;
+  const cajaDisponibleConfigurada =
+    isConfiguredNumber(caja?.actual) && !caja?.requiere_parametrizacion;
+  const runwayConfigurado =
+    isConfiguredNumber(runway?.actual) && !runway?.requiere_parametrizacion;
 
   const kpiCards = useMemo(() => {
     if (!data?.kpis) return [];
@@ -651,7 +774,11 @@ export default function DashboardResumenEjecutivoPage() {
                   onClick={cargarDashboard}
                   className="inline-flex h-10 items-center gap-2 rounded-2xl bg-slate-900 px-5 text-sm font-black text-white shadow-lg transition hover:bg-black active:scale-[0.98]"
                 >
-                  {loading ? <RefreshCcw size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                  {loading ? (
+                    <RefreshCcw size={16} className="animate-spin" />
+                  ) : (
+                    <Sparkles size={16} />
+                  )}
                   {loading ? "Actualizando..." : "Actualizar dashboard"}
                 </button>
               </div>
@@ -665,9 +792,7 @@ export default function DashboardResumenEjecutivoPage() {
                     {data.metadata.fecha_corte_confiable}
                   </div>
                 )}
-                {data?.metadata?.mensaje_contexto && (
-                  <div>{data.metadata.mensaje_contexto}</div>
-                )}
+                {data?.metadata?.mensaje_contexto && <div>{data.metadata.mensaje_contexto}</div>}
               </div>
             )}
           </CardContent>
@@ -713,6 +838,8 @@ export default function DashboardResumenEjecutivoPage() {
                   <TitleWithInfo
                     info="Este bloque resalta la eficiencia operativa porque muestra cuánto de cada peso vendido se convierte en EBITDA. Por eso se compara el valor actual, el anterior, la tendencia y la meta."
                     className="text-lg font-black uppercase tracking-[0.16em]"
+                    dark
+                    align="left"
                   >
                     Indicador estrella
                   </TitleWithInfo>
@@ -741,6 +868,7 @@ export default function DashboardResumenEjecutivoPage() {
                     <TitleWithInfo
                       info={item.info}
                       className="text-[11px] font-black uppercase tracking-[0.16em]"
+                      align="right"
                     >
                       {item.label}
                     </TitleWithInfo>
@@ -762,7 +890,10 @@ export default function DashboardResumenEjecutivoPage() {
                       en EBITDA.
                     </>
                   ) : (
-                    <>No hay información del auxiliar para calcular la eficiencia operativa del período seleccionado.</>
+                    <>
+                      No hay información del auxiliar para calcular la eficiencia operativa del
+                      período seleccionado.
+                    </>
                   )}
                 </p>
               </div>
@@ -785,24 +916,18 @@ export default function DashboardResumenEjecutivoPage() {
                   <LineChart data={data?.series?.mensual || []}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#475569" }} />
-                    <YAxis yAxisId="money" tickFormatter={abreviar} tick={{ fontSize: 11, fill: "#475569" }} />
+                    <YAxis
+                      yAxisId="money"
+                      tickFormatter={abreviar}
+                      tick={{ fontSize: 11, fill: "#475569" }}
+                    />
                     <YAxis
                       yAxisId="pct"
                       orientation="right"
                       tickFormatter={(v) => `${v}%`}
                       tick={{ fontSize: 11, fill: "#475569" }}
                     />
-                    <Tooltip
-                      formatter={(value: any, name: string) => {
-                        if (name === "eficiencia_operativa") {
-                          return [`${Number(value).toFixed(1)}%`, "Eficiencia operativa"];
-                        }
-                        return [
-                          formatCurrency(Number(value)),
-                          name === "ventas" ? "Ventas" : "EBITDA",
-                        ];
-                      }}
-                    />
+                    <Tooltip content={<CustomQueCambioTooltip />} />
                     <Legend />
                     <Line
                       yAxisId="money"
@@ -826,7 +951,7 @@ export default function DashboardResumenEjecutivoPage() {
                       yAxisId="pct"
                       type="monotone"
                       dataKey="eficiencia_operativa"
-                      name="eficiencia_operativa"
+                      name="Eficiencia operativa"
                       stroke="#4f46e5"
                       strokeWidth={2.5}
                       dot={{ r: 3 }}
@@ -886,7 +1011,11 @@ export default function DashboardResumenEjecutivoPage() {
                       margin={{ top: 10, right: 20, left: 10, bottom: 10 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis type="number" tickFormatter={abreviar} tick={{ fontSize: 11, fill: "#475569" }} />
+                      <XAxis
+                        type="number"
+                        tickFormatter={abreviar}
+                        tick={{ fontSize: 11, fill: "#475569" }}
+                      />
                       <YAxis
                         type="category"
                         dataKey="nombre"
@@ -1077,12 +1206,7 @@ export default function DashboardResumenEjecutivoPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                   <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#475569" }} />
                   <YAxis tickFormatter={abreviar} tick={{ fontSize: 11, fill: "#475569" }} />
-                  <Tooltip
-                    formatter={(value: any, name: string) => [
-                      formatCurrency(Number(value)),
-                      name === "ventas" ? "Ventas" : "EBITDA",
-                    ]}
-                  />
+                  <Tooltip content={<CustomVentasEbitdaTooltip />} />
                   <Legend />
                   <Area
                     type="monotone"

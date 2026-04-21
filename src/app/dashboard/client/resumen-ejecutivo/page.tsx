@@ -682,7 +682,7 @@ export default function DashboardResumenEjecutivoPage() {
                 Resumen Ejecutivo Inteligente
               </div>
               <h1 className="text-xl font-black tracking-tight text-slate-900 md:text-2xl">
-                Dashboard financiero premium
+                Dashboard Ejecutivo
               </h1>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
                 Foto rápida del desempeño financiero de tu empresa. Aquí ves los KPIs

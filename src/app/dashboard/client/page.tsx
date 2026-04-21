@@ -101,7 +101,7 @@ export default function ClientHome() {
         tiene("ver_configuraciones_varias")) && (
         <section className="rounded-xl p-4 bg-gray-100 space-y-3">
           <h2 className="text-base font-semibold text-gray-900">🔧 Consulta y Configuración</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
             {tiene("ver_perfiles") && (
               <FeatureCard
                 icon="🧑‍💼"

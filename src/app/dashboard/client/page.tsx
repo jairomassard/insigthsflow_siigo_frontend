@@ -95,7 +95,10 @@ export default function ClientHome() {
       </div>
 
       {/* 🔧 Consulta y Configuración */}
-      {(tiene("ver_perfiles") || tiene("ver_usuarios") || tiene("ver_integracion_siigo")) && (
+      {(tiene("ver_perfiles") ||
+        tiene("ver_usuarios") ||
+        tiene("ver_integracion_siigo") ||
+        tiene("ver_configuraciones_varias")) && (
         <section className="rounded-xl p-4 bg-gray-100 space-y-3">
           <h2 className="text-base font-semibold text-gray-900">🔧 Consulta y Configuración</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -121,6 +124,14 @@ export default function ClientHome() {
                 title="Integración Siigo"
                 href="/dashboard/client/integrations/siigo"
                 description="Configura credenciales API Siigo y sincroniza información."
+              />
+            )}
+            {tiene("ver_configuraciones_varias") && (
+              <FeatureCard
+                icon="⚙️"
+                title="Configuraciones Varias"
+                href="/dashboard/client/configuraciones_varias"
+                description="Administra parámetros generales y configuraciones complementarias del dashboard."
               />
             )}
           </div>

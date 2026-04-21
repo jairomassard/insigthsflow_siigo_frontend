@@ -17,6 +17,7 @@ import {
   FileBarChart2,
   BarChartBig,
   LayoutDashboard,
+  Settings,
 } from "lucide-react";
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
@@ -99,6 +100,15 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 href: "/dashboard/client/integrations/siigo",
                 label: "Integración Siigo",
                 icon: <Plug className="w-4 h-4" />,
+              },
+            ]
+          : []),
+        ...(tiene("ver_configuraciones_varias")
+          ? [
+              {
+                href: "/dashboard/client/configuraciones_varias",
+                label: "Configuraciones Varias",
+                icon: <Settings className="w-4 h-4" />,
               },
             ]
           : []),

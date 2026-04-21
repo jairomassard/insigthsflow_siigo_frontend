@@ -254,7 +254,7 @@ const InfoHint = ({
   dark?: boolean;
   align?: "left" | "right";
 }) => (
-  <div className="group/info relative inline-flex">
+  <div className="group/info relative inline-flex shrink-0">
     <button
       type="button"
       className={cx(
@@ -270,14 +270,16 @@ const InfoHint = ({
 
     <div
       className={cx(
-        "pointer-events-none absolute top-6 z-50 w-64 rounded-2xl border px-3 py-3 text-[11px] leading-5 shadow-2xl opacity-0 scale-95 transition-all duration-200 group-hover/info:opacity-100 group-hover/info:scale-100 group-focus-within/info:opacity-100 group-focus-within/info:scale-100",
+        "pointer-events-none absolute top-6 z-50 w-[280px] max-w-[280px] rounded-2xl border px-3 py-3 text-[12px] font-medium normal-case tracking-normal leading-5 whitespace-normal break-words shadow-xl opacity-0 scale-95 transition-all duration-200 group-hover/info:opacity-100 group-hover/info:scale-100 group-focus-within/info:opacity-100 group-focus-within/info:scale-100",
         align === "left" ? "left-0" : "right-0",
         dark
           ? "border-slate-700 bg-slate-900 text-slate-100"
           : "border-slate-200 bg-white text-slate-700"
       )}
     >
-      {text}
+      <div className="normal-case tracking-normal leading-5 whitespace-normal break-words">
+        {text}
+      </div>
     </div>
   </div>
 );
@@ -337,9 +339,9 @@ function KpiCard({
         <div className="mb-3 flex items-start justify-between gap-3">
           <div className="min-w-0">
             <TitleWithInfo
-              info={info}
-              className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500"
-              align="right"
+                info={info}
+                className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500"
+                align="left"
             >
               {label}
             </TitleWithInfo>
@@ -388,7 +390,7 @@ function SectionTitle({
       <TitleWithInfo
         info={info}
         className="text-lg font-black tracking-tight text-slate-900 md:text-xl"
-        align="right"
+        align="left"
       >
         {title}
       </TitleWithInfo>
@@ -866,11 +868,11 @@ export default function DashboardResumenEjecutivoPage() {
                 {eficienciaComparativos.map((item, i) => (
                   <div key={i} className={cx("rounded-3xl border p-4", item.accent)}>
                     <TitleWithInfo
-                      info={item.info}
-                      className="text-[11px] font-black uppercase tracking-[0.16em]"
-                      align="right"
+                        info={item.info}
+                        className="text-[11px] font-black uppercase tracking-[0.16em]"
+                        align="left"
                     >
-                      {item.label}
+                    {item.label}
                     </TitleWithInfo>
                     <div className="mt-2 text-2xl font-black">{item.value}</div>
                   </div>

@@ -5,8 +5,6 @@ import { authFetch } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import * as XLSX from "xlsx";
-import { saveAs } from "file-saver";
 import {
   Landmark,
   Wallet,
@@ -28,7 +26,6 @@ import {
   TrendingDown,
   BarChart3,
   HelpCircle,
-  Download,
 } from "lucide-react";
 
 type BalanceItem = {
@@ -167,19 +164,6 @@ const BALANCE_INFO: Record<string, string> = {
   patrimonio_total_mix:
     "Es la suma del patrimonio explícito reportado y el patrimonio calculado por el sistema cuando aplica.",
 };
-
-function autoFitColumns(ws: XLSX.WorkSheet, rows: any[]) {
-  const widths: number[] = [];
-
-  rows.forEach((row) => {
-    Object.values(row || {}).forEach((value, idx) => {
-      const cellValue = value === null || value === undefined ? "" : String(value);
-      widths[idx] = Math.max(widths[idx] || 10, cellValue.length + 2);
-    });
-  });
-
-  ws["!cols"] = widths.map((w) => ({ wch: Math.min(w, 40) }));
-}
 
 function ValueCell({
   value,
@@ -847,152 +831,6 @@ export default function BalanceGeneralPage() {
   const patrimonioTotal =
     data?.meta?.patrimonio?.patrimonio_total ?? cards?.patrimonio_total ?? 0;
 
-  const exportarExcel = () => {
-    if (!data || !cards) {
-      alert("No hay información para exportar.");
-      return;
-    }
-
-    const wb = XLSX.utils.book_new();
-
-    const resumenRows = [
-      {
-        Campo: "Fecha de corte",
-        Valor: data.fechas?.fecha_corte || fechaCorte,
-      },
-      {
-        Campo: "Comparar con",
-        Valor: data.fechas?.comparar_con || (modoComparativo ? compararCon : "No aplica"),
-      },
-      {
-        Campo: "Modo comparativo",
-        Valor: modoComparativo ? "Sí" : "No",
-      },
-      {
-        Campo: "Snapshot comparativo existe",
-        Valor: snapshotComparativoExiste ? "Sí" : "No",
-      },
-      {
-        Campo: "Patrimonio calculado",
-        Valor: patrimonioCalculado ? "Sí" : "No",
-      },
-      { Campo: "Activo corriente", Valor: cards.activo_corriente },
-      { Campo: "Activo no corriente base", Valor: activoNoCorrienteBruto },
-      { Campo: "Depreciaciones / ajustes acumulados", Valor: activoNoCorrienteContra },
-      { Campo: "Activo no corriente neto", Valor: activoNoCorrienteNeto },
-      { Campo: "Activos totales", Valor: cards.activos_totales },
-      { Campo: "Pasivo corriente", Valor: cards.pasivo_corriente },
-      { Campo: "Pasivo no corriente", Valor: cards.pasivo_no_corriente },
-      { Campo: "Pasivos totales", Valor: cards.pasivos_totales },
-      { Campo: "Patrimonio reportado", Valor: patrimonioExplicitoTotal },
-      { Campo: "Patrimonio calculado", Valor: patrimonioCalculadoTotal },
-      { Campo: "Patrimonio total", Valor: patrimonioTotal },
-      { Campo: "Pasivo + patrimonio", Valor: cards.pasivo_mas_patrimonio },
-      { Campo: "Capital de trabajo", Valor: cards.capital_trabajo },
-      { Campo: "Razón corriente", Valor: cards.razon_corriente },
-      { Campo: "Nivel de endeudamiento %", Valor: cards.nivel_endeudamiento_pct },
-      { Campo: "Autonomía financiera %", Valor: cards.autonomia_financiera_pct },
-      { Campo: "Cuadratura", Valor: cards.cuadratura },
-    ];
-
-    const wsResumen = XLSX.utils.json_to_sheet(resumenRows);
-    autoFitColumns(wsResumen, resumenRows);
-    XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
-
-    const buildSectionRows = (sectionTitle: string, items: BalanceItem[]) => {
-      const rows = items.map((item) => ({
-        Seccion: sectionTitle,
-        Cuenta: item.cuenta,
-        Cuenta_padre: item.cuenta_padre,
-        Nombre: item.nombre,
-        Seccion_balance: item.seccion,
-        Grupo_balance: item.grupo_balance,
-        Actual: item.saldo_actual || 0,
-        ...(modoComparativo
-          ? {
-              Anterior: item.saldo_anterior || 0,
-              Variacion_abs: item.variacion_abs || 0,
-              Variacion_pct: item.variacion_pct || 0,
-            }
-          : {}),
-      }));
-
-      const totalActual = items.reduce((acc, it) => acc + (it.saldo_actual || 0), 0);
-      const totalAnterior = items.reduce((acc, it) => acc + (it.saldo_anterior || 0), 0);
-      const variacionAbs = totalActual - totalAnterior;
-      const variacionPct = totalAnterior !== 0 ? (variacionAbs / totalAnterior) * 100 : 0;
-
-      rows.push({
-        Seccion: sectionTitle,
-        Cuenta: "TOTAL",
-        Cuenta_padre: "",
-        Nombre: `Total ${sectionTitle}`,
-        Seccion_balance: "",
-        Grupo_balance: "",
-        Actual: totalActual,
-        ...(modoComparativo
-          ? {
-              Anterior: totalAnterior,
-              Variacion_abs: variacionAbs,
-              Variacion_pct: variacionPct,
-            }
-          : {}),
-      });
-
-      return rows;
-    };
-
-    const detalleRows = [
-      ...buildSectionRows("Activo Corriente", data.balance.activo_corriente || []),
-      ...buildSectionRows(
-        "Activo No Corriente Base",
-        data.balance.activo_no_corriente_bruto || []
-      ),
-      ...buildSectionRows(
-        "Depreciaciones y Ajustes Acumulados",
-        data.balance.activo_no_corriente_contra || []
-      ),
-      ...buildSectionRows("Pasivo Corriente", data.balance.pasivo_corriente || []),
-      ...buildSectionRows("Pasivo No Corriente", data.balance.pasivo_no_corriente || []),
-      ...buildSectionRows("Patrimonio Reportado", data.balance.patrimonio_explicito || []),
-      ...buildSectionRows("Patrimonio Calculado", data.balance.patrimonio_calculado || []),
-    ];
-
-    const wsDetalle = XLSX.utils.json_to_sheet(detalleRows);
-    autoFitColumns(wsDetalle, detalleRows);
-    XLSX.utils.book_append_sheet(wb, wsDetalle, "Detalle Balance");
-
-    const narrativaRows =
-      data.resumen?.narrativa?.map((txt, idx) => ({
-        Tipo: "Narrativa",
-        Nro: idx + 1,
-        Texto: txt,
-      })) || [];
-
-    const alertasRows =
-      data.resumen?.alertas?.map((txt, idx) => ({
-        Tipo: "Alerta",
-        Nro: idx + 1,
-        Texto: txt,
-      })) || [];
-
-    const extrasRows = [...narrativaRows, ...alertasRows];
-
-    if (extrasRows.length > 0) {
-      const wsExtras = XLSX.utils.json_to_sheet(extrasRows);
-      autoFitColumns(wsExtras, extrasRows);
-      XLSX.utils.book_append_sheet(wb, wsExtras, "Narrativa y Alertas");
-    }
-
-    const fileName = `balance_general_${fechaCorte}${modoComparativo && compararCon ? `_vs_${compararCon}` : ""}.xlsx`;
-    const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    const blob = new Blob([excelBuffer], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    });
-
-    saveAs(blob, fileName);
-  };
-
   return (
     <div className="space-y-4 p-5 bg-slate-50 min-h-screen">
       {/* HEADER */}
@@ -1031,16 +869,6 @@ export default function BalanceGeneralPage() {
               )}
               {uploading ? "Sincronizando..." : "Sincronizar Auxiliar"}
             </button>
-
-            <Button
-              onClick={exportarExcel}
-              disabled={!data || loading}
-              variant="outline"
-              className="rounded-2xl px-5 py-3 text-xs font-black border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-            >
-              <Download size={16} className="mr-2" />
-              Excel
-            </Button>
 
             <ModeBadge
               comparativo={modoComparativo}

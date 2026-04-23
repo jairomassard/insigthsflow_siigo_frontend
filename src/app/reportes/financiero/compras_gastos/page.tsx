@@ -20,25 +20,22 @@ import {
 import { format } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 
-
 interface EvolucionMes {
-  mes: string; // ISO date string
+  mes: string;
   total_compras: number;
-  total_pagadas: number;     // ahora es contable (SUM(total - saldo))
-  total_pendientes: number;  // contable (SUM(saldo))
+  total_pagadas: number;
+  total_pendientes: number;
 }
 
 interface KPIs {
   total_compras: number;
-  total_pagado: number;      // contable (SUM(total - saldo))
-  total_saldo: number;       // contable (SUM(saldo))
+  total_pagado: number;
+  total_saldo: number;
   total_facturas: number;
-
-  facturas_pagadas: number;     // saldo=0
-  facturas_pendientes: number;  // saldo>=total
-  facturas_parciales: number;   // 0<saldo<total
-  saldo_parcial: number;        // SUM(saldo) solo parciales
-
+  facturas_pagadas: number;
+  facturas_pendientes: number;
+  facturas_parciales: number;
+  saldo_parcial: number;
   compras_x_factura: number;
   valor_compras_x_factura: number;
   compras_x_cta_cobro: number;
@@ -46,6 +43,8 @@ interface KPIs {
 }
 
 type EstadoCalc = "pagado" | "pendiente" | "parcial";
+type EstadoModal = "total" | "pagado" | "pendiente" | "parcial";
+type TipoDocumentoModal = "todos" | "factura" | "documento_soporte";
 
 interface CentroCosto {
   id: string;
@@ -53,29 +52,25 @@ interface CentroCosto {
 }
 
 interface FacturaDetalle {
-  id?: number; // opcional si lo incluiste en el SELECT
+  id?: number;
   proveedor_nombre: string;
   factura: string;
   fecha: string;
   vencimiento: string;
-
-  // NUEVOS desde BE (endpoint detalle por mes)
-  estado_calc?: EstadoCalc;   // ✅ el que manda la lógica contable
-  estado_raw?: string;        // informativo (siigo)
-
+  estado_calc?: EstadoCalc;
+  estado_raw?: string;
   total: number;
   saldo: number;
-  pagado_calc?: number;       // (total - saldo)
-
-  anomalia_saldo_mayor_total?: boolean; // ✅ NUEVO
-
+  pagado_calc?: number;
+  anomalia_saldo_mayor_total?: boolean;
   centro_costo_nombre?: string;
+  tipo_documento?: TipoDocumentoModal | "otro";
 }
 
 interface TopProveedorValor {
   proveedor_nombre: string;
-  total_compras: number;  // <- nombre real del backend
-  num_facturas: number;   // <- opcional, también lo devuelve
+  total_compras: number;
+  num_facturas: number;
 }
 
 interface TopProveedorCount {
@@ -83,10 +78,7 @@ interface TopProveedorCount {
   num_facturas: number;
 }
 
-/* --------------------- helpers --------------------- */
-
 function formatCurrency(valor: number): string {
-  // Miles con 0 decimales
   return `$ ${Math.round(Number(valor || 0)).toLocaleString("es-CO")}`;
 }
 
@@ -107,40 +99,48 @@ function toYYYYMM(dateLike: string | Date): string {
 
 function formatMesYYYYMM(mesYYYYMM: string): string {
   const [y, m] = mesYYYYMM.split("-").map(Number);
-  const d = new Date(Date.UTC(y, m - 1, 1, 12)); // 12:00 UTC evita corrimientos
+  const d = new Date(Date.UTC(y, m - 1, 1, 12));
   return formatInTimeZone(d, "UTC", "MMM yyyy");
 }
 
+function labelEstadoModal(estado: EstadoModal): string {
+  if (estado === "total") return "Totales";
+  if (estado === "pagado") return "Pagadas";
+  if (estado === "pendiente") return "Pendientes";
+  return "Parciales";
+}
 
-
-/* --------------------- componente --------------------- */
+function labelTipoDocumento(tipo: TipoDocumentoModal): string {
+  if (tipo === "factura") return "Facturas de compra";
+  if (tipo === "documento_soporte") return "Documento Soporte";
+  return "Todos";
+}
 
 export default function ReporteFinancieroComprasGastosPage() {
   const [evolucion, setEvolucion] = useState<EvolucionMes[]>([]);
   const [kpis, setKpis] = useState<KPIs | null>(null);
 
   const [fechaDesde, setFechaDesde] = useState<string>("");
-  const [fechaHasta, setFechaHasta] = useState<string>("");   /*_si se quiere establecer fecha se deja ("2025-09-30")  */
+  const [fechaHasta, setFechaHasta] = useState<string>("");
   const [centroCostos, setCentroCostos] = useState<string>("");
 
   const [centros, setCentros] = useState<CentroCosto[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
 
-  // Top proveedores
   const [topView, setTopView] = useState<"valor" | "facturas">("valor");
   const [topValor, setTopValor] = useState<TopProveedorValor[]>([]);
   const [topFacturas, setTopFacturas] = useState<TopProveedorCount[]>([]);
 
-  // Modal
   const [modalOpen, setModalOpen] = useState<boolean>(false);
-  const [modalMes, setModalMes] = useState<string>(""); // YYYY-MM
-  const [modalEstado, setModalEstado] = useState<"total" | "pagado" | "pendiente" | "parcial">("total");
+  const [modalMes, setModalMes] = useState<string>("");
+  const [modalEstado, setModalEstado] = useState<EstadoModal>("total");
+  const [modalTipoDocumento, setModalTipoDocumento] =
+    useState<TipoDocumentoModal>("todos");
 
   const [modalTitle, setModalTitle] = useState<string>("");
   const [modalRows, setModalRows] = useState<FacturaDetalle[]>([]);
   const [modalLoading, setModalLoading] = useState<boolean>(false);
 
-  // Construir querystring común
   const queryParams = useMemo(() => {
     const q: string[] = [];
     if (fechaDesde) q.push(`desde=${encodeURIComponent(fechaDesde)}`);
@@ -149,23 +149,19 @@ export default function ReporteFinancieroComprasGastosPage() {
     return q.length ? `?${q.join("&")}` : "";
   }, [fechaDesde, fechaHasta, centroCostos]);
 
-  /* -------- centros de costo reales -------- */
   useEffect(() => {
     const fetchCentros = async () => {
       try {
-        const url = `/catalogos/centros-costo-reales${
-          queryParams ? queryParams.replace("?", "?") : ""
-        }`;
-        const data = await authFetch(url);
+        const data = await authFetch(`/catalogos/centros-costo-reales${queryParams}`);
         setCentros(data || []);
       } catch (e) {
         console.error("Error cargando centros de costo reales", e);
       }
     };
+
     fetchCentros();
   }, [queryParams]);
 
-  /* -------- datos principales + tops -------- */
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -173,9 +169,15 @@ export default function ReporteFinancieroComprasGastosPage() {
         const data = await authFetch(`/reportes/financiero/compras-gastos${queryParams}`);
         setKpis(data.kpis);
         setEvolucion(data.evolucion || []);
-        const topVal = await authFetch(`/reportes/financiero/compras-gastos/top-proveedores${queryParams}`);
+
+        const topVal = await authFetch(
+          `/reportes/financiero/compras-gastos/top-proveedores${queryParams}`
+        );
         setTopValor(topVal || []);
-        const topFac = await authFetch(`/reportes/financiero/compras-gastos/top-proveedores-facturas${queryParams}`);
+
+        const topFac = await authFetch(
+          `/reportes/financiero/compras-gastos/top-proveedores-facturas${queryParams}`
+        );
         setTopFacturas(topFac || []);
       } catch (e) {
         console.error("Error al cargar el reporte financiero", e);
@@ -183,87 +185,115 @@ export default function ReporteFinancieroComprasGastosPage() {
         setLoading(false);
       }
     };
+
     fetchData();
   }, [queryParams]);
 
-    // Evita bug de zona horaria en el eje X (mes se corre 1 día)
-    const evolucionSegura = useMemo(() => {
-      return (evolucion || []).map((item) => {
-        const d = new Date(item.mes);
-        d.setUTCHours(12);
-        return { ...item, mes: d.toISOString() };
-      });
-    }, [evolucion]);
+  const evolucionSegura = useMemo(() => {
+    return (evolucion || []).map((item) => {
+      const d = new Date(item.mes);
+      d.setUTCHours(12);
+      return { ...item, mes: d.toISOString() };
+    });
+  }, [evolucion]);
 
-      /* -------- handler del modal (click en barras) -------- */
-    async function handleBarClick(serie: "total" | "pagadas" | "pendiente", item: EvolucionMes) {
-      try {
-        setModalLoading(true);
+  async function cargarDetalleMes(
+    mesYYYYMM: string,
+    estado: EstadoModal,
+    tipoDocumento: TipoDocumentoModal
+  ) {
+    const base = `/reportes/financiero/compras-gastos/detalle?mes=${mesYYYYMM}&estado=${estado}&tipo_documento=${tipoDocumento}`;
+    const url = centroCostos
+      ? `${base}&centro_costos=${encodeURIComponent(centroCostos)}`
+      : base;
 
-        const estado: "total" | "pagado" | "pendiente" =
-          serie === "total" ? "total" : serie === "pagadas" ? "pagado" : "pendiente";
+    return await authFetch(url);
+  }
 
-        const mesYYYYMM = toYYYYMM(item.mes);
+  async function handleBarClick(
+    serie: "total" | "pagadas" | "pendiente",
+    item: EvolucionMes
+  ) {
+    try {
+      setModalLoading(true);
 
-        // Guardar contexto del modal para los botones Totales/Pagadas/Pendientes/Parciales
-        setModalMes(mesYYYYMM);
-        setModalEstado(estado);
+      const estado: EstadoModal =
+        serie === "total" ? "total" : serie === "pagadas" ? "pagado" : "pendiente";
 
-        const base = `/reportes/financiero/compras-gastos/detalle?mes=${mesYYYYMM}&estado=${estado}`;
-        const url = centroCostos ? `${base}&centro_costos=${encodeURIComponent(centroCostos)}` : base;
+      const mesYYYYMM = toYYYYMM(item.mes);
+      const tipoDocumento: TipoDocumentoModal = "todos";
 
-        const rows: FacturaDetalle[] = await authFetch(url);
+      setModalMes(mesYYYYMM);
+      setModalEstado(estado);
+      setModalTipoDocumento(tipoDocumento);
 
-        const titulo = `Facturas ${
-          estado === "total"
-            ? "Totales"
-            : estado === "pagado"
-            ? "Pagadas (contable)"
-            : "Pendientes (contable)"
-        } • ${formatMesYYYYMM(mesYYYYMM)}`;
+      const rows: FacturaDetalle[] = await cargarDetalleMes(
+        mesYYYYMM,
+        estado,
+        tipoDocumento
+      );
 
+      setModalTitle(
+        `Facturas ${labelEstadoModal(estado)} • ${labelTipoDocumento(
+          tipoDocumento
+        )} • ${formatMesYYYYMM(mesYYYYMM)}`
+      );
 
-        
-        setModalTitle(titulo);
-        setModalRows(rows || []);
-        setModalOpen(true);
-      } catch (e) {
-        console.error("Error abriendo modal de facturas", e);
-      } finally {
-        setModalLoading(false);
-      }
+      setModalRows(rows || []);
+      setModalOpen(true);
+    } catch (e) {
+      console.error("Error abriendo modal de facturas", e);
+    } finally {
+      setModalLoading(false);
     }
+  }
 
+  async function recargarModal(
+    nuevoEstado: EstadoModal = modalEstado,
+    nuevoTipoDocumento: TipoDocumentoModal = modalTipoDocumento
+  ) {
+    try {
+      if (!modalMes) return;
 
-    async function recargarModal(nuevoEstado: "total" | "pagado" | "pendiente" | "parcial") {
-      try {
-        if (!modalMes) return;
-        setModalLoading(true);
-        setModalEstado(nuevoEstado);
+      setModalLoading(true);
+      setModalEstado(nuevoEstado);
+      setModalTipoDocumento(nuevoTipoDocumento);
 
-        const base = `/reportes/financiero/compras-gastos/detalle?mes=${modalMes}&estado=${nuevoEstado}`;
-        const url = centroCostos ? `${base}&centro_costos=${encodeURIComponent(centroCostos)}` : base;
+      const rows: FacturaDetalle[] = await cargarDetalleMes(
+        modalMes,
+        nuevoEstado,
+        nuevoTipoDocumento
+      );
 
-        const rows: FacturaDetalle[] = await authFetch(url);
-        setModalRows(rows || []);
-      } catch (e) {
-        console.error("Error recargando modal", e);
-      } finally {
-        setModalLoading(false);
-      }
+      setModalTitle(
+        `Facturas ${labelEstadoModal(nuevoEstado)} • ${labelTipoDocumento(
+          nuevoTipoDocumento
+        )} • ${formatMesYYYYMM(modalMes)}`
+      );
+
+      setModalRows(rows || []);
+    } catch (e) {
+      console.error("Error recargando modal", e);
+    } finally {
+      setModalLoading(false);
     }
+  }
 
-
-    /* -------- handler modal proveedor -------- */
   async function handleProveedorClick(proveedor: string) {
     try {
       setModalLoading(true);
-      const url = `/reportes/financiero/compras-gastos/detalle-proveedor${queryParams ? queryParams + "&" : "?"}proveedor=${encodeURIComponent(proveedor)}`;
+
+      const url = `/reportes/financiero/compras-gastos/detalle-proveedor${
+        queryParams ? queryParams + "&" : "?"
+      }proveedor=${encodeURIComponent(proveedor)}&tipo_documento=todos`;
+
       const rows: FacturaDetalle[] = await authFetch(url);
+
       setModalTitle(`Facturas de ${proveedor}`);
       setModalRows(rows || []);
-      setModalMes("");                 // para que recargarModal no aplique por error
-      setModalEstado("total");         // tab por defecto
+      setModalMes("");
+      setModalEstado("total");
+      setModalTipoDocumento("todos");
       setModalOpen(true);
     } catch (e) {
       console.error("Error cargando facturas de proveedor", e);
@@ -272,40 +302,47 @@ export default function ReporteFinancieroComprasGastosPage() {
     }
   }
 
-  /* -------- datasets Top en horizontal (Power BI vibe) -------- */
-    const topValorData = useMemo(
+  const topValorData = useMemo(
     () =>
-        (topValor || []).map((t) => ({
+      (topValor || []).map((t) => ({
         proveedor: t.proveedor_nombre,
-        valor: Number(t.total_compras) || 0,  // ✅ ahora sí existe
-        })),
+        valor: Number(t.total_compras) || 0,
+      })),
     [topValor]
-    );
+  );
 
-    const topFacturasData = useMemo(
+  const topFacturasData = useMemo(
     () =>
-        (topFacturas || []).map((t) => ({
+      (topFacturas || []).map((t) => ({
         proveedor: t.proveedor_nombre,
         facturas: Number(t.num_facturas) || 0,
-        })),
+      })),
     [topFacturas]
-    );
-
+  );
 
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">📊 Reporte Egresos por Compras & Gastos</h1>
 
-      {/* Filtros */}
       <div className="grid gap-2 md:grid-cols-3">
         <div className="flex flex-col">
           <label className="text-sm font-medium">Fecha desde</label>
-          <Input type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)} />
+          <Input
+            type="date"
+            value={fechaDesde}
+            onChange={(e) => setFechaDesde(e.target.value)}
+          />
         </div>
+
         <div className="flex flex-col">
           <label className="text-sm font-medium">Fecha hasta</label>
-          <Input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} />
+          <Input
+            type="date"
+            value={fechaHasta}
+            onChange={(e) => setFechaHasta(e.target.value)}
+          />
         </div>
+
         <div className="flex flex-col">
           <label className="text-sm font-medium">Centro de Costos</label>
           <Select value={centroCostos} onChange={(e) => setCentroCostos(e.target.value)}>
@@ -317,150 +354,133 @@ export default function ReporteFinancieroComprasGastosPage() {
         </div>
       </div>
 
-      {/* KPIs */}
-      {/* KPIs */}
+      {loading && <p className="text-sm text-gray-500">Cargando reporte…</p>}
+
       {kpis && (
         <div className="grid grid-cols-2 md:grid-cols-6 lg:grid-cols-12 gap-2">
-            {/* Total Compras */}
-            <Card className="min-h-[74px]">
+          <Card className="min-h-[74px]">
             <CardContent className="p-3 flex flex-col justify-center">
-                <div className="text-m font-bold text-black-600 tracking-tight text-center">Total Compras</div>
-                <div className="mt-1 text-lg font-extrabold leading-none text-blue-600 text-center">
+              <div className="text-m font-bold text-center">Total Compras</div>
+              <div className="mt-1 text-lg font-extrabold text-blue-600 text-center">
                 {formatCurrency(kpis.total_compras)}
-                </div>
+              </div>
             </CardContent>
-            </Card>
+          </Card>
 
-            {/* # Facturas Compras*/}
-            <Card className="min-h-[74px]">
+          <Card className="min-h-[74px]">
             <CardContent className="p-3 flex flex-col justify-center">
-                <div className="text-m font-bold text-black-600 tracking-tight text-center"># Compras</div>
-                <div className="mt-1 text-lg font-extrabold leading-none text-blue-600 text-center">
+              <div className="text-m font-bold text-center"># Compras</div>
+              <div className="mt-1 text-lg font-extrabold text-blue-600 text-center">
                 {kpis.total_facturas.toLocaleString("es-CO")}
-                </div>
+              </div>
             </CardContent>
-            </Card>
+          </Card>
 
-
-
-            {/* Total Pagado */}
-            <Card className="min-h-[74px]">
+          <Card className="min-h-[74px]">
             <CardContent className="p-3 flex flex-col justify-center">
-                <div className="text-m font-bold text-black-600 tracking-tight text-center">Total Pagado</div>
-                <div className="mt-1 text-lg font-extrabold leading-none text-green-600 text-center">
+              <div className="text-m font-bold text-center">Total Pagado</div>
+              <div className="mt-1 text-lg font-extrabold text-green-600 text-center">
                 {formatCurrency(kpis.total_pagado)}
-                </div>
+              </div>
             </CardContent>
-            </Card>
+          </Card>
 
-            {/* Pagadas */}
-            <Card className="min-h-[74px]">
+          <Card className="min-h-[74px]">
             <CardContent className="p-3 flex flex-col justify-center">
-                <div className="text-m font-bold text-black-600 tracking-tight text-center">Pagadas</div>
-                <div className="mt-1 text-lg font-extrabold leading-none text-green-600 text-center">
+              <div className="text-m font-bold text-center">Pagadas</div>
+              <div className="mt-1 text-lg font-extrabold text-green-600 text-center">
                 {kpis.facturas_pagadas.toLocaleString("es-CO")}
-                </div>
+              </div>
             </CardContent>
-            </Card>
+          </Card>
 
-            {/* Total Pendiente */}
-            <Card className="min-h-[74px]">
+          <Card className="min-h-[74px]">
             <CardContent className="p-3 flex flex-col justify-center">
-                <div className="text-m font-bold text-black-600 tracking-tight text-center">Total Pendiente</div>
-                <div className="mt-1 text-lg font-extrabold leading-none text-red-600 text-center">
+              <div className="text-m font-bold text-center">Total Pendiente</div>
+              <div className="mt-1 text-lg font-extrabold text-red-600 text-center">
                 {formatCurrency(kpis.total_saldo)}
-                </div>
+              </div>
             </CardContent>
-            </Card>
+          </Card>
 
-            {/* Pendientes */}
-            <Card className="min-h-[74px]">
+          <Card className="min-h-[74px]">
             <CardContent className="p-3 flex flex-col justify-center">
-                <div className="text-m font-bold text-black-600 tracking-tight text-center">Pendientes</div>
-                <div className="mt-1 text-lg font-extrabold leading-none text-red-600 text-center">
+              <div className="text-m font-bold text-center">Pendientes</div>
+              <div className="mt-1 text-lg font-extrabold text-red-600 text-center">
                 {kpis.facturas_pendientes.toLocaleString("es-CO")}
-                </div>
+              </div>
             </CardContent>
-            </Card>
+          </Card>
 
+          <Card className="min-h-[74px]">
+            <CardContent className="p-3 flex flex-col justify-center">
+              <div className="text-m font-bold text-center">Saldo Parcial</div>
+              <div className="mt-1 text-lg font-extrabold text-orange-600 text-center">
+                {formatCurrency(Number(kpis.saldo_parcial || 0))}
+              </div>
+            </CardContent>
+          </Card>
 
-            {/* Saldo Parcial */}
-            <Card className="min-h-[74px]">
-              <CardContent className="p-3 flex flex-col justify-center">
-                <div className="text-m font-bold text-black-600 tracking-tight text-center">Saldo Parcial</div>
-                <div className="mt-1 text-lg font-extrabold leading-none text-orange-600 text-center">
-                  {formatCurrency(Number(kpis.saldo_parcial || 0))}
-                </div>
-              </CardContent>
-            </Card>
+          <Card className="min-h-[74px]">
+            <CardContent className="p-3 flex flex-col justify-center">
+              <div className="text-m font-bold text-center">Parciales</div>
+              <div className="mt-1 text-lg font-extrabold text-orange-600 text-center">
+                {Number(kpis.facturas_parciales || 0).toLocaleString("es-CO")}
+              </div>
+            </CardContent>
+          </Card>
 
+          <Card className="min-h-[74px]">
+            <CardContent className="p-3 flex flex-col justify-center">
+              <div className="text-m font-bold text-center">Valor x Facturas</div>
+              <div className="mt-1 text-lg font-extrabold text-indigo-600 text-center">
+                {formatCurrency(kpis.valor_compras_x_factura)}
+              </div>
+            </CardContent>
+          </Card>
 
-            {/* Parciales */}
-            <Card className="min-h-[74px]">
-              <CardContent className="p-3 flex flex-col justify-center">
-                <div className="text-m font-bold text-black-600 tracking-tight text-center">Parciales</div>
-                <div className="mt-1 text-lg font-extrabold leading-none text-orange-600 text-center">
-                  {Number(kpis.facturas_parciales || 0).toLocaleString("es-CO")}
-                </div>
-              </CardContent>
-            </Card>
+          <Card className="min-h-[74px]">
+            <CardContent className="p-3 flex flex-col justify-center">
+              <div className="text-m font-bold text-center"># Facturas</div>
+              <div className="mt-1 text-lg font-extrabold text-indigo-600 text-center">
+                {kpis.compras_x_factura.toLocaleString("es-CO")}
+              </div>
+            </CardContent>
+          </Card>
 
+          <Card className="min-h-[74px]">
+            <CardContent className="p-3 flex flex-col justify-center">
+              <div className="text-m font-bold text-center">Valor Ctas. Cobro</div>
+              <div className="mt-1 text-lg font-extrabold text-purple-600 text-center">
+                {formatCurrency(kpis.valor_compras_x_cta_cobro)}
+              </div>
+            </CardContent>
+          </Card>
 
-            {/* Valor Compras x Factura */}
-            <Card className="min-h-[74px]">
-              <CardContent className="p-3 flex flex-col justify-center">
-                <div className="text-m font-bold text-center">Valor x Facturas</div>
-                <div className="mt-1 text-lg font-extrabold text-indigo-600 text-center">
-                  {formatCurrency(kpis.valor_compras_x_factura)}
-                </div>
-              </CardContent>
-            </Card>
-
-
-            {/* Compras x Factura */}
-            <Card className="min-h-[74px]">
-              <CardContent className="p-3 flex flex-col justify-center">
-                <div className="text-m font-bold text-center"># Facturas</div>
-                <div className="mt-1 text-lg font-extrabold text-indigo-600 text-center">
-                  {kpis.compras_x_factura.toLocaleString("es-CO")}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Valor Compras x Cta. Cobro */}
-            <Card className="min-h-[74px]">
-              <CardContent className="p-3 flex flex-col justify-center">
-                <div className="text-m font-bold text-center">Valor Ctas. Cobro</div>
-                <div className="mt-1 text-lg font-extrabold text-purple-600 text-center">
-                  {formatCurrency(kpis.valor_compras_x_cta_cobro)}
-                </div>
-              </CardContent>
-            </Card>
-
-
-            {/* Compras x Cta. Cobro */}
-            <Card className="min-h-[74px]">
-              <CardContent className="p-3 flex flex-col justify-center">
-                <div className="text-m font-bold text-center"># Ctas. Cobro</div>
-                <div className="mt-1 text-lg font-extrabold text-purple-600 text-center">
-                  {kpis.compras_x_cta_cobro.toLocaleString("es-CO")}
-                </div>
-              </CardContent>
-            </Card>
-
-
+          <Card className="min-h-[74px]">
+            <CardContent className="p-3 flex flex-col justify-center">
+              <div className="text-m font-bold text-center"># Ctas. Cobro</div>
+              <div className="mt-1 text-lg font-extrabold text-purple-600 text-center">
+                {kpis.compras_x_cta_cobro.toLocaleString("es-CO")}
+              </div>
+            </CardContent>
+          </Card>
         </div>
-     )}
+      )}
 
-      {/* Evolución mensual */}
       <Card className="shadow-sm">
         <CardHeader>
           <CardTitle>Evolución Mensual</CardTitle>
         </CardHeader>
+
         <CardContent>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={evolucionSegura} margin={{ top: 10, bottom: 40, left: 40, right: 20 }}>
+            <BarChart
+              data={evolucionSegura}
+              margin={{ top: 10, bottom: 40, left: 40, right: 20 }}
+            >
               <CartesianGrid strokeDasharray="3 3" />
+
               <XAxis
                 dataKey="mes"
                 tickFormatter={(mes) => format(new Date(mes), "MMM yyyy")}
@@ -468,23 +488,25 @@ export default function ReporteFinancieroComprasGastosPage() {
                 textAnchor="end"
                 height={60}
               />
-              <YAxis tickFormatter={(v) => formatCurrency(v)} fontSize={11}/>
+
+              <YAxis tickFormatter={(v) => formatCurrency(v)} fontSize={11} />
+
               <Tooltip
-                formatter={(value: number, name: string) => [formatCurrency(Number(value)), name]}
-                labelFormatter={(label) =>
-                  (() => {
-                    try {
-                      return format(new Date(label), "MMM yyyy");
-                    } catch {
-                      return label;
-                    }
-                  })()
-                }
-                
+                formatter={(value: number, name: string) => [
+                  formatCurrency(Number(value)),
+                  name,
+                ]}
+                labelFormatter={(label) => {
+                  try {
+                    return format(new Date(label), "MMM yyyy");
+                  } catch {
+                    return label;
+                  }
+                }}
               />
+
               <Legend />
 
-              {/* Total Compras */}
               <Bar
                 dataKey="total_compras"
                 name="Compras Totales"
@@ -503,7 +525,6 @@ export default function ReporteFinancieroComprasGastosPage() {
                 />
               </Bar>
 
-              {/* Pagadas */}
               <Bar
                 dataKey="total_pagadas"
                 name="Pagadas"
@@ -522,7 +543,6 @@ export default function ReporteFinancieroComprasGastosPage() {
                 />
               </Bar>
 
-              {/* Pendientes */}
               <Bar
                 dataKey="total_pendientes"
                 name="Pendientes"
@@ -542,14 +562,17 @@ export default function ReporteFinancieroComprasGastosPage() {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-          <div className="text-s text-black-600 tracking-tight text-right">* Haga click sobre una barra de interés para mayor información</div>
+
+          <div className="text-s text-black-600 tracking-tight text-right">
+            * Haga click sobre una barra de interés para mayor información
+          </div>
         </CardContent>
       </Card>
 
-      {/* Top Proveedores */}
       <Card className="shadow-sm">
         <CardHeader className="flex items-center justify-between">
           <CardTitle>Top 15 Proveedores</CardTitle>
+
           <div className="flex items-center gap-2">
             <button
               onClick={() => setTopView("valor")}
@@ -561,6 +584,7 @@ export default function ReporteFinancieroComprasGastosPage() {
             >
               Por valor
             </button>
+
             <button
               onClick={() => setTopView("facturas")}
               className={`px-3 py-1 rounded-full text-sm ${
@@ -575,76 +599,87 @@ export default function ReporteFinancieroComprasGastosPage() {
         </CardHeader>
 
         <CardContent>
-        {topView === "valor" ? (
+          {topView === "valor" ? (
             <div className="w-full h-[420px]">
-            <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%">
                 <BarChart
-                layout="vertical"
-                data={topValorData}
-                margin={{ top: 10, bottom: 10, left: 20, right: 20 }}
+                  layout="vertical"
+                  data={topValorData}
+                  margin={{ top: 10, bottom: 10, left: 20, right: 20 }}
                 >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" tickFormatter={(v) => formatCurrency(Number(v))} />
-                <YAxis type="category" dataKey="proveedor" width={220} tick={{ fontSize: 12 }} />
-                <Tooltip formatter={(v: number) => formatCurrency(Number(v))} />
-                <Bar
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis type="number" tickFormatter={(v) => formatCurrency(Number(v))} />
+                  <YAxis
+                    type="category"
+                    dataKey="proveedor"
+                    width={220}
+                    tick={{ fontSize: 12 }}
+                  />
+                  <Tooltip formatter={(v: number) => formatCurrency(Number(v))} />
+                  <Bar
                     dataKey="valor"
                     name="Compras"
                     fill="#2563eb"
                     radius={[0, 6, 6, 0]}
                     onClick={(_, index) => {
-                    const item = topValorData[index];
-                    if (item) handleProveedorClick(item.proveedor);
+                      const item = topValorData[index];
+                      if (item) handleProveedorClick(item.proveedor);
                     }}
-                >
+                  >
                     <LabelList
-                    dataKey="valor"
-                    position="right"
-                    formatter={(v: any) => abreviar(Number(v))}
-                    style={{ fontSize: 10, fontWeight: 500 }}
+                      dataKey="valor"
+                      position="right"
+                      formatter={(v: any) => abreviar(Number(v))}
+                      style={{ fontSize: 10, fontWeight: 500 }}
                     />
-                </Bar>
+                  </Bar>
                 </BarChart>
-            </ResponsiveContainer>
+              </ResponsiveContainer>
             </div>
-        ) : (
+          ) : (
             <div className="w-full h-[420px]">
-            <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%">
                 <BarChart
-                layout="vertical"
-                data={topFacturasData}
-                margin={{ top: 10, bottom: 10, left: 20, right: 20 }}
+                  layout="vertical"
+                  data={topFacturasData}
+                  margin={{ top: 10, bottom: 10, left: 20, right: 20 }}
                 >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" allowDecimals={false} />
-                <YAxis type="category" dataKey="proveedor" width={220} tick={{ fontSize: 12 }} />
-                <Tooltip formatter={(v: number) => `${Number(v).toLocaleString("es-CO")}`} />
-                <Bar
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis type="number" allowDecimals={false} />
+                  <YAxis
+                    type="category"
+                    dataKey="proveedor"
+                    width={220}
+                    tick={{ fontSize: 12 }}
+                  />
+                  <Tooltip formatter={(v: number) => `${Number(v).toLocaleString("es-CO")}`} />
+                  <Bar
                     dataKey="facturas"
                     name="# Facturas"
                     fill="#22c55e"
                     radius={[0, 6, 6, 0]}
                     onClick={(_, index) => {
-                    const item = topFacturasData[index];
-                    if (item) handleProveedorClick(item.proveedor);
+                      const item = topFacturasData[index];
+                      if (item) handleProveedorClick(item.proveedor);
                     }}
-                >
+                  >
                     <LabelList
-                    dataKey="facturas"
-                    position="right"
-                    formatter={(v: any) => `${Number(v).toLocaleString("es-CO")}`}
+                      dataKey="facturas"
+                      position="right"
+                      formatter={(v: any) => `${Number(v).toLocaleString("es-CO")}`}
                     />
-                </Bar>
+                  </Bar>
                 </BarChart>
-            </ResponsiveContainer>
+              </ResponsiveContainer>
             </div>
-        )}
-        <div className="text-s text-black-600 tracking-tight text-right">* Haga click sobre una barra de interés para mayor información</div>
-        </CardContent>
+          )}
 
+          <div className="text-s text-black-600 tracking-tight text-right">
+            * Haga click sobre una barra de interés para mayor información
+          </div>
+        </CardContent>
       </Card>
 
-      {/* Modal de detalle */}
       {modalOpen && (
         <div
           className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center p-4"
@@ -656,6 +691,7 @@ export default function ReporteFinancieroComprasGastosPage() {
           >
             <div className="px-4 sm:px-6 py-4 border-b flex items-center justify-between">
               <h3 className="text-lg font-semibold">{modalTitle}</h3>
+
               <button
                 onClick={() => setModalOpen(false)}
                 className="px-3 py-1 rounded-md bg-gray-100 hover:bg-gray-200"
@@ -666,18 +702,56 @@ export default function ReporteFinancieroComprasGastosPage() {
 
             <div className="p-4 max-h-[70vh] overflow-auto">
               {modalMes && (
-                <div className="mb-3 flex flex-wrap gap-2">
-                  {(["total", "pagado", "pendiente", "parcial"] as const).map((st) => (
-                    <button
-                      key={st}
-                      onClick={() => recargarModal(st)}
-                      className={`px-3 py-1 rounded-full text-sm border ${
-                        modalEstado === st ? "bg-blue-600 text-white" : "bg-white hover:bg-gray-100"
-                      }`}
-                    >
-                      {st === "total" ? "Totales" : st === "pagado" ? "Pagadas" : st === "pendiente" ? "Pendientes" : "Parciales"}
-                    </button>
-                  ))}
+                <div className="mb-4 space-y-3">
+                  <div>
+                    <div className="text-xs font-semibold text-gray-500 mb-1">
+                      Tipo de documento
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {(
+                        [
+                          ["todos", "Todos"],
+                          ["factura", "Facturas de compra"],
+                          ["documento_soporte", "Documento Soporte"],
+                        ] as const
+                      ).map(([tipo, label]) => (
+                        <button
+                          key={tipo}
+                          onClick={() => recargarModal(modalEstado, tipo)}
+                          className={`px-3 py-1 rounded-full text-sm border transition ${
+                            modalTipoDocumento === tipo
+                              ? "bg-slate-900 text-white border-slate-900"
+                              : "bg-white hover:bg-gray-100"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs font-semibold text-gray-500 mb-1">
+                      Estado
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {(["total", "pagado", "pendiente", "parcial"] as const).map((st) => (
+                        <button
+                          key={st}
+                          onClick={() => recargarModal(st, modalTipoDocumento)}
+                          className={`px-3 py-1 rounded-full text-sm border transition ${
+                            modalEstado === st
+                              ? "bg-blue-600 text-white border-blue-600"
+                              : "bg-white hover:bg-gray-100"
+                          }`}
+                        >
+                          {labelEstadoModal(st)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -700,10 +774,7 @@ export default function ReporteFinancieroComprasGastosPage() {
                         "Pagado",
                         "Saldo",
                       ].map((h, idx) => (
-                        <th
-                          key={idx}
-                          className={`p-2 ${idx < 6 ? "text-left" : "text-right"}`}
-                        >
+                        <th key={idx} className={`p-2 ${idx < 6 ? "text-left" : "text-right"}`}>
                           {h}
                         </th>
                       ))}
@@ -721,32 +792,37 @@ export default function ReporteFinancieroComprasGastosPage() {
                         "border-b " +
                         (esPendiente ? "text-red-600 " : esParcial ? "text-orange-600 " : "") +
                         (esAnomalia ? "font-semibold " : "");
-                      
+
                       const pagadoCalc = Number.isFinite(Number(r.pagado_calc))
                         ? Number(r.pagado_calc)
                         : Number(r.total || 0) - Number(r.saldo || 0);
 
                       return (
                         <tr key={`${r.factura}-${i}`} className={rowClass}>
-                        
                           <td className="p-2">{r.proveedor_nombre}</td>
                           <td className="p-2">{r.factura}</td>
                           <td className="p-2">{format(new Date(r.fecha), "dd-MM-yyyy")}</td>
-                          <td className="p-2">{format(new Date(r.vencimiento), "dd-MM-yyyy")}</td>
                           <td className="p-2">
-                            {estado === "pagado" ? "Pagada" : estado === "parcial" ? "Parcial" : "Pendiente"}
+                            {r.vencimiento
+                              ? format(new Date(r.vencimiento), "dd-MM-yyyy")
+                              : "—"}
+                          </td>
+                          <td className="p-2">
+                            {estado === "pagado"
+                              ? "Pagada"
+                              : estado === "parcial"
+                              ? "Parcial"
+                              : "Pendiente"}
                             {esAnomalia ? " ⚠️" : ""}
                           </td>
                           <td className="p-2">{r.centro_costo_nombre || "—"}</td>
                           <td className="p-2 text-right">{formatCurrency(r.total)}</td>
                           <td className="p-2 text-right">{formatCurrency(pagadoCalc)}</td>
-
                           <td className="p-2 text-right">{formatCurrency(r.saldo)}</td>
                         </tr>
                       );
                     })}
                   </tbody>
-
                 </table>
               )}
             </div>

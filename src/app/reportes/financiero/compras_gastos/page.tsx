@@ -45,6 +45,7 @@ interface KPIs {
 type EstadoCalc = "pagado" | "pendiente" | "parcial";
 type EstadoModal = "total" | "pagado" | "pendiente" | "parcial";
 type TipoDocumentoModal = "todos" | "factura" | "documento_soporte";
+type ModalSortBy = "fecha_desc" | "fecha_asc" | "proveedor_asc" | "proveedor_desc";
 
 interface CentroCosto {
   id: string;
@@ -56,7 +57,7 @@ interface FacturaDetalle {
   proveedor_nombre: string;
   factura: string;
   fecha: string;
-  vencimiento: string;
+  vencimiento: string | null;
   estado_calc?: EstadoCalc;
   estado_raw?: string;
   total: number;
@@ -103,6 +104,17 @@ function formatMesYYYYMM(mesYYYYMM: string): string {
   return formatInTimeZone(d, "UTC", "MMM yyyy");
 }
 
+function formatDateSafe(value?: string | null): string {
+  if (!value) return "—";
+
+  const raw = String(value).slice(0, 10);
+  const [y, m, d] = raw.split("-");
+
+  if (!y || !m || !d) return "—";
+
+  return `${d}-${m}-${y}`;
+}
+
 function labelEstadoModal(estado: EstadoModal): string {
   if (estado === "total") return "Totales";
   if (estado === "pagado") return "Pagadas";
@@ -136,6 +148,7 @@ export default function ReporteFinancieroComprasGastosPage() {
   const [modalEstado, setModalEstado] = useState<EstadoModal>("total");
   const [modalTipoDocumento, setModalTipoDocumento] =
     useState<TipoDocumentoModal>("todos");
+  const [modalSortBy, setModalSortBy] = useState<ModalSortBy>("fecha_desc");
 
   const [modalTitle, setModalTitle] = useState<string>("");
   const [modalRows, setModalRows] = useState<FacturaDetalle[]>([]);
@@ -197,6 +210,67 @@ export default function ReporteFinancieroComprasGastosPage() {
     });
   }, [evolucion]);
 
+  const topValorData = useMemo(
+    () =>
+      (topValor || []).map((t) => ({
+        proveedor: t.proveedor_nombre,
+        valor: Number(t.total_compras) || 0,
+      })),
+    [topValor]
+  );
+
+  const topFacturasData = useMemo(
+    () =>
+      (topFacturas || []).map((t) => ({
+        proveedor: t.proveedor_nombre,
+        facturas: Number(t.num_facturas) || 0,
+      })),
+    [topFacturas]
+  );
+
+  const modalResumen = useMemo(() => {
+    const cantidad = modalRows.length;
+    const total = modalRows.reduce((acc, r) => acc + Number(r.total || 0), 0);
+
+    const pagado = modalRows.reduce((acc, r) => {
+      const pagadoCalc = Number.isFinite(Number(r.pagado_calc))
+        ? Number(r.pagado_calc)
+        : Number(r.total || 0) - Number(r.saldo || 0);
+
+      return acc + pagadoCalc;
+    }, 0);
+
+    const saldo = modalRows.reduce((acc, r) => acc + Number(r.saldo || 0), 0);
+
+    return { cantidad, total, pagado, saldo };
+  }, [modalRows]);
+
+  const modalRowsOrdenadas = useMemo(() => {
+    const rows = [...modalRows];
+
+    rows.sort((a, b) => {
+      if (modalSortBy === "fecha_asc") {
+        return String(a.fecha || "").localeCompare(String(b.fecha || ""));
+      }
+
+      if (modalSortBy === "fecha_desc") {
+        return String(b.fecha || "").localeCompare(String(a.fecha || ""));
+      }
+
+      if (modalSortBy === "proveedor_asc") {
+        return String(a.proveedor_nombre || "").localeCompare(
+          String(b.proveedor_nombre || "")
+        );
+      }
+
+      return String(b.proveedor_nombre || "").localeCompare(
+        String(a.proveedor_nombre || "")
+      );
+    });
+
+    return rows;
+  }, [modalRows, modalSortBy]);
+
   async function cargarDetalleMes(
     mesYYYYMM: string,
     estado: EstadoModal,
@@ -226,6 +300,7 @@ export default function ReporteFinancieroComprasGastosPage() {
       setModalMes(mesYYYYMM);
       setModalEstado(estado);
       setModalTipoDocumento(tipoDocumento);
+      setModalSortBy("fecha_desc");
 
       const rows: FacturaDetalle[] = await cargarDetalleMes(
         mesYYYYMM,
@@ -294,6 +369,7 @@ export default function ReporteFinancieroComprasGastosPage() {
       setModalMes("");
       setModalEstado("total");
       setModalTipoDocumento("todos");
+      setModalSortBy("fecha_desc");
       setModalOpen(true);
     } catch (e) {
       console.error("Error cargando facturas de proveedor", e);
@@ -301,24 +377,6 @@ export default function ReporteFinancieroComprasGastosPage() {
       setModalLoading(false);
     }
   }
-
-  const topValorData = useMemo(
-    () =>
-      (topValor || []).map((t) => ({
-        proveedor: t.proveedor_nombre,
-        valor: Number(t.total_compras) || 0,
-      })),
-    [topValor]
-  );
-
-  const topFacturasData = useMemo(
-    () =>
-      (topFacturas || []).map((t) => ({
-        proveedor: t.proveedor_nombre,
-        facturas: Number(t.num_facturas) || 0,
-      })),
-    [topFacturas]
-  );
 
   return (
     <div className="space-y-4">
@@ -489,7 +547,7 @@ export default function ReporteFinancieroComprasGastosPage() {
                 height={60}
               />
 
-              <YAxis tickFormatter={(v) => formatCurrency(v)} fontSize={11} />
+              <YAxis tickFormatter={(v) => formatCurrency(Number(v))} fontSize={11} />
 
               <Tooltip
                 formatter={(value: number, name: string) => [
@@ -732,9 +790,7 @@ export default function ReporteFinancieroComprasGastosPage() {
                   </div>
 
                   <div>
-                    <div className="text-xs font-semibold text-gray-500 mb-1">
-                      Estado
-                    </div>
+                    <div className="text-xs font-semibold text-gray-500 mb-1">Estado</div>
 
                     <div className="flex flex-wrap gap-2">
                       {(["total", "pagado", "pendiente", "parcial"] as const).map((st) => (
@@ -754,6 +810,49 @@ export default function ReporteFinancieroComprasGastosPage() {
                   </div>
                 </div>
               )}
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+                <div className="rounded-xl border bg-gray-50 p-3">
+                  <div className="text-xs text-gray-500">Cantidad</div>
+                  <div className="text-lg font-bold">
+                    {modalResumen.cantidad.toLocaleString("es-CO")}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border bg-gray-50 p-3">
+                  <div className="text-xs text-gray-500">Total</div>
+                  <div className="text-lg font-bold text-blue-600">
+                    {formatCurrency(modalResumen.total)}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border bg-gray-50 p-3">
+                  <div className="text-xs text-gray-500">Pagado</div>
+                  <div className="text-lg font-bold text-green-600">
+                    {formatCurrency(modalResumen.pagado)}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border bg-gray-50 p-3">
+                  <div className="text-xs text-gray-500">Saldo</div>
+                  <div className="text-lg font-bold text-red-600">
+                    {formatCurrency(modalResumen.saldo)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mb-3 flex justify-end">
+                <select
+                  value={modalSortBy}
+                  onChange={(e) => setModalSortBy(e.target.value as ModalSortBy)}
+                  className="border rounded-lg px-3 py-2 text-sm bg-white"
+                >
+                  <option value="fecha_desc">Fecha: más reciente primero</option>
+                  <option value="fecha_asc">Fecha: más antigua primero</option>
+                  <option value="proveedor_asc">Proveedor: A-Z</option>
+                  <option value="proveedor_desc">Proveedor: Z-A</option>
+                </select>
+              </div>
 
               {modalLoading ? (
                 <p className="text-sm text-gray-500">Cargando…</p>
@@ -782,7 +881,7 @@ export default function ReporteFinancieroComprasGastosPage() {
                   </thead>
 
                   <tbody>
-                    {modalRows.map((r, i) => {
+                    {modalRowsOrdenadas.map((r, i) => {
                       const estado = (r.estado_calc || "pendiente") as EstadoCalc;
                       const esPendiente = estado === "pendiente";
                       const esParcial = estado === "parcial";
@@ -801,12 +900,8 @@ export default function ReporteFinancieroComprasGastosPage() {
                         <tr key={`${r.factura}-${i}`} className={rowClass}>
                           <td className="p-2">{r.proveedor_nombre}</td>
                           <td className="p-2">{r.factura}</td>
-                          <td className="p-2">{format(new Date(r.fecha), "dd-MM-yyyy")}</td>
-                          <td className="p-2">
-                            {r.vencimiento
-                              ? format(new Date(r.vencimiento), "dd-MM-yyyy")
-                              : "—"}
-                          </td>
+                          <td className="p-2">{formatDateSafe(r.fecha)}</td>
+                          <td className="p-2">{formatDateSafe(r.vencimiento)}</td>
                           <td className="p-2">
                             {estado === "pagado"
                               ? "Pagada"

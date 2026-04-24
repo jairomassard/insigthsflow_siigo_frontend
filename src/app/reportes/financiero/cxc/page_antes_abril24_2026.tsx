@@ -23,23 +23,6 @@ import {
   Cell,
 } from "recharts";
 
-type FacturaDetalle = {
-  idfactura: string;
-  cliente_nombre: string;
-  centro_costo_nombre?: string;
-  vendedor_nombre?: string;
-  fecha: string;
-  vencimiento: string;
-  dias_vencidos: number;
-  dias_transcurridos?: number;
-  total: number;
-  pagos_total: number;
-  saldo: number;
-  saldo_str: string;
-  total_str: string;
-  public_url: string | null;
-};
-
 type Cliente = {
   cliente_nombre: string;
   total: number;
@@ -51,7 +34,7 @@ type Cliente = {
     "61_90": number;
     "91_mas": number;
   };
-  facturas: FacturaDetalle[];
+  facturas: any[];
 };
 
 type Proyeccion = {
@@ -70,7 +53,6 @@ type Proyeccion = {
 
 export default function ReporteCxCPage() {
   useAuthGuard();
-
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [resumen, setResumen] = useState<any>({});
   const [proyeccion, setProyeccion] = useState<Proyeccion[]>([]);
@@ -84,13 +66,11 @@ export default function ReporteCxCPage() {
     const load = async () => {
       setLoading(true);
       setError("");
-
       try {
         const res = await authFetch("/reportes/cuentas-por-cobrar?detalle=1");
         if (res.error) throw new Error(res.error);
 
         setResumen(res.resumen_global);
-
         setClientes(
           res.consolidado.map((c: any) => ({
             ...c,
@@ -99,7 +79,6 @@ export default function ReporteCxCPage() {
             ),
           }))
         );
-
         setProyeccion(res.proyeccion_por_fecha || []);
       } catch (e: any) {
         setError(e.message);
@@ -107,7 +86,6 @@ export default function ReporteCxCPage() {
         setLoading(false);
       }
     };
-
     load();
   }, []);
 
@@ -115,7 +93,6 @@ export default function ReporteCxCPage() {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setSelectedCliente(null);
-        setSelectedBar(null);
       }
     };
 
@@ -278,14 +255,16 @@ export default function ReporteCxCPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-md">📅 Proyección de cobros por fecha</CardTitle>
+              <CardTitle className="text-md">
+                📅 Proyección de cobros por fecha
+              </CardTitle>
             </CardHeader>
 
             <CardContent>
               <ResponsiveContainer width="100%" height={350}>
                 <BarChart data={proyeccion}>
                   <XAxis dataKey="fecha" tick={{ fontSize: 12 }} />
-                  <YAxis tickFormatter={(v) => `$${(Number(v) / 1_000_000).toFixed(0)}M`} />
+                  <YAxis tickFormatter={(v) => `$${(v / 1_000_000).toFixed(0)}M`} />
 
                   <Tooltip
                     content={({ active, payload, label }) => {
@@ -302,11 +281,9 @@ export default function ReporteCxCPage() {
                               {rango}
                             </div>
                           )}
-
                           <div>
                             <strong>Vencimiento:</strong> {label}
                           </div>
-
                           <div>
                             <strong>Total:</strong> {totalFormatted}
                           </div>
@@ -352,8 +329,8 @@ export default function ReporteCxCPage() {
                         const { x, y, value } = props;
                         if (value == null) return null;
 
-                        const v = Number(value);
                         let displayValue = "";
+                        const v = Number(value);
 
                         if (v >= 1_000_000_000) {
                           displayValue = (v / 1_000_000_000).toFixed(1) + "B";
@@ -511,7 +488,9 @@ export default function ReporteCxCPage() {
                         </p>
                       )}
 
-                      <p className="font-semibold">Vencimiento: {selectedBar.fecha}</p>
+                      <p className="font-semibold">
+                        Vencimiento: {selectedBar.fecha}
+                      </p>
 
                       <p className="text-green-700 font-bold">
                         Total día: {selectedBar.total_str}
@@ -528,7 +507,10 @@ export default function ReporteCxCPage() {
 
                   <div className="grid gap-2">
                     {selectedBar.facturas.map((f: any, idx: number) => (
-                      <div key={idx} className="border p-2 rounded bg-gray-50 text-sm">
+                      <div
+                        key={idx}
+                        className="border p-2 rounded bg-gray-50 text-sm"
+                      >
                         <p className="font-medium">{f.cliente_nombre}</p>
                         <p className="text-xs text-gray-600">Factura: {f.idfactura}</p>
                         <p className="text-xs text-gray-600">
@@ -569,28 +551,13 @@ export default function ReporteCxCPage() {
               onClick={() => setSelectedCliente(null)}
             >
               <div
-                className="relative flex flex-col rounded-2xl bg-white shadow-2xl border border-white/40"
-                style={{
-                  width: "min(95vw, 1120px)",
-                  height: "min(90vh, 760px)",
-                  minWidth: "430px",
-                  minHeight: "420px",
-                  maxWidth: "96vw",
-                  maxHeight: "92vh",
-                  resize: "both",
-                  overflow: "auto",
-                }}
+                className="relative w-full max-w-6xl max-h-[90vh] overflow-auto rounded-2xl bg-white shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="sticky top-0 z-20 flex items-center justify-between border-b bg-white px-4 py-3 rounded-t-2xl">
-                  <div>
-                    <h2 className="text-lg font-semibold">
-                      Detalle ampliado del cliente
-                    </h2>
-                    <p className="text-xs text-gray-500">
-                      Puedes ajustar el tamaño desde la esquina inferior derecha.
-                    </p>
-                  </div>
+                <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-4 py-3">
+                  <h2 className="text-lg font-semibold">
+                    Detalle ampliado del cliente
+                  </h2>
 
                   <button
                     onClick={() => setSelectedCliente(null)}
@@ -601,8 +568,8 @@ export default function ReporteCxCPage() {
                   </button>
                 </div>
 
-                <div className="flex-1 overflow-auto p-4">
-                  <ClienteCard cliente={selectedCliente} ampliado />
+                <div className="p-4">
+                  <ClienteCard cliente={selectedCliente} />
                 </div>
               </div>
             </div>
@@ -631,19 +598,12 @@ function fmtPct(value: number) {
   })}%`;
 }
 
-function fmtDias(value: any) {
-  const n = Number(value ?? 0);
-  if (!Number.isFinite(n)) return "0";
-  return Math.max(0, Math.round(n)).toLocaleString("es-CO");
-}
-
 type ClienteCardProps = {
   cliente: Cliente;
   onAmpliar?: () => void;
-  ampliado?: boolean;
 };
 
-function ClienteCard({ cliente, onAmpliar, ampliado = false }: ClienteCardProps) {
+function ClienteCard({ cliente, onAmpliar }: ClienteCardProps) {
   const [ordenFacturas, setOrdenFacturas] = useState<"fecha" | "vencimiento">(
     "fecha"
   );
@@ -675,7 +635,7 @@ function ClienteCard({ cliente, onAmpliar, ampliado = false }: ClienteCardProps)
     return isNaN(intento) ? 0 : intento;
   };
 
-  const facturasOrdenadas = [...cliente.facturas].sort((a: FacturaDetalle, b: FacturaDetalle) => {
+  const facturasOrdenadas = [...cliente.facturas].sort((a: any, b: any) => {
     if (ordenFacturas === "vencimiento") {
       const diasA = Number(a.dias_vencidos ?? 0);
       const diasB = Number(b.dias_vencidos ?? 0);
@@ -689,7 +649,7 @@ function ClienteCard({ cliente, onAmpliar, ampliado = false }: ClienteCardProps)
   });
 
   return (
-    <Card className={`shadow-md h-full ${ampliado ? "border-0 shadow-none" : ""}`}>
+    <Card className="shadow-md h-full">
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -711,7 +671,7 @@ function ClienteCard({ cliente, onAmpliar, ampliado = false }: ClienteCardProps)
       </CardHeader>
 
       <CardContent>
-        <ResponsiveContainer width="100%" height={ampliado ? 260 : 220}>
+        <ResponsiveContainer width="100%" height={220}>
           <BarChart
             data={[
               { bucket: "Por vencer", monto: cliente.aging.por_vencer },
@@ -724,7 +684,7 @@ function ClienteCard({ cliente, onAmpliar, ampliado = false }: ClienteCardProps)
           >
             <XAxis dataKey="bucket" />
             <YAxis hide />
-            <Tooltip formatter={(v: number) => `$ ${Number(v).toLocaleString("es-CO")}`} />
+            <Tooltip formatter={(v: number) => `$ ${v.toLocaleString("es-CO")}`} />
 
             <Bar dataKey="monto" radius={[6, 6, 0, 0]}>
               {[
@@ -747,8 +707,8 @@ function ClienteCard({ cliente, onAmpliar, ampliado = false }: ClienteCardProps)
                   const { x, y, value } = props;
                   if (value == null) return null;
 
-                  const v = Number(value);
                   let displayValue = "";
+                  const v = Number(value);
 
                   if (v >= 1_000_000_000) {
                     displayValue = (v / 1_000_000_000).toFixed(1) + "B";
@@ -778,15 +738,17 @@ function ClienteCard({ cliente, onAmpliar, ampliado = false }: ClienteCardProps)
           </BarChart>
         </ResponsiveContainer>
 
-        <Accordion type="single" collapsible className="mt-4" defaultValue={ampliado ? "facturas" : undefined}>
+        <Accordion type="single" collapsible className="mt-4">
           <AccordionItem value="facturas">
             <AccordionTrigger className="text-sm font-medium">
               Ver detalle de facturas
             </AccordionTrigger>
 
             <AccordionContent>
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-sm font-medium text-gray-700">Ordenar por:</span>
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-gray-700">
+                  Ordenar por:
+                </span>
 
                 <div className="flex gap-2">
                   <button
@@ -815,49 +777,34 @@ function ClienteCard({ cliente, onAmpliar, ampliado = false }: ClienteCardProps)
                 </div>
               </div>
 
-              <div className={`${ampliado ? "max-h-none" : "max-h-[420px]"} overflow-auto`}>
-                <table className="w-full min-w-[860px] text-sm border-collapse">
-                  <thead className="sticky top-0 z-10">
+              <div className="overflow-auto max-h-[420px]">
+                <table className="w-full text-sm border-collapse">
+                  <thead>
                     <tr className="bg-gray-100">
                       <th className="p-2 text-left">Factura</th>
                       <th className="p-2 text-left">Fecha</th>
                       <th className="p-2 text-left">Vencimiento</th>
                       <th className="p-2 text-left">Rango</th>
-                      <th className="p-2 text-right">Días transc.</th>
                       <th className="p-2 text-right">Saldo</th>
                       <th className="p-2">Link</th>
                     </tr>
                   </thead>
 
                   <tbody>
-                    {facturasOrdenadas.map((f: FacturaDetalle, i: number) => {
-                      const rango = calcularRango(Number(f.dias_vencidos || 0));
+                    {facturasOrdenadas.map((f: any, i: number) => {
+                      const rango = calcularRango(f.dias_vencidos);
                       const esVencida = rango !== "Por vencer";
-                      const diasTranscurridos = f.dias_transcurridos ?? 0;
 
                       return (
                         <tr
-                          key={`${f.idfactura}-${i}`}
+                          key={i}
                           className={`border-b ${esVencida ? "text-red-600" : ""}`}
                         >
-                          <td className="p-2 whitespace-nowrap">{f.idfactura}</td>
-                          <td className="p-2 whitespace-nowrap">{f.fecha}</td>
-                          <td className="p-2 whitespace-nowrap">{f.vencimiento}</td>
-                          <td className="p-2 whitespace-nowrap">{rango}</td>
-                          <td className="p-2 text-right whitespace-nowrap">
-                            <span
-                              className={`inline-flex min-w-[58px] justify-center rounded-full px-2 py-1 text-xs font-semibold ${
-                                Number(diasTranscurridos) <= 30
-                                  ? "bg-green-50 text-green-700"
-                                  : Number(diasTranscurridos) <= 60
-                                  ? "bg-orange-50 text-orange-700"
-                                  : "bg-red-50 text-red-700"
-                              }`}
-                            >
-                              {fmtDias(diasTranscurridos)}
-                            </span>
-                          </td>
-                          <td className="p-2 text-right whitespace-nowrap">{f.saldo_str}</td>
+                          <td className="p-2">{f.idfactura}</td>
+                          <td className="p-2">{f.fecha}</td>
+                          <td className="p-2">{f.vencimiento}</td>
+                          <td className="p-2">{rango}</td>
+                          <td className="p-2 text-right">{f.saldo_str}</td>
                           <td className="p-2 text-center">
                             {f.public_url ? (
                               <a

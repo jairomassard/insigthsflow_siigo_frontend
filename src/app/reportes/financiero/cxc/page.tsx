@@ -555,51 +555,7 @@ export default function ReporteCxCPage() {
             ))}
           </div>
 
-          {selectedCliente && (
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-              onClick={() => setSelectedCliente(null)}
-            >
-              <div
-                className="relative flex flex-col rounded-2xl bg-white shadow-2xl border border-white/40"
-                style={{
-                  width: "min(95vw, 1120px)",
-                  height: "min(90vh, 760px)",
-                  minWidth: "430px",
-                  minHeight: "420px",
-                  maxWidth: "96vw",
-                  maxHeight: "92vh",
-                  resize: "both",
-                  overflow: "auto",
-                }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="sticky top-0 z-20 flex items-center justify-between border-b bg-white px-4 py-3 rounded-t-2xl">
-                  <div>
-                    <h2 className="text-lg font-semibold">
-                      Detalle ampliado del cliente
-                    </h2>
-                    <p className="text-xs text-gray-500">
-                      Puedes ajustar el tamaño desde la esquina inferior derecha.
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={() => setSelectedCliente(null)}
-                    className="flex h-9 w-9 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600"
-                    aria-label="Cerrar modal"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                <div className="flex-1 overflow-auto p-4">
-                  <ClienteCard cliente={selectedCliente} ampliado />
-                </div>
-              </div>
-            </div>
-          )}
-        </>
+       </>
       )}
     </div>
   );

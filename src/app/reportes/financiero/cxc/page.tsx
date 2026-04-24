@@ -501,52 +501,44 @@ export default function ReporteCxCPage() {
                 )}
               </div>
 
-              {selectedBar && (
-                <div className="mt-4 p-4 border rounded-lg shadow-md bg-white max-h-96 overflow-auto">
-                  <div className="flex justify-between items-center mb-3">
-                    <div>
-                      {obtenerRangoBarra(selectedBar) && (
-                        <p className="text-sm font-semibold text-gray-700">
-                          {obtenerRangoBarra(selectedBar)}
+              {selectedCliente && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+                  <div
+                    className="relative flex flex-col rounded-2xl bg-white shadow-2xl border border-white/40"
+                    style={{
+                      width: "min(95vw, 1120px)",
+                      height: "min(90vh, 760px)",
+                      minWidth: "430px",
+                      minHeight: "420px",
+                      maxWidth: "96vw",
+                      maxHeight: "92vh",
+                      resize: "both",
+                      overflow: "auto",
+                    }}
+                  >
+                    {/* Header */}
+                    <div className="sticky top-0 z-20 flex items-center justify-between border-b bg-white px-4 py-3 rounded-t-2xl">
+                      <div>
+                        <h2 className="text-lg font-semibold">
+                          Detalle ampliado del cliente
+                        </h2>
+                        <p className="text-xs text-gray-500">
+                          Puedes ajustar el tamaño desde la esquina inferior derecha.
                         </p>
-                      )}
+                      </div>
 
-                      <p className="font-semibold">Vencimiento: {selectedBar.fecha}</p>
-
-                      <p className="text-green-700 font-bold">
-                        Total día: {selectedBar.total_str}
-                      </p>
+                      <button
+                        onClick={() => setSelectedCliente(null)}
+                        className="flex h-9 w-9 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600"
+                      >
+                        ✕
+                      </button>
                     </div>
 
-                    <button
-                      onClick={() => setSelectedBar(null)}
-                      className="px-3 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600"
-                    >
-                      Cerrar
-                    </button>
-                  </div>
-
-                  <div className="grid gap-2">
-                    {selectedBar.facturas.map((f: any, idx: number) => (
-                      <div key={idx} className="border p-2 rounded bg-gray-50 text-sm">
-                        <p className="font-medium">{f.cliente_nombre}</p>
-                        <p className="text-xs text-gray-600">Factura: {f.idfactura}</p>
-                        <p className="text-xs text-gray-600">
-                          Valor: ${Number(f.saldo).toLocaleString("es-CO")}
-                        </p>
-
-                        {f.public_url && (
-                          <a
-                            href={f.public_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-blue-600 text-xs hover:underline"
-                          >
-                            Ver factura
-                          </a>
-                        )}
-                      </div>
-                    ))}
+                    {/* Body */}
+                    <div className="flex-1 overflow-auto p-4">
+                      <ClienteCard cliente={selectedCliente} ampliado />
+                    </div>
                   </div>
                 </div>
               )}

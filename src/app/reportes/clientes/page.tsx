@@ -1,652 +1,1141 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import useAuthGuard from "@/hooks/useAuthGuard";
+import { authFetch } from "@/lib/api";
+
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  ResponsiveContainer,
   BarChart,
   Bar,
   XAxis,
   YAxis,
   Tooltip,
-  CartesianGrid,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
   LabelList,
+  Cell,
 } from "recharts";
-import { authFetch } from "@/lib/api";
 
-// Helpers de formato
-const fmtCOP = (n: number) =>
-  Number(n || 0).toLocaleString("es-CO", {
-    style: "currency",
-    currency: "COP",
-    maximumFractionDigits: 0,
-  });
-
-const fmtShort = (n: number) =>
-  new Intl.NumberFormat("es-CO", {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(Number(n || 0));
-
-type ClienteRow = {
-  cliente: string;
-  cantidad_facturas: number;
-  total_facturado: number;
-  total_pagado: number;
-  saldo_pendiente: number;
+type CatalogoItem = {
+  id: string | number;
+  nombre: string;
 };
 
-type CentroCostoRow = {
-  cliente_nombre: string;
-  centro_costo_nombre: string;
-  cost_center: number | null;
-  cantidad_facturas: number;
-  total_facturado: number;
-  total_pagado: number;
-  saldo_pendiente: number;
-};
-
-type FacturaRow = {
-  cliente_nombre?: string; // 👈 ahora opcional
+type FacturaCliente = {
   idfactura: string;
-  fecha: string;
-  vencimiento?: string | null;
-  dias_vencimiento: number | null; // 👈 ya no opcional
-   estado_cartera?: "sano" | "alerta" | "vencido" | "pagado"; // 👈 ahora incluye pagado
+  fecha: string | null;
+  vencimiento: string | null;
   total: number;
   pagado: number;
   pendiente: number;
-  public_url?: string | null;
-  centro_costo_nombre?: string | null;
+  total_str: string;
+  pagado_str: string;
+  pendiente_str: string;
+  public_url: string | null;
+  cliente_nombre: string;
+  cliente_key: string;
+  cost_center?: number | string | null;
+  centro_costo_nombre?: string;
+  estado_cartera: "pagado" | "sano" | "alerta" | "vencido";
+  dias_vencimiento: number | null;
 };
 
-type FacturasEstadoRow = {
-  cliente: string;  
-  estado: "sano" | "alerta" | "vencido" | "pagado";
-  cantidad: number;
+type CentroCostoCliente = {
+  centro_costo_nombre: string;
+  cost_center?: number | string | null;
+  cantidad_facturas: number;
+  total_facturado: number;
+  total_pagado: number;
+  saldo_pendiente: number;
+  total_facturado_str: string;
+  saldo_pendiente_str: string;
 };
 
-type ClienteUI = ClienteRow & {
-  centros_costo: Array<{
-    centro_costo_nombre: string;
-    cost_center: number | null;
-    cantidad_facturas: number;
-    total: number;
+type ClienteInsight = {
+  cliente: string;
+  cliente_key: string;
+  cantidad_facturas: number;
+  cantidad_centros_costo: number;
+  total_facturado: number;
+  total_pagado: number;
+  saldo_pendiente: number;
+  saldo_vencido: number;
+  saldo_por_vencer: number;
+  total_facturado_str: string;
+  total_pagado_str: string;
+  saldo_pendiente_str: string;
+  saldo_vencido_str: string;
+  saldo_por_vencer_str: string;
+  pct_pagado: number;
+  pct_pendiente: number;
+  pct_vencido: number;
+  ultima_factura: string | null;
+  centros_costo: CentroCostoCliente[];
+  facturas_recientes: FacturaCliente[];
+  estados: {
     pagado: number;
-    pendiente: number;
-  }>;
-  facturas_recientes: FacturaRow[]; // 👈 ahora usa el tipo que ya definiste arriba
-  facturas_por_estado: FacturasEstadoRow[]; // 👈 nuevo
+    sano: number;
+    alerta: number;
+    vencido: number;
+  };
+  estados_saldo: {
+    pagado: number;
+    sano: number;
+    alerta: number;
+    vencido: number;
+  };
 };
 
+type ResumenClientes = {
+  clientes_facturados: number;
+  cantidad_facturas: number;
+  total_facturado: number;
+  total_pagado: number;
+  saldo_pendiente: number;
+  saldo_vencido: number;
+  saldo_por_vencer: number;
+  pct_pagado: number;
+  pct_vencido: number;
+  total_facturado_str: string;
+  total_pagado_str: string;
+  saldo_pendiente_str: string;
+  saldo_vencido_str: string;
+  saldo_por_vencer_str: string;
+};
 
-export default function ReporteClientes() {
-  // Data
-  const [clientes, setClientes] = useState<ClienteUI[]>([]);
-  const [clientesCatalogo, setClientesCatalogo] = useState<any[]>([]);
-  const [ccCatalogo, setCcCatalogo] = useState<any[]>([]);
+export default function ReporteClientesPage() {
+  useAuthGuard();
 
-  // Estado UI
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [consultando, setConsultando] = useState(false);
+  const [error, setError] = useState("");
 
-  // Filtros
+  const [resumen, setResumen] = useState<ResumenClientes | null>(null);
+  const [clientes, setClientes] = useState<ClienteInsight[]>([]);
+  const [catalogoClientes, setCatalogoClientes] = useState<CatalogoItem[]>([]);
+  const [catalogoCentrosCosto, setCatalogoCentrosCosto] = useState<CatalogoItem[]>([]);
+
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
-  const [clienteSel, setClienteSel] = useState("");
-  const [costCenter, setCostCenter] = useState("");
-  const [estadoCartera, setEstadoCartera] = useState(""); // 👈 nuevo filtro
+  const [clienteFiltro, setClienteFiltro] = useState("");
+  const [centroCostoFiltro, setCentroCostoFiltro] = useState("");
+  const [estadoFiltro, setEstadoFiltro] = useState("");
 
-  // Modal
-  const [showModal, setShowModal] = useState(false);
-  const [facturasModal, setFacturasModal] = useState<FacturaRow[]>([]);
-  const [modalCliente, setModalCliente] = useState("");
-  const [modalOffset, setModalOffset] = useState(0);
+  const [busquedaLocal, setBusquedaLocal] = useState("");
+  const [orden, setOrden] = useState<
+    "facturado" | "saldo" | "vencido" | "facturas" | "nombre"
+  >("facturado");
 
-  // ---------- Cargar catálogos (clientes + centros de costo) ----------
-  const loadCatalogos = async () => {
-    try {
-      const qs = new URLSearchParams();
-      if (desde) qs.append("desde", desde);
-      if (hasta) qs.append("hasta", hasta);
+  const [clientesExpandidos, setClientesExpandidos] = useState<Record<string, boolean>>({});
+  const [clienteModal, setClienteModal] = useState<ClienteInsight | null>(null);
 
-      const clientesRes = await authFetch(`/catalogos/clientes-facturas?${qs}`);
-      setClientesCatalogo(Array.isArray(clientesRes) ? clientesRes : []);
-
-      const ccRes = await authFetch(`/catalogos/centros-costo?${qs}`);
-      setCcCatalogo(Array.isArray(ccRes) ? ccRes : []);
-    } catch (e) {
-      console.error("Error cargando catálogos", e);
+  const cargarDatos = async (modo: "inicial" | "consulta" = "consulta") => {
+    if (modo === "inicial") {
+      setLoading(true);
+    } else {
+      setConsultando(true);
     }
-  };
 
-  // Re-cargar catálogos si cambia el rango de fechas
-  useEffect(() => {
-    loadCatalogos();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [desde, hasta]);
-
-  // ---------- Cargar reporte (clientes + cc + facturas recientes) ----------
-  const load = async () => {
-    setLoading(true);
-    setErr("");
+    setError("");
 
     try {
-      const qs = new URLSearchParams();
-      if (desde) qs.append("desde", desde);
-      if (hasta) qs.append("hasta", hasta);
-      if (clienteSel) qs.append("cliente", clienteSel);
-      if (costCenter) qs.append("cost_center", costCenter);
-      if (estadoCartera) qs.append("estado", estadoCartera); // 👈 se envía al backend
+      const params = new URLSearchParams();
 
-      console.log("🔍 Fetching analisis_clientes con filtros:", qs.toString());    // se puede quitar para no mostrar en la pagina
+      if (desde) params.set("desde", desde);
+      if (hasta) params.set("hasta", hasta);
+      if (clienteFiltro) params.set("cliente", clienteFiltro);
+      if (centroCostoFiltro) params.set("cost_center", centroCostoFiltro);
+      if (estadoFiltro) params.set("estado", estadoFiltro);
 
-      const res = await authFetch(`/reportes/analisis_clientes?${qs.toString()}`);
-      if (res?.error) {
-        setErr(res.error);
-        setClientes([]);
-        return;
-      }
+      params.set("limit_facturas", "8");
 
-      const clientesRaw: ClienteRow[] = Array.isArray(res?.clientes) ? res.clientes : [];
-      const ccRaw: CentroCostoRow[] = Array.isArray(res?.centros_costo) ? res.centros_costo : [];
-      const factRaw: FacturaRow[] = Array.isArray(res?.facturas_recientes) ? res.facturas_recientes : [];
+      const url = `/reportes/analisis_clientes?${params.toString()}`;
+      const res = await authFetch(url);
 
-      const estadosRaw: FacturasEstadoRow[] = Array.isArray(res?.facturas_por_estado)
-        ? res.facturas_por_estado
-        : [];
+      if (res.error) throw new Error(res.error);
 
-      // Enriquecer: agrupar cc y facturas recientes por cliente
-      const enriched: ClienteUI[] = clientesRaw.map((c) => {
-        const centros = ccRaw
-          .filter((x) => x.cliente_nombre === c.cliente)
-          .map((x) => ({
-            centro_costo_nombre: x.centro_costo_nombre,
-            cost_center: x.cost_center ?? null,
-            cantidad_facturas: x.cantidad_facturas,
-            total: Number(x.total_facturado || 0),
-            pagado: Number(x.total_pagado || 0),
-            pendiente: Number(x.saldo_pendiente || 0),
-          }));
-
-        const facturasCli = factRaw
-        .filter((f) => f.cliente_nombre === c.cliente)
-        .map((f) => ({
-            cliente_nombre: f.cliente_nombre, // 👈 aquí lo agregas
-            idfactura: f.idfactura,
-            fecha: f.fecha,
-            vencimiento: f.vencimiento ?? null,
-            dias_vencimiento: f.dias_vencimiento ?? null,
-            estado_cartera: f.estado_cartera ?? undefined,
-            total: Number(f.total || 0),
-            pagado: Number(f.pagado || 0),
-            pendiente: Number(f.pendiente || 0),
-            public_url: f.public_url,
-        }));
-
-        return {
-          cliente: c.cliente,
-          cantidad_facturas: c.cantidad_facturas,
-          total_facturado: Number(c.total_facturado || 0),
-          total_pagado: Number(c.total_pagado || 0),
-          saldo_pendiente: Number(c.saldo_pendiente || 0),
-          centros_costo: centros,
-          facturas_recientes: facturasCli,
-          facturas_por_estado: (Array.isArray(estadosRaw) ? estadosRaw : []).filter(
-            (e) => e.cliente === c.cliente
-         ),
-
-        };
-      });
-
-      setClientes(enriched);
+      setResumen(res.resumen || null);
+      setClientes(res.clientes || []);
+      setCatalogoClientes(res.catalogos?.clientes || []);
+      setCatalogoCentrosCosto(res.catalogos?.centros_costo || []);
     } catch (e: any) {
-      setErr(e.message);
-      setClientes([]);
+      setError(e.message || "Error cargando el reporte de clientes");
     } finally {
       setLoading(false);
+      setConsultando(false);
     }
   };
 
-  const COLORS: Record<string, string> = {
-    sano: "#2095b0",     // verde #16a34a    
-    alerta: "#facc15",   // amarillo
-    vencido: "#dc2626",  // rojo
-    pagado: "#22c55e",   // verde claro
-    };
-
-
   useEffect(() => {
-    load(); // carga inicial
+    cargarDatos("inicial");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---------- Modal: abrir y paginar facturas ----------
-  const openModal = async (cliente: string) => {
-    setShowModal(true);
-    setModalCliente(cliente);
-    setFacturasModal([]);
-    setModalOffset(0);
-    await loadMasFacturas(cliente, 0);
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setClienteModal(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, []);
+
+  const clientesFiltrados = useMemo(() => {
+    const q = busquedaLocal.trim().toLowerCase();
+
+    const base = clientes.filter((c) => {
+      if (!q) return true;
+      return c.cliente.toLowerCase().includes(q);
+    });
+
+    return [...base].sort((a, b) => {
+      if (orden === "nombre") return a.cliente.localeCompare(b.cliente);
+      if (orden === "saldo") return b.saldo_pendiente - a.saldo_pendiente;
+      if (orden === "vencido") return b.saldo_vencido - a.saldo_vencido;
+      if (orden === "facturas") return b.cantidad_facturas - a.cantidad_facturas;
+      return b.total_facturado - a.total_facturado;
+    });
+  }, [clientes, busquedaLocal, orden]);
+
+  const topFacturacion = useMemo(() => {
+    return [...clientes]
+      .sort((a, b) => b.total_facturado - a.total_facturado)
+      .slice(0, 10)
+      .map((c) => ({
+        cliente: cortarTexto(c.cliente, 24),
+        total_facturado: c.total_facturado,
+      }));
+  }, [clientes]);
+
+  const topSaldo = useMemo(() => {
+    return [...clientes]
+      .sort((a, b) => b.saldo_pendiente - a.saldo_pendiente)
+      .slice(0, 10)
+      .map((c) => ({
+        cliente: cortarTexto(c.cliente, 24),
+        saldo_pendiente: c.saldo_pendiente,
+      }));
+  }, [clientes]);
+
+  const estadoGlobal = useMemo(() => {
+    const data = {
+      pagado: 0,
+      sano: 0,
+      alerta: 0,
+      vencido: 0,
+    };
+
+    clientes.forEach((c) => {
+      data.pagado += c.estados?.pagado || 0;
+      data.sano += c.estados?.sano || 0;
+      data.alerta += c.estados?.alerta || 0;
+      data.vencido += c.estados?.vencido || 0;
+    });
+
+    return [
+      { estado: "Pagado", cantidad: data.pagado },
+      { estado: "Sano", cantidad: data.sano },
+      { estado: "Alerta", cantidad: data.alerta },
+      { estado: "Vencido", cantidad: data.vencido },
+    ];
+  }, [clientes]);
+
+  const todosExpandidos =
+    clientesFiltrados.length > 0 &&
+    clientesFiltrados.every((c) => clientesExpandidos[c.cliente_key]);
+
+  const toggleCliente = (cliente: ClienteInsight) => {
+    setClientesExpandidos((prev) => ({
+      ...prev,
+      [cliente.cliente_key]: !prev[cliente.cliente_key],
+    }));
   };
 
-  const loadMasFacturas = async (cliente: string, offset: number) => {
-    try {
-      const qs = new URLSearchParams();
-      qs.append("cliente", cliente);
-      qs.append("limit", "5");
-      qs.append("offset", offset.toString());
-      if (desde) qs.append("desde", desde);
-      if (hasta) qs.append("hasta", hasta);
-      if (costCenter) qs.append("cost_center", costCenter);
-      if (estadoCartera) qs.append("estado", estadoCartera); // 👈 también aquí
-
-      const res = await authFetch(`/reportes/facturas_cliente?${qs.toString()}`);
-      if (Array.isArray(res?.rows)) {
-        const normalizadas: FacturaRow[] = res.rows.map((f: any) => ({
-        idfactura: f.idfactura,
-        fecha: f.fecha,
-        vencimiento: f.vencimiento ?? null,
-        dias_vencimiento: f.dias_vencimiento ?? null,
-        estado_cartera: f.estado_cartera ?? undefined,
-        total: Number(f.total || 0),
-        pagado: Number(f.pagado || 0),
-        pendiente: Number(f.pendiente || 0),
-        public_url: f.public_url,
-        centro_costo_nombre: f.centro_costo_nombre ?? null,
-        }));
-
-        setFacturasModal((prev) => [...prev, ...normalizadas]);
-        setModalOffset(offset + 5);
-        }
-
-    } catch (e) {
-      console.error("Error cargando facturas cliente", e);
+  const toggleTodos = () => {
+    if (todosExpandidos) {
+      setClientesExpandidos({});
+      return;
     }
+
+    const nuevo: Record<string, boolean> = {};
+    clientesFiltrados.forEach((c) => {
+      nuevo[c.cliente_key] = true;
+    });
+
+    setClientesExpandidos(nuevo);
   };
 
-  // ---------- Render ----------
+  const limpiarFiltros = () => {
+    setDesde("");
+    setHasta("");
+    setClienteFiltro("");
+    setCentroCostoFiltro("");
+    setEstadoFiltro("");
+    setBusquedaLocal("");
+    setOrden("facturado");
+
+    setTimeout(() => {
+      cargarDatos("consulta");
+    }, 0);
+  };
+
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold flex items-center gap-2">📊 Análisis Facturación de Clientes</h2>
+      <div className="rounded-2xl border border-slate-200 bg-gradient-to-r from-emerald-50 via-white to-slate-100 p-5 shadow-sm">
+        <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="mb-3 inline-flex items-center rounded-full border border-blue-100 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500 shadow-sm">
+              Reporte comercial
+            </div>
 
-      {/* Filtros */}
-      <div className="bg-gray-50 p-4 rounded shadow flex flex-wrap gap-4 items-end">
-        <div>
-          <label className="block text-sm">Desde</label>
-          <input
-            type="date"
-            value={desde}
-            onChange={(e) => setDesde(e.target.value)}
-            className="border rounded p-1"
-          />
+            <h1 className="text-2xl font-bold tracking-tight text-slate-950 md:text-3xl">
+              Análisis de Clientes
+            </h1>
+
+            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-600">
+              Vista ejecutiva para analizar clientes facturados, cartera pendiente,
+              pagos, centros de costo y facturas recientes.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:flex md:items-center">
+            <MiniMetric
+              label="Estado"
+              value={loading ? "Cargando" : error ? "Con error" : "Actualizado"}
+            />
+            <MiniMetric
+              label="Clientes"
+              value={resumen?.clientes_facturados ?? 0}
+            />
+            <MiniMetric
+              label="Facturas"
+              value={resumen?.cantidad_facturas ?? 0}
+            />
+            <MiniMetric
+              label="% vencido"
+              value={`${resumen?.pct_vencido ?? 0}%`}
+              danger
+            />
+          </div>
         </div>
-        <div>
-          <label className="block text-sm">Hasta</label>
-          <input
-            type="date"
-            value={hasta}
-            onChange={(e) => setHasta(e.target.value)}
-            className="border rounded p-1"
-          />
-        </div>
-        <div>
-          <label className="block text-sm">Cliente</label>
-          <select
-            value={clienteSel}
-            onChange={(e) => setClienteSel(e.target.value)}
-            className="border rounded p-1"
-          >
-            <option value="">Todos</option>
-            {clientesCatalogo.map((c: any) => (
-              <option key={c.id} value={c.nombre}>
-                {c.nombre}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm">Centro de costo</label>
-          <select
-            value={costCenter}
-            onChange={(e) => setCostCenter(e.target.value)}
-            className="border rounded p-1"
-          >
-            <option value="">Todos</option>
-            {ccCatalogo.map((cc: any) => (
-              <option key={cc.id} value={cc.id}>
-                {cc.nombre}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm">Estado cartera</label>
-          <select
-            value={estadoCartera}
-            onChange={(e) => setEstadoCartera(e.target.value)}
-            className="border rounded p-1"
-          >
-            <option value="">Todos</option>
-            <option value="sano">Sano</option>
-            <option value="alerta">Alerta</option>
-            <option value="vencido">Vencido</option>
-            <option value="pagado">Pagado</option> {/* 👈 nuevo */}
-          </select>
-        </div>
-        <button
-          onClick={load}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-        >
-          Aplicar filtros
-        </button>
       </div>
 
-      {loading && <p>Cargando datos...</p>}
-      {err && <p className="text-red-600">{err}</p>}
+      {loading && (
+        <Card className="rounded-2xl border-slate-200 shadow-sm">
+          <CardContent className="p-6">
+            <p className="text-sm text-slate-500">Cargando reporte de clientes…</p>
+          </CardContent>
+        </Card>
+      )}
 
-      {!loading &&
-        !err &&
-        clientes.map((cli, idx) => (
-          <div key={idx} className="bg-white p-4 rounded shadow space-y-4">
-            <h3 className="text-lg font-semibold">{cli.cliente}</h3>
+      {error && (
+        <Card className="rounded-2xl border-red-200 bg-red-50 shadow-sm">
+          <CardContent className="p-6">
+            <p className="font-medium text-red-700">Error: {error}</p>
+          </CardContent>
+        </Card>
+      )}
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* KPIs */}
-            <div className="grid grid-cols-2 gap-4 text-center">
-                <div>
-                <p className="text-sm text-gray-500">Facturas</p>
-                <p className="text-xl font-bold text-blue-700">{cli.cantidad_facturas}</p>
+      {!loading && !error && (
+        <>
+          <Card className="rounded-2xl border-slate-200 shadow-sm">
+            <CardHeader className="border-b bg-white">
+              <div className="flex flex-col gap-1">
+                <div className="inline-flex w-fit items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 shadow-sm">
+                  Filtros del reporte
                 </div>
-                <div>
-                <p className="text-sm text-gray-500">Total facturado</p>
-                <p className="text-xl font-bold text-emerald-600">{fmtCOP(cli.total_facturado)}</p>
-                </div>
-                <div>
-                <p className="text-sm text-gray-500">Pagado</p>
-                <p className="text-xl font-bold text-green-600">{fmtCOP(cli.total_pagado)}</p>
-                </div>
-                <div>
-                <p className="text-sm text-gray-500">Pendiente</p>
-                <p className="text-xl font-bold text-red-600">{fmtCOP(cli.saldo_pendiente)}</p>
-                </div>
-            </div>
-
-            {/* BarChart */}
-            <div className="flex items-center justify-center">
-                <ResponsiveContainer width="100%" height={180}>
-                <BarChart
-                    data={[
-                    {
-                        name: cli.cliente,
-                        pagado: Number(cli.total_pagado),
-                        pendiente: Number(cli.saldo_pendiente),
-                    },
-                    ]}
-                >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" hide />
-                    <YAxis tickFormatter={fmtShort} />
-                    <Tooltip formatter={(v) => fmtCOP(Number(v))} />
-                    <Bar dataKey="pagado" fill="#16a34a" name="Pagado">
-                        <LabelList
-                            dataKey="pagado"
-                            position="insideTop"
-                            fill="#fff"
-                            formatter={(v: any) => fmtShort(v)}
-                            offset={10} // 👈 le da margen adicional
-                        />
-                    </Bar>
-
-                    <Bar dataKey="pendiente" fill="#dc2626" name="Pendiente">
-                        <LabelList 
-                            dataKey="pendiente"
-                            position="insideTop"
-                            fill="#fff"
-                            formatter={(v: any) => fmtShort(v)}
-                            offset={10} // 👈 le da margen adicional
-                        />
-                    </Bar>
-
-                </BarChart>
-                </ResponsiveContainer>
-            </div>
-
-            {/* PieChart de facturas por estado */}
-            <div className="flex items-center justify-center">
-                <ResponsiveContainer width="100%" height={180}>
-                <PieChart>
-                <Pie
-                    data={cli.facturas_por_estado || []}
-                    dataKey="cantidad"
-                    nameKey="estado"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={60} // 👈 más pequeño
-                    label={({ name, value }) => `${name}: ${value}`} // 👈 etiquetas externas
-                    labelLine={true}
-                >
-                    {(cli.facturas_por_estado || []).map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[entry.estado] || "#8884d8"} />
-                    ))}
-                </Pie>
-                <Tooltip formatter={(v) => `${v} facturas`} />
-                {/*<Legend /> */}
-                </PieChart>
-
-                </ResponsiveContainer>
-            </div>
-            </div>
-
-
-            {/* Por centro de costo */}
-            {cli.centros_costo && cli.centros_costo.length > 0 && (
-              <div>
-                <h4 className="text-md font-semibold mb-2">Por centro de costo</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {cli.centros_costo.map((cc, i) => (
-                    <div key={i} className="p-3 border rounded">
-                      <p className="font-semibold">{cc.centro_costo_nombre}</p>
-                      <p className="text-sm text-gray-500">
-                        {cc.cantidad_facturas} facturas · {fmtCOP(cc.total)}
-                      </p>
-                      <p className="text-green-600 text-sm">Pagado: {fmtCOP(cc.pagado)}</p>
-                      <p className="text-red-600 text-sm">Pendiente: {fmtCOP(cc.pendiente)}</p>
-                    </div>
-                  ))}
-                </div>
+                <CardTitle className="text-lg font-bold tracking-tight text-slate-950">
+                  Consulta de clientes
+                </CardTitle>
+                <p className="text-sm text-slate-500">
+                  Ajusta los filtros y presiona consultar. Los filtros locales no recargan el backend.
+                </p>
               </div>
-            )}
+            </CardHeader>
 
-            {/* Facturas recientes */}
-            {cli.facturas_recientes && cli.facturas_recientes.length > 0 && (
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <h4 className="text-md font-semibold">Facturas recientes</h4>
-                  <button
-                    onClick={() => openModal(cli.cliente)}
-                    className="text-blue-600 underline text-sm"
+            <CardContent className="p-4">
+              <div className="grid gap-3 md:grid-cols-6">
+                <Field label="Desde">
+                  <input
+                    type="date"
+                    value={desde}
+                    onChange={(e) => setDesde(e.target.value)}
+                    className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  />
+                </Field>
+
+                <Field label="Hasta">
+                  <input
+                    type="date"
+                    value={hasta}
+                    onChange={(e) => setHasta(e.target.value)}
+                    className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  />
+                </Field>
+
+                <Field label="Cliente">
+                  <select
+                    value={clienteFiltro}
+                    onChange={(e) => setClienteFiltro(e.target.value)}
+                    className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   >
-                    Más
+                    <option value="">Todos</option>
+                    {catalogoClientes.map((c) => (
+                      <option key={String(c.id)} value={c.nombre}>
+                        {c.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field label="Centro de costo">
+                  <select
+                    value={centroCostoFiltro}
+                    onChange={(e) => setCentroCostoFiltro(e.target.value)}
+                    className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="">Todos</option>
+                    {catalogoCentrosCosto.map((c) => (
+                      <option key={String(c.id)} value={String(c.id)}>
+                        {c.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field label="Estado cartera">
+                  <select
+                    value={estadoFiltro}
+                    onChange={(e) => setEstadoFiltro(e.target.value)}
+                    className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="">Todos</option>
+                    <option value="pagado">Pagado</option>
+                    <option value="sano">Sano</option>
+                    <option value="alerta">Por vencer pronto</option>
+                    <option value="vencido">Vencido</option>
+                  </select>
+                </Field>
+
+                <div className="flex items-end gap-2">
+                  <button
+                    onClick={() => cargarDatos("consulta")}
+                    disabled={consultando}
+                    className="h-10 flex-1 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {consultando ? "Consultando…" : "Consultar"}
+                  </button>
+
+                  <button
+                    onClick={limpiarFiltros}
+                    disabled={consultando}
+                    className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Limpiar
                   </button>
                 </div>
-                <table className="w-full text-sm border">
-                  <thead className="bg-gray-100">
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <KpiCard
+              title="Total facturado"
+              value={resumen?.total_facturado_str}
+              helper="Valor total de facturas emitidas en el periodo consultado."
+              tone="blue"
+            />
+
+            <KpiCard
+              title="Total pagado"
+              value={resumen?.total_pagado_str}
+              helper={`${resumen?.pct_pagado ?? 0}% del total facturado.`}
+              tone="green"
+            />
+
+            <KpiCard
+              title="Saldo pendiente"
+              value={resumen?.saldo_pendiente_str}
+              helper="Valor aún pendiente por recaudar."
+              tone="orange"
+            />
+
+            <KpiCard
+              title="Saldo vencido"
+              value={resumen?.saldo_vencido_str}
+              helper={`${resumen?.pct_vencido ?? 0}% del saldo pendiente.`}
+              tone="red"
+            />
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-3">
+            <Card className="rounded-2xl border-slate-200 shadow-sm xl:col-span-1">
+              <CardHeader className="border-b">
+                <CardTitle className="text-base font-bold">
+                  Top clientes por facturación
+                </CardTitle>
+                <p className="text-sm text-slate-500">
+                  Clientes con mayor valor facturado.
+                </p>
+              </CardHeader>
+              <CardContent className="p-4">
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart
+                    data={topFacturacion}
+                    layout="vertical"
+                    margin={{ top: 10, right: 25, left: 10, bottom: 10 }}
+                  >
+                    <XAxis
+                      type="number"
+                      tickFormatter={(v) => formatoAbreviado(Number(v))}
+                      tick={{ fontSize: 11 }}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="cliente"
+                      width={120}
+                      tick={{ fontSize: 11 }}
+                    />
+                    <Tooltip formatter={(v: any) => fmt(Number(v))} />
+                    <Bar dataKey="total_facturado" fill="#2563eb" radius={[0, 6, 6, 0]}>
+                      <LabelList
+                        dataKey="total_facturado"
+                        position="right"
+                        formatter={(v: any) => formatoAbreviado(Number(v))}
+                        fontSize={11}
+                        fill="#334155"
+                      />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-2xl border-slate-200 shadow-sm xl:col-span-1">
+              <CardHeader className="border-b">
+                <CardTitle className="text-base font-bold">
+                  Top clientes por saldo
+                </CardTitle>
+                <p className="text-sm text-slate-500">
+                  Clientes con mayor cartera pendiente.
+                </p>
+              </CardHeader>
+              <CardContent className="p-4">
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart
+                    data={topSaldo}
+                    layout="vertical"
+                    margin={{ top: 10, right: 25, left: 10, bottom: 10 }}
+                  >
+                    <XAxis
+                      type="number"
+                      tickFormatter={(v) => formatoAbreviado(Number(v))}
+                      tick={{ fontSize: 11 }}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="cliente"
+                      width={120}
+                      tick={{ fontSize: 11 }}
+                    />
+                    <Tooltip formatter={(v: any) => fmt(Number(v))} />
+                    <Bar dataKey="saldo_pendiente" fill="#f97316" radius={[0, 6, 6, 0]}>
+                      <LabelList
+                        dataKey="saldo_pendiente"
+                        position="right"
+                        formatter={(v: any) => formatoAbreviado(Number(v))}
+                        fontSize={11}
+                        fill="#334155"
+                      />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-2xl border-slate-200 shadow-sm xl:col-span-1">
+              <CardHeader className="border-b">
+                <CardTitle className="text-base font-bold">
+                  Estado de facturas
+                </CardTitle>
+                <p className="text-sm text-slate-500">
+                  Distribución de facturas por estado de cartera.
+                </p>
+              </CardHeader>
+              <CardContent className="p-4">
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart
+                    data={estadoGlobal}
+                    margin={{ top: 20, right: 15, left: 5, bottom: 10 }}
+                  >
+                    <XAxis dataKey="estado" tick={{ fontSize: 11 }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                    <Tooltip />
+                    <Bar dataKey="cantidad" radius={[6, 6, 0, 0]}>
+                      {estadoGlobal.map((e, idx) => (
+                        <Cell
+                          key={idx}
+                          fill={
+                            e.estado === "Pagado"
+                              ? "#16a34a"
+                              : e.estado === "Sano"
+                              ? "#2563eb"
+                              : e.estado === "Alerta"
+                              ? "#f97316"
+                              : "#dc2626"
+                          }
+                        />
+                      ))}
+                      <LabelList dataKey="cantidad" position="top" fontSize={11} fill="#334155" />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="rounded-2xl border-slate-200 shadow-sm">
+            <CardHeader className="border-b bg-white">
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                <div>
+                  <div className="mb-2 inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 shadow-sm">
+                    Detalle de clientes
+                  </div>
+
+                  <CardTitle className="text-lg font-bold tracking-tight text-slate-950">
+                    Clientes facturados
+                  </CardTitle>
+
+                  <p className="mt-1 text-sm text-slate-500">
+                    Expande un cliente para ver centros de costo, estados y facturas recientes.
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-2 md:flex-row md:items-center">
+                  <input
+                    type="text"
+                    value={busquedaLocal}
+                    onChange={(e) => setBusquedaLocal(e.target.value)}
+                    placeholder="Buscar cliente..."
+                    className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 md:w-64"
+                  />
+
+                  <select
+                    value={orden}
+                    onChange={(e) => setOrden(e.target.value as any)}
+                    className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="facturado">Ordenar: facturación</option>
+                    <option value="saldo">Ordenar: saldo pendiente</option>
+                    <option value="vencido">Ordenar: saldo vencido</option>
+                    <option value="facturas">Ordenar: # facturas</option>
+                    <option value="nombre">Ordenar: nombre</option>
+                  </select>
+
+                  <button
+                    onClick={toggleTodos}
+                    className="h-10 rounded-lg bg-slate-700 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
+                  >
+                    {todosExpandidos ? "Contraer todos" : "Expandir todos"}
+                  </button>
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1180px] text-sm">
+                  <thead className="sticky top-0 z-10 bg-slate-100 text-slate-700">
                     <tr>
-                      <th className="p-2 border">Factura</th>
-                      <th className="p-2 border">Fecha Factura</th>
-                      <th className="p-2 border">Fecha Vencimiento</th>
-                      <th className="p-2 border">Días Vencimiento</th>
-                      <th className="p-2 border">Estado</th>
-                      <th className="p-2 border">Total</th>
-                      <th className="p-2 border">Pagado</th>
-                      <th className="p-2 border">Pendiente</th>
-                      <th className="p-2 border">Link</th>
+                      <th className="p-3 text-left">Cliente</th>
+                      <th className="p-3 text-right">Facturas</th>
+                      <th className="p-3 text-right">Total facturado</th>
+                      <th className="p-3 text-right">Pagado</th>
+                      <th className="p-3 text-right">Saldo pendiente</th>
+                      <th className="p-3 text-right">Saldo vencido</th>
+                      <th className="p-3 text-right">% vencido</th>
+                      <th className="p-3 text-center">Acción</th>
                     </tr>
                   </thead>
+
                   <tbody>
-                    {cli.facturas_recientes.map((f, j) => (
-                      <tr key={j} className="border-t">
-                        <td className="p-2 font-mono">{f.idfactura}</td>
-
-                        <td className="p-2">{f.fecha}</td>
-                        <td className="p-2">{f.vencimiento || "-"}</td>
-                        <td
-                            className={`p-2 font-bold ${
-                                f.estado_cartera === "pagado"
-                                ? "text-green-600"
-                                : f.dias_vencimiento !== null && f.dias_vencimiento < 0
-                                ? "text-red-600"
-                                : f.dias_vencimiento !== null && f.dias_vencimiento <= 5
-                                ? "text-yellow-600"
-                                : "text-black"
-                            }`}
-                            >
-                            {/* 👇 Si es pagado, no mostramos días */}
-                            {f.estado_cartera === "pagado"
-                                ? "-"
-                                : f.dias_vencimiento !== null
-                                ? f.dias_vencimiento > 0
-                                ? `+${f.dias_vencimiento}`
-                                : f.dias_vencimiento
-                                : "-"}
-                        </td>
-                        <td className="p-2">
-                            {f.estado_cartera === "sano" && <span className="text-green-600">✔️</span>}
-                            {f.estado_cartera === "alerta" && <span className="text-yellow-600">⚠️</span>}
-                            {f.estado_cartera === "vencido" && <span className="text-red-600">❌</span>}
-                            {f.estado_cartera === "pagado" && (
-                                <span className="text-green-600 font-bold">✅ Pagado</span>
-                            )}
-                        </td>
-
-                        <td className="p-2">{fmtCOP(f.total)}</td>
-                        <td className="p-2 text-green-600">{fmtCOP(f.pagado)}</td>
-                        <td className="p-2 text-red-600">{fmtCOP(f.pendiente)}</td>
-
-                        <td className="p-2">
-                          {f.public_url ? (
-                            <a
-                              href={f.public_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 underline"
-                            >
-                              Ver
-                            </a>
-                          ) : (
-                            "-"
-                          )}
+                    {clientesFiltrados.length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="p-8 text-center text-slate-500">
+                          No hay clientes para los filtros seleccionados.
                         </td>
                       </tr>
-                    ))}
+                    )}
+
+                    {clientesFiltrados.map((c) => {
+                      const expandido = !!clientesExpandidos[c.cliente_key];
+
+                      return (
+                        <Fragment key={c.cliente_key}>
+                          <tr className="border-b bg-white hover:bg-slate-50">
+                            <td className="p-3">
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleCliente(c)}
+                                  className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-300 bg-white text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-100"
+                                >
+                                  {expandido ? "−" : "+"}
+                                </button>
+
+                                <div>
+                                  <div className="font-semibold text-slate-900">
+                                    {c.cliente}
+                                  </div>
+
+                                  <div className="text-xs text-slate-500">
+                                    Última factura: {c.ultima_factura || "-"} ·{" "}
+                                    {c.cantidad_centros_costo} centro(s) de costo
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+
+                            <td className="p-3 text-right font-medium">
+                              {c.cantidad_facturas}
+                            </td>
+
+                            <td className="p-3 text-right font-semibold text-blue-700">
+                              {c.total_facturado_str}
+                            </td>
+
+                            <td className="p-3 text-right text-green-700">
+                              <div className="font-semibold">{c.total_pagado_str}</div>
+                              <div className="text-[11px] text-slate-500">
+                                {fmtPct(c.pct_pagado)}
+                              </div>
+                            </td>
+
+                            <td className="p-3 text-right text-orange-600">
+                              <div className="font-semibold">{c.saldo_pendiente_str}</div>
+                              <div className="text-[11px] text-slate-500">
+                                {fmtPct(c.pct_pendiente)}
+                              </div>
+                            </td>
+
+                            <td className="p-3 text-right text-red-600">
+                              {c.saldo_vencido_str}
+                            </td>
+
+                            <td className="p-3 text-right">
+                              <span
+                                className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                                  c.pct_vencido > 50
+                                    ? "bg-red-100 text-red-700"
+                                    : c.pct_vencido > 0
+                                    ? "bg-orange-100 text-orange-700"
+                                    : "bg-green-100 text-green-700"
+                                }`}
+                              >
+                                {fmtPct(c.pct_vencido)}
+                              </span>
+                            </td>
+
+                            <td className="p-3 text-center">
+                              <button
+                                onClick={() => setClienteModal(c)}
+                                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                              >
+                                Ver ficha
+                              </button>
+                            </td>
+                          </tr>
+
+                          {expandido && (
+                            <tr className="bg-slate-50">
+                              <td colSpan={8} className="p-0">
+                                <ClienteDetalleInline cliente={c} />
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
-            )}
-          </div>
-        ))}
+            </CardContent>
+          </Card>
 
-      {/* Modal facturas */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start p-6 overflow-auto">
-          <div className="bg-white rounded shadow-lg w-full max-w-4xl p-6 relative">
-            <button
-              onClick={() => setShowModal(false)}
-              className="absolute top-2 right-2 text-gray-500 hover:text-black"
-            >
-              ✖
-            </button>
-            <h3 className="text-lg font-bold mb-4">Facturas de {modalCliente}</h3>
-            <table className="w-full text-sm border">
-              <thead className="bg-gray-100">
+          {clienteModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+              <div
+                className="relative flex flex-col rounded-2xl border border-white/40 bg-white shadow-2xl"
+                style={{
+                  width: "min(95vw, 1180px)",
+                  height: "min(90vh, 780px)",
+                  minWidth: "430px",
+                  minHeight: "420px",
+                  maxWidth: "96vw",
+                  maxHeight: "92vh",
+                  resize: "both",
+                  overflow: "auto",
+                }}
+              >
+                <div className="sticky top-0 z-20 flex items-center justify-between rounded-t-2xl border-b bg-white px-4 py-3">
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-950">
+                      Ficha del cliente
+                    </h2>
+                    <p className="text-xs text-slate-500">
+                      Puedes ampliar o reducir esta ventana desde la esquina inferior derecha.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => setClienteModal(null)}
+                    className="flex h-9 w-9 items-center justify-center rounded-full bg-red-500 text-white transition hover:bg-red-600"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-auto p-4">
+                  <ClienteFicha cliente={clienteModal} />
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function ClienteDetalleInline({ cliente }: { cliente: ClienteInsight }) {
+  return (
+    <div className="space-y-4 border-b border-slate-200 p-4">
+      <div className="grid gap-3 md:grid-cols-4">
+        <MiniState label="Pagadas" value={cliente.estados.pagado} tone="green" />
+        <MiniState label="Sanas" value={cliente.estados.sano} tone="blue" />
+        <MiniState label="Por vencer pronto" value={cliente.estados.alerta} tone="orange" />
+        <MiniState label="Vencidas" value={cliente.estados.vencido} tone="red" />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <h3 className="mb-2 text-sm font-bold text-slate-900">
+            Centros de costo
+          </h3>
+
+          <div className="max-h-72 overflow-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-slate-100 text-slate-700">
                 <tr>
-                  <th className="p-2 border">Factura</th>
-
-                  <th className="p-2 border">Fecha Factura</th>
-                  <th className="p-2 border">Fecha Vencimiento</th>
-                  <th className="p-2 border">Días Vencimiento</th>
-                  <th className="p-2 border">Estado</th>
-                  <th className="p-2 border">Total</th>
-                  <th className="p-2 border">Pagado</th>
-                  <th className="p-2 border">Pendiente</th>
-                  <th className="p-2 border">Centro costo</th>
-                  <th className="p-2 border">Link</th>
+                  <th className="p-2 text-left">Centro de costo</th>
+                  <th className="p-2 text-right">Facturas</th>
+                  <th className="p-2 text-right">Facturado</th>
+                  <th className="p-2 text-right">Pendiente</th>
                 </tr>
               </thead>
+
               <tbody>
-                {facturasModal.map((f, j) => (
-                  <tr key={j} className="border-t">
-                    <td className="p-2 font-mono">{f.idfactura}</td>
-                    <td className="p-2">{f.fecha}</td>
-                    <td className="p-2">{f.vencimiento || "-"}</td>
-                    <td
-                        className={`p-2 font-bold ${
-                            f.estado_cartera === "pagado"
-                            ? "text-green-600"
-                            : f.dias_vencimiento !== null && f.dias_vencimiento < 0
-                            ? "text-red-600"
-                            : f.dias_vencimiento !== null && f.dias_vencimiento <= 5
-                            ? "text-yellow-600"
-                            : "text-black"
-                        }`}
-                        >
-                        {f.estado_cartera === "pagado"
-                            ? "-" // 👈 no mostrar días si ya está pagado
-                            : f.dias_vencimiento !== null
-                            ? f.dias_vencimiento > 0
-                            ? `+${f.dias_vencimiento}`
-                            : f.dias_vencimiento
-                            : "-"}
+                {cliente.centros_costo.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="p-3 text-center text-slate-500">
+                      Sin centros de costo.
                     </td>
+                  </tr>
+                )}
 
-
-                    <td className="p-2">
-                        {f.estado_cartera === "sano" && <span className="text-green-600">✔️</span>}
-                        {f.estado_cartera === "alerta" && <span className="text-yellow-600">⚠️</span>}
-                        {f.estado_cartera === "vencido" && <span className="text-red-600">❌</span>}
-                        {f.estado_cartera === "pagado" && (
-                            <span className="text-green-600 font-bold">✅ Pagado</span>
-                        )}
+                {cliente.centros_costo.map((cc, idx) => (
+                  <tr key={`${cc.cost_center}-${idx}`} className="border-t">
+                    <td className="p-2">{cc.centro_costo_nombre}</td>
+                    <td className="p-2 text-right">{cc.cantidad_facturas}</td>
+                    <td className="p-2 text-right font-semibold text-blue-700">
+                      {cc.total_facturado_str}
                     </td>
-
-                    
-                    <td className="p-2">{fmtCOP(f.total)}</td>
-                    <td className="p-2 text-green-600">{fmtCOP(f.pagado)}</td>
-                    <td className="p-2 text-red-600">{fmtCOP(f.pendiente)}</td>
-                    <td className="p-2">{f.centro_costo_nombre || "-"}</td>
-                    <td className="p-2">
-                      {f.public_url ? (
-                        <a
-                          href={f.public_url as string}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 underline"
-                        >
-                          Ver
-                        </a>
-                      ) : (
-                        "-"
-                      )}
+                    <td className="p-2 text-right font-semibold text-orange-600">
+                      {cc.saldo_pendiente_str}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <div className="text-center mt-4">
-              <button
-                onClick={() => loadMasFacturas(modalCliente, modalOffset)}
-                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-              >
-                Cargar más
-              </button>
-            </div>
           </div>
         </div>
-      )}
+
+        <FacturasRecientesTable facturas={cliente.facturas_recientes} />
+      </div>
     </div>
   );
+}
+
+function ClienteFicha({ cliente }: { cliente: ClienteInsight }) {
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-50 via-white to-blue-50 p-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="mb-2 inline-flex rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 shadow-sm">
+              Cliente
+            </div>
+
+            <h2 className="text-2xl font-bold text-slate-950">
+              {cliente.cliente}
+            </h2>
+
+            <p className="mt-1 text-sm text-slate-500">
+              {cliente.cantidad_facturas} factura(s) · {cliente.cantidad_centros_costo} centro(s) de costo · Última factura:{" "}
+              {cliente.ultima_factura || "-"}
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-right shadow-sm">
+            <p className="text-xs text-slate-500">Saldo pendiente</p>
+            <p className="text-xl font-bold text-orange-600">
+              {cliente.saldo_pendiente_str}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-4">
+        <KpiCard
+          title="Total facturado"
+          value={cliente.total_facturado_str}
+          helper="Facturación total del cliente."
+          tone="blue"
+        />
+        <KpiCard
+          title="Total pagado"
+          value={cliente.total_pagado_str}
+          helper={`${fmtPct(cliente.pct_pagado)} del total facturado.`}
+          tone="green"
+        />
+        <KpiCard
+          title="Saldo pendiente"
+          value={cliente.saldo_pendiente_str}
+          helper={`${fmtPct(cliente.pct_pendiente)} del total facturado.`}
+          tone="orange"
+        />
+        <KpiCard
+          title="Saldo vencido"
+          value={cliente.saldo_vencido_str}
+          helper={`${fmtPct(cliente.pct_vencido)} del saldo pendiente.`}
+          tone="red"
+        />
+      </div>
+
+      <ClienteDetalleInline cliente={cliente} />
+    </div>
+  );
+}
+
+function FacturasRecientesTable({ facturas }: { facturas: FacturaCliente[] }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3">
+      <h3 className="mb-2 text-sm font-bold text-slate-900">
+        Facturas recientes
+      </h3>
+
+      <div className="max-h-72 overflow-auto">
+        <table className="w-full min-w-[720px] text-xs">
+          <thead className="bg-slate-100 text-slate-700">
+            <tr>
+              <th className="p-2 text-left">Factura</th>
+              <th className="p-2 text-left">Fecha</th>
+              <th className="p-2 text-left">Vencimiento</th>
+              <th className="p-2 text-left">Estado</th>
+              <th className="p-2 text-right">Total</th>
+              <th className="p-2 text-right">Pendiente</th>
+              <th className="p-2 text-center">Link</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {facturas.length === 0 && (
+              <tr>
+                <td colSpan={7} className="p-3 text-center text-slate-500">
+                  Sin facturas recientes.
+                </td>
+              </tr>
+            )}
+
+            {facturas.map((f, idx) => (
+              <tr key={`${f.idfactura}-${idx}`} className="border-t hover:bg-slate-50">
+                <td className="p-2 font-medium whitespace-nowrap">{f.idfactura}</td>
+                <td className="p-2 whitespace-nowrap">{f.fecha || "-"}</td>
+                <td className="p-2 whitespace-nowrap">{f.vencimiento || "-"}</td>
+                <td className="p-2 whitespace-nowrap">
+                  <EstadoBadge estado={f.estado_cartera} />
+                </td>
+                <td className="p-2 text-right whitespace-nowrap font-semibold text-blue-700">
+                  {f.total_str}
+                </td>
+                <td className="p-2 text-right whitespace-nowrap font-semibold text-orange-600">
+                  {f.pendiente_str}
+                </td>
+                <td className="p-2 text-center">
+                  {f.public_url ? (
+                    <a
+                      href={f.public_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-medium text-blue-600 hover:underline"
+                    >
+                      Ver
+                    </a>
+                  ) : (
+                    <span className="text-slate-400">-</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="space-y-1">
+      <span className="text-xs font-semibold text-slate-600">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function MiniMetric({
+  label,
+  value,
+  danger = false,
+}: {
+  label: string;
+  value: any;
+  danger?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-xl border bg-white px-4 py-3 text-center shadow-sm ${
+        danger ? "border-red-100" : "border-slate-200"
+      }`}
+    >
+      <p className="text-[11px] font-medium text-slate-500">{label}</p>
+      <p className={`mt-1 text-sm font-bold ${danger ? "text-red-600" : "text-slate-900"}`}>
+        {value ?? "-"}
+      </p>
+    </div>
+  );
+}
+
+function MiniState({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "green" | "blue" | "orange" | "red";
+}) {
+  const cls: Record<string, string> = {
+    green: "bg-green-50 text-green-700 border-green-100",
+    blue: "bg-blue-50 text-blue-700 border-blue-100",
+    orange: "bg-orange-50 text-orange-700 border-orange-100",
+    red: "bg-red-50 text-red-700 border-red-100",
+  };
+
+  return (
+    <div className={`rounded-xl border px-3 py-2 shadow-sm ${cls[tone]}`}>
+      <p className="text-xs font-medium opacity-80">{label}</p>
+      <p className="text-lg font-bold">{value}</p>
+    </div>
+  );
+}
+
+function KpiCard({
+  title,
+  value,
+  helper,
+  tone = "slate",
+}: {
+  title: string;
+  value: any;
+  helper?: string;
+  tone?: "slate" | "blue" | "green" | "orange" | "red";
+}) {
+  const toneMap: Record<string, string> = {
+    slate: "text-slate-900 bg-slate-50 border-slate-200",
+    blue: "text-blue-700 bg-blue-50 border-blue-100",
+    green: "text-green-700 bg-green-50 border-green-100",
+    orange: "text-orange-700 bg-orange-50 border-orange-100",
+    red: "text-red-700 bg-red-50 border-red-100",
+  };
+
+  return (
+    <Card className={`rounded-2xl border ${toneMap[tone]} shadow-sm transition hover:shadow-md`}>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-semibold">{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-xl font-bold">{value ?? "-"}</p>
+        {helper && <p className="mt-1 text-xs text-slate-500">{helper}</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
+function EstadoBadge({ estado }: { estado: string }) {
+  const labelMap: Record<string, string> = {
+    pagado: "Pagado",
+    sano: "Sano",
+    alerta: "Por vencer",
+    vencido: "Vencido",
+  };
+
+  const cls =
+    estado === "pagado"
+      ? "bg-green-50 text-green-700 border-green-100"
+      : estado === "sano"
+      ? "bg-blue-50 text-blue-700 border-blue-100"
+      : estado === "alerta"
+      ? "bg-orange-50 text-orange-700 border-orange-100"
+      : "bg-red-50 text-red-700 border-red-100";
+
+  return (
+    <span className={`inline-flex rounded-full border px-2 py-1 text-[11px] font-semibold ${cls}`}>
+      {labelMap[estado] || estado}
+    </span>
+  );
+}
+
+function fmt(n: any) {
+  const value = Number(n || 0);
+  return `$ ${value.toLocaleString("es-CO", { maximumFractionDigits: 0 })}`;
+}
+
+function fmtPct(n: any) {
+  const value = Number(n || 0);
+  return `${value.toLocaleString("es-CO", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })}%`;
+}
+
+function formatoAbreviado(n: number) {
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(0)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
+  return `${Math.round(n)}`;
+}
+
+function cortarTexto(texto: string, max = 24) {
+  if (!texto) return "";
+  if (texto.length <= max) return texto;
+  return `${texto.slice(0, max)}…`;
 }

@@ -219,26 +219,51 @@ export default function ReporteCxCPage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-6 text-white shadow-lg">
-        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+      <div className="rounded-2xl border border-slate-200 bg-gradient-to-r from-emerald-50 via-white to-slate-100 p-5 shadow-sm">
+        <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-sm uppercase tracking-[0.25em] text-blue-200">
-              InsightFlow · Financiero
-            </p>
-            <h1 className="mt-2 text-2xl font-bold md:text-3xl">
-              Reporte de Cuentas por Cobrar
+            <div className="mb-3 inline-flex items-center rounded-full border border-blue-100 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500 shadow-sm">
+              Clientes y Cartera
+            </div>
+
+            <h1 className="text-2xl font-bold tracking-tight text-slate-950 md:text-3xl">
+              Cuentas por Cobrar
             </h1>
-            <p className="mt-2 max-w-3xl text-sm text-slate-300">
-              Análisis de cartera por vencimiento, cliente y factura. Usa la tabla de aging
-              para revisar la deuda resumida y expande cada cliente para ver el detalle.
+
+            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-600">
+              Vista ejecutiva de cartera por vencimiento, cliente y factura. Revisa la deuda
+              resumida en aging y expande cada cliente para consultar el detalle de sus facturas.
             </p>
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-white/10 px-4 py-3 text-right backdrop-blur">
-            <p className="text-xs text-blue-100">Estado del reporte</p>
-            <p className="text-lg font-semibold">
-              {loading ? "Cargando..." : error ? "Con error" : "Actualizado"}
-            </p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:flex md:items-center">
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center shadow-sm">
+              <p className="text-[11px] font-medium text-slate-500">Estado</p>
+              <p className="mt-1 text-sm font-bold text-slate-900">
+                {loading ? "Cargando" : error ? "Con error" : "Actualizado"}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center shadow-sm">
+              <p className="text-[11px] font-medium text-slate-500">Facturas</p>
+              <p className="mt-1 text-lg font-bold text-slate-900">
+                {resumen.facturas_vivas ?? 0}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center shadow-sm">
+              <p className="text-[11px] font-medium text-slate-500">Clientes</p>
+              <p className="mt-1 text-lg font-bold text-slate-900">
+                {clientes.length}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-red-100 bg-white px-4 py-3 text-center shadow-sm">
+              <p className="text-[11px] font-medium text-slate-500">% Vencido</p>
+              <p className="mt-1 text-lg font-bold text-red-600">
+                {resumen.pct_vencido ?? 0}%
+              </p>
+            </div>
           </div>
         </div>
       </div>

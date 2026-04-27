@@ -358,13 +358,13 @@ export default function DashboardFinanciero() {
       />
 
       <div className="rounded-2xl border border-slate-200 bg-gradient-to-r from-emerald-50 via-white to-slate-100 p-5 shadow-sm">
-        <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="mb-3 inline-flex items-center rounded-full border border-blue-100 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500 shadow-sm">
               Reporte financiero
             </div>
 
-            <h1 className="text-2xl font-bold tracking-tight text-slate-950 md:text-3xl">
+            <h1 className="text-xl font-bold tracking-tight text-slate-950 md:text-2xl">
               Ingresos por Ventas
             </h1>
 
@@ -492,58 +492,57 @@ export default function DashboardFinanciero() {
 
       {!loading && !err && (
         <>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <KpiCard
-              title="Ventas netas"
-              value={fmtCOP(totalSubtotal)}
-              helper="Valor neto comercial de las ventas."
-              tone="green"
-            />
-            <KpiCard
-              title="Impuestos"
-              value={fmtCOP(totalImpuestos)}
-              helper="Impuestos asociados a las facturas."
-              tone="yellow"
-            />
-            <KpiCard
-              title="Retenciones"
-              value={fmtCOP(totalRetenciones)}
-              helper="Retenciones diferentes a autorretención."
-              tone="orange"
-            />
-            <KpiCard
-              title="Total facturado Siigo"
-              value={fmtCOP(totalFacturado)}
-              helper="Valor total facturado según Siigo."
-              tone="emerald"
-            />
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <KpiCard
-              title="Autorretención"
-              value={fmtCOP(totalAutorretencion)}
-              helper="Autorretenciones registradas en facturas."
-              tone="purple"
-            />
-            <KpiCard
-              title="Total utilizable"
-              value={fmtCOP(totalUtilizable)}
-              helper="Total facturado menos retenciones."
-              tone="teal"
-            />
-            <KpiCard
-              title="Pagado"
-              value={fmtCOP(totalPagado)}
-              helper={`${fmtPct(pctPagado)} del total facturado Siigo.`}
-              tone="blue"
-            />
-            <KpiCard
-              title="Pendiente"
-              value={fmtCOP(totalPendiente)}
-              helper={`${fmtPct(pctPendiente)} del total facturado Siigo.`}
-              tone="red"
-            />
+          <div className="overflow-x-auto pb-1">
+            <div className="grid min-w-[1280px] grid-cols-8 gap-3">
+              <KpiCard
+                title="Ventas netas"
+                value={fmtCOP(totalSubtotal)}
+                helper="Valor neto comercial."
+                tone="green"
+              />
+              <KpiCard
+                title="Impuestos"
+                value={fmtCOP(totalImpuestos)}
+                helper="Impuestos asociados."
+                tone="yellow"
+              />
+              <KpiCard
+                title="Retenciones"
+                value={fmtCOP(totalRetenciones)}
+                helper="Sin autorretención."
+                tone="orange"
+              />
+              <KpiCard
+                title="Total Siigo"
+                value={fmtCOP(totalFacturado)}
+                helper="Total facturado."
+                tone="emerald"
+              />
+              <KpiCard
+                title="Autorretención"
+                value={fmtCOP(totalAutorretencion)}
+                helper="Autorretenciones."
+                tone="purple"
+              />
+              <KpiCard
+                title="Total utilizable"
+                value={fmtCOP(totalUtilizable)}
+                helper="Total menos retenciones."
+                tone="teal"
+              />
+              <KpiCard
+                title="Pagado"
+                value={fmtCOP(totalPagado)}
+                helper={`${fmtPct(pctPagado)}% del total.`}
+                tone="blue"
+              />
+              <KpiCard
+                title="Pendiente"
+                value={fmtCOP(totalPendiente)}
+                helper={`${fmtPct(pctPendiente)}% del total.`}
+                tone="red"
+              />
+            </div>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -946,10 +945,16 @@ function KpiCard({
   };
 
   return (
-    <div className={`rounded-2xl border p-5 shadow-sm transition hover:shadow-md ${toneMap[tone]}`}>
-      <p className="text-sm font-semibold">{title}</p>
-      <p className="mt-7 text-xl font-bold">{value ?? "-"}</p>
-      {helper && <p className="mt-2 text-xs text-slate-500">{helper}</p>}
+    <div
+      className={`rounded-2xl border p-3 shadow-sm transition hover:shadow-md ${toneMap[tone]}`}
+    >
+      <p className="text-xs font-semibold leading-tight">{title}</p>
+      <p className="mt-4 text-base font-bold leading-tight">{value ?? "-"}</p>
+      {helper && (
+        <p className="mt-1 text-[11px] leading-snug text-slate-500">
+          {helper}
+        </p>
+      )}
     </div>
   );
 }

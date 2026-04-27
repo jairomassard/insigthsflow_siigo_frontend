@@ -25,12 +25,22 @@ type FacturaCliente = {
   idfactura: string;
   fecha: string | null;
   vencimiento: string | null;
+
+  ventas_netas: number;
+  impuestos: number;
+  total_facturado_siigo: number;
+
+  ventas_netas_str: string;
+  impuestos_str: string;
+  total_facturado_siigo_str: string;
+
   total: number;
   pagado: number;
   pendiente: number;
   total_str: string;
   pagado_str: string;
   pendiente_str: string;
+
   public_url: string | null;
   cliente_nombre: string;
   cliente_key: string;
@@ -44,9 +54,19 @@ type CentroCostoCliente = {
   centro_costo_nombre: string;
   cost_center?: number | string | null;
   cantidad_facturas: number;
+
+  ventas_netas: number;
+  impuestos: number;
+  total_facturado_siigo: number;
+
   total_facturado: number;
   total_pagado: number;
   saldo_pendiente: number;
+
+  ventas_netas_str: string;
+  impuestos_str: string;
+  total_facturado_siigo_str: string;
+
   total_facturado_str: string;
   saldo_pendiente_str: string;
 };
@@ -56,16 +76,27 @@ type ClienteInsight = {
   cliente_key: string;
   cantidad_facturas: number;
   cantidad_centros_costo: number;
+
+  ventas_netas: number;
+  impuestos: number;
+  total_facturado_siigo: number;
+
   total_facturado: number;
   total_pagado: number;
   saldo_pendiente: number;
   saldo_vencido: number;
   saldo_por_vencer: number;
+
+  ventas_netas_str: string;
+  impuestos_str: string;
+  total_facturado_siigo_str: string;
+
   total_facturado_str: string;
   total_pagado_str: string;
   saldo_pendiente_str: string;
   saldo_vencido_str: string;
   saldo_por_vencer_str: string;
+
   pct_pagado: number;
   pct_pendiente: number;
   pct_vencido: number;
@@ -89,13 +120,24 @@ type ClienteInsight = {
 type ResumenClientes = {
   clientes_facturados: number;
   cantidad_facturas: number;
+
+  ventas_netas: number;
+  impuestos: number;
+  total_facturado_siigo: number;
+
   total_facturado: number;
   total_pagado: number;
   saldo_pendiente: number;
   saldo_vencido: number;
   saldo_por_vencer: number;
+
   pct_pagado: number;
   pct_vencido: number;
+
+  ventas_netas_str: string;
+  impuestos_str: string;
+  total_facturado_siigo_str: string;
+
   total_facturado_str: string;
   total_pagado_str: string;
   saldo_pendiente_str: string;
@@ -123,8 +165,8 @@ export default function ReporteClientesPage() {
 
   const [busquedaLocal, setBusquedaLocal] = useState("");
   const [orden, setOrden] = useState<
-    "facturado" | "saldo" | "vencido" | "facturas" | "nombre"
-  >("facturado");
+    "ventas_netas" | "saldo" | "vencido" | "facturas" | "nombre" | "total_siigo"
+  >("ventas_netas");
 
   const [clientesExpandidos, setClientesExpandidos] = useState<Record<string, boolean>>({});
   const [clienteModal, setClienteModal] = useState<ClienteInsight | null>(null);
@@ -195,17 +237,18 @@ export default function ReporteClientesPage() {
       if (orden === "saldo") return b.saldo_pendiente - a.saldo_pendiente;
       if (orden === "vencido") return b.saldo_vencido - a.saldo_vencido;
       if (orden === "facturas") return b.cantidad_facturas - a.cantidad_facturas;
-      return b.total_facturado - a.total_facturado;
+      if (orden === "total_siigo") return b.total_facturado_siigo - a.total_facturado_siigo;
+      return b.ventas_netas - a.ventas_netas;
     });
   }, [clientes, busquedaLocal, orden]);
 
-  const topFacturacion = useMemo(() => {
+  const topVentasNetas = useMemo(() => {
     return [...clientes]
-      .sort((a, b) => b.total_facturado - a.total_facturado)
+      .sort((a, b) => b.ventas_netas - a.ventas_netas)
       .slice(0, 10)
       .map((c) => ({
         cliente: cortarTexto(c.cliente, 24),
-        total_facturado: c.total_facturado,
+        ventas_netas: c.ventas_netas,
       }));
   }, [clientes]);
 
@@ -274,7 +317,7 @@ export default function ReporteClientesPage() {
     setCentroCostoFiltro("");
     setEstadoFiltro("");
     setBusquedaLocal("");
-    setOrden("facturado");
+    setOrden("ventas_netas");
 
     setTimeout(() => {
       cargarDatos("consulta");
@@ -295,8 +338,8 @@ export default function ReporteClientesPage() {
             </h1>
 
             <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-600">
-              Vista ejecutiva para analizar clientes facturados, cartera pendiente,
-              pagos, centros de costo y facturas recientes.
+              Vista ejecutiva para analizar ventas netas, total facturado Siigo,
+              cartera pendiente, pagos, centros de costo y facturas recientes.
             </p>
           </div>
 
@@ -305,19 +348,9 @@ export default function ReporteClientesPage() {
               label="Estado"
               value={loading ? "Cargando" : error ? "Con error" : "Actualizado"}
             />
-            <MiniMetric
-              label="Clientes"
-              value={resumen?.clientes_facturados ?? 0}
-            />
-            <MiniMetric
-              label="Facturas"
-              value={resumen?.cantidad_facturas ?? 0}
-            />
-            <MiniMetric
-              label="% vencido"
-              value={`${resumen?.pct_vencido ?? 0}%`}
-              danger
-            />
+            <MiniMetric label="Clientes" value={resumen?.clientes_facturados ?? 0} />
+            <MiniMetric label="Facturas" value={resumen?.cantidad_facturas ?? 0} />
+            <MiniMetric label="% vencido" value={`${resumen?.pct_vencido ?? 0}%`} danger />
           </div>
         </div>
       </div>
@@ -440,18 +473,25 @@ export default function ReporteClientesPage() {
             </CardContent>
           </Card>
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <KpiCard
-              title="Total facturado"
-              value={resumen?.total_facturado_str}
-              helper="Valor total de facturas emitidas en el periodo consultado."
+              title="Ventas netas"
+              value={resumen?.ventas_netas_str}
+              helper="Valor comercial neto, alineado con el reporte de Ingresos por ventas."
               tone="blue"
+            />
+
+            <KpiCard
+              title="Total facturado Siigo"
+              value={resumen?.total_facturado_siigo_str}
+              helper="Valor total de documentos facturados en Siigo."
+              tone="slate"
             />
 
             <KpiCard
               title="Total pagado"
               value={resumen?.total_pagado_str}
-              helper={`${resumen?.pct_pagado ?? 0}% del total facturado.`}
+              helper={`${resumen?.pct_pagado ?? 0}% del total facturado Siigo.`}
               tone="green"
             />
 
@@ -474,16 +514,16 @@ export default function ReporteClientesPage() {
             <Card className="rounded-2xl border-slate-200 shadow-sm xl:col-span-1">
               <CardHeader className="border-b">
                 <CardTitle className="text-base font-bold">
-                  Top clientes por facturación
+                  Top clientes por ventas netas
                 </CardTitle>
                 <p className="text-sm text-slate-500">
-                  Clientes con mayor valor facturado.
+                  Clientes con mayor venta neta en el periodo.
                 </p>
               </CardHeader>
               <CardContent className="p-4">
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart
-                    data={topFacturacion}
+                    data={topVentasNetas}
                     layout="vertical"
                     margin={{ top: 10, right: 25, left: 10, bottom: 10 }}
                   >
@@ -499,9 +539,9 @@ export default function ReporteClientesPage() {
                       tick={{ fontSize: 11 }}
                     />
                     <Tooltip formatter={(v: any) => fmt(Number(v))} />
-                    <Bar dataKey="total_facturado" fill="#2563eb" radius={[0, 6, 6, 0]}>
+                    <Bar dataKey="ventas_netas" fill="#2563eb" radius={[0, 6, 6, 0]}>
                       <LabelList
-                        dataKey="total_facturado"
+                        dataKey="ventas_netas"
                         position="right"
                         formatter={(v: any) => formatoAbreviado(Number(v))}
                         fontSize={11}
@@ -627,7 +667,8 @@ export default function ReporteClientesPage() {
                     onChange={(e) => setOrden(e.target.value as any)}
                     className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   >
-                    <option value="facturado">Ordenar: facturación</option>
+                    <option value="ventas_netas">Ordenar: ventas netas</option>
+                    <option value="total_siigo">Ordenar: total Siigo</option>
                     <option value="saldo">Ordenar: saldo pendiente</option>
                     <option value="vencido">Ordenar: saldo vencido</option>
                     <option value="facturas">Ordenar: # facturas</option>
@@ -646,12 +687,13 @@ export default function ReporteClientesPage() {
 
             <CardContent className="p-0">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[1180px] text-sm">
+                <table className="w-full min-w-[1280px] text-sm">
                   <thead className="sticky top-0 z-10 bg-slate-100 text-slate-700">
                     <tr>
                       <th className="p-3 text-left">Cliente</th>
                       <th className="p-3 text-right">Facturas</th>
-                      <th className="p-3 text-right">Total facturado</th>
+                      <th className="p-3 text-right">Ventas netas</th>
+                      <th className="p-3 text-right">Total Siigo</th>
                       <th className="p-3 text-right">Pagado</th>
                       <th className="p-3 text-right">Saldo pendiente</th>
                       <th className="p-3 text-right">Saldo vencido</th>
@@ -663,7 +705,7 @@ export default function ReporteClientesPage() {
                   <tbody>
                     {clientesFiltrados.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="p-8 text-center text-slate-500">
+                        <td colSpan={9} className="p-8 text-center text-slate-500">
                           No hay clientes para los filtros seleccionados.
                         </td>
                       </tr>
@@ -703,7 +745,11 @@ export default function ReporteClientesPage() {
                             </td>
 
                             <td className="p-3 text-right font-semibold text-blue-700">
-                              {c.total_facturado_str}
+                              {c.ventas_netas_str}
+                            </td>
+
+                            <td className="p-3 text-right font-semibold text-slate-700">
+                              {c.total_facturado_siigo_str}
                             </td>
 
                             <td className="p-3 text-right text-green-700">
@@ -750,7 +796,7 @@ export default function ReporteClientesPage() {
 
                           {expandido && (
                             <tr className="bg-slate-50">
-                              <td colSpan={8} className="p-0">
+                              <td colSpan={9} className="p-0">
                                 <ClienteDetalleInline cliente={c} />
                               </td>
                             </tr>
@@ -831,7 +877,7 @@ function ClienteDetalleInline({ cliente }: { cliente: ClienteInsight }) {
                 <tr>
                   <th className="p-2 text-left">Centro de costo</th>
                   <th className="p-2 text-right">Facturas</th>
-                  <th className="p-2 text-right">Facturado</th>
+                  <th className="p-2 text-right">Ventas netas</th>
                   <th className="p-2 text-right">Pendiente</th>
                 </tr>
               </thead>
@@ -850,7 +896,7 @@ function ClienteDetalleInline({ cliente }: { cliente: ClienteInsight }) {
                     <td className="p-2">{cc.centro_costo_nombre}</td>
                     <td className="p-2 text-right">{cc.cantidad_facturas}</td>
                     <td className="p-2 text-right font-semibold text-blue-700">
-                      {cc.total_facturado_str}
+                      {cc.ventas_netas_str || cc.total_facturado_str}
                     </td>
                     <td className="p-2 text-right font-semibold text-orange-600">
                       {cc.saldo_pendiente_str}
@@ -897,23 +943,29 @@ function ClienteFicha({ cliente }: { cliente: ClienteInsight }) {
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <KpiCard
-          title="Total facturado"
-          value={cliente.total_facturado_str}
-          helper="Facturación total del cliente."
+          title="Ventas netas"
+          value={cliente.ventas_netas_str}
+          helper="Venta neta comercial del cliente."
           tone="blue"
+        />
+        <KpiCard
+          title="Total facturado Siigo"
+          value={cliente.total_facturado_siigo_str}
+          helper="Valor total facturado en Siigo."
+          tone="slate"
         />
         <KpiCard
           title="Total pagado"
           value={cliente.total_pagado_str}
-          helper={`${fmtPct(cliente.pct_pagado)} del total facturado.`}
+          helper={`${fmtPct(cliente.pct_pagado)} del total facturado Siigo.`}
           tone="green"
         />
         <KpiCard
           title="Saldo pendiente"
           value={cliente.saldo_pendiente_str}
-          helper={`${fmtPct(cliente.pct_pendiente)} del total facturado.`}
+          helper={`${fmtPct(cliente.pct_pendiente)} del total facturado Siigo.`}
           tone="orange"
         />
         <KpiCard
@@ -937,14 +989,15 @@ function FacturasRecientesTable({ facturas }: { facturas: FacturaCliente[] }) {
       </h3>
 
       <div className="max-h-72 overflow-auto">
-        <table className="w-full min-w-[720px] text-xs">
+        <table className="w-full min-w-[820px] text-xs">
           <thead className="bg-slate-100 text-slate-700">
             <tr>
               <th className="p-2 text-left">Factura</th>
               <th className="p-2 text-left">Fecha</th>
               <th className="p-2 text-left">Vencimiento</th>
               <th className="p-2 text-left">Estado</th>
-              <th className="p-2 text-right">Total</th>
+              <th className="p-2 text-right">Ventas netas</th>
+              <th className="p-2 text-right">Total Siigo</th>
               <th className="p-2 text-right">Pendiente</th>
               <th className="p-2 text-center">Link</th>
             </tr>
@@ -953,7 +1006,7 @@ function FacturasRecientesTable({ facturas }: { facturas: FacturaCliente[] }) {
           <tbody>
             {facturas.length === 0 && (
               <tr>
-                <td colSpan={7} className="p-3 text-center text-slate-500">
+                <td colSpan={8} className="p-3 text-center text-slate-500">
                   Sin facturas recientes.
                 </td>
               </tr>
@@ -968,7 +1021,10 @@ function FacturasRecientesTable({ facturas }: { facturas: FacturaCliente[] }) {
                   <EstadoBadge estado={f.estado_cartera} />
                 </td>
                 <td className="p-2 text-right whitespace-nowrap font-semibold text-blue-700">
-                  {f.total_str}
+                  {f.ventas_netas_str || "-"}
+                </td>
+                <td className="p-2 text-right whitespace-nowrap font-semibold text-slate-700">
+                  {f.total_facturado_siigo_str || f.total_str}
                 </td>
                 <td className="p-2 text-right whitespace-nowrap font-semibold text-orange-600">
                   {f.pendiente_str}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import useAuthGuard from "@/hooks/useAuthGuard";
 import { authFetch } from "@/lib/api";
 
@@ -59,6 +60,7 @@ export default function ClientsPage() {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const [ok, setOk] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [confirmOpen, setConfirmOpen] = useState<null | number>(null);
@@ -661,15 +663,32 @@ export default function ClientsPage() {
                 <label className="mb-1 block text-sm font-medium text-slate-700">
                   Contraseña inicial *
                 </label>
-                <input
-                  type="password"
-                  className="w-full rounded-xl border border-slate-300 p-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  value={form.admin_password}
-                  onChange={(e) =>
-                    setForm({ ...form, admin_password: e.target.value })
-                  }
-                  required={!editingId}
-                />
+
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    className="w-full rounded-xl border border-slate-300 p-2.5 pr-11 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    value={form.admin_password}
+                    onChange={(e) =>
+                      setForm({ ...form, admin_password: e.target.value })
+                    }
+                    required={!editingId}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-800"
+                    aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                    title={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-5 w-5" />
+                    ) : (
+                      <Eye className="h-5 w-5" />
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </>

@@ -25,7 +25,7 @@ export default function ClientProfilesPage() {
   const load = async () => {
     try {
       setLoading(true); setErr(""); setOk("");
-      const data = await authFetch("/perfiles"); // backend filtra por cliente si no es superadmin
+      const data = await authFetch("/admin/perfiles"); // backend filtra por cliente si no es superadmin
       setPerfiles(data);
     } catch (e: any) {
       setErr(e.message);

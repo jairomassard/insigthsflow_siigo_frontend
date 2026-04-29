@@ -41,8 +41,8 @@ export default function ClientUsersPage() {
     try {
       setLoading(true); setErr(""); setOk("");
       const [pfs, us] = await Promise.all([
-        authFetch("/perfiles"),
-        authFetch("/usuarios"),
+        authFetch("/admin/perfiles"), // backend retorna solo los del cliente
+        authFetch("/usuarios"),       // nuevo endpoint: solo usuarios del cliente
       ]);
       setPerfiles(pfs);
       setUsuarios(us);

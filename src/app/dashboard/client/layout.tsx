@@ -298,6 +298,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     },
   ];
 
+  const visibleNavSections = navSections.filter(
+    (section) => section.items.length > 0
+  );
+
+
   return (
     <div className="min-h-screen grid grid-cols-12 bg-white">
       <aside className="col-span-12 md:col-span-3 lg:col-span-2 bg-black text-white">
@@ -309,7 +314,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           )}
         </div>
         <nav className="space-y-6 p-4">
-          {navSections.map((section, sectionIndex) => (
+          {visibleNavSections.map((section, sectionIndex) => (
             <div key={sectionIndex}>
               {section.title && (
                 <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">

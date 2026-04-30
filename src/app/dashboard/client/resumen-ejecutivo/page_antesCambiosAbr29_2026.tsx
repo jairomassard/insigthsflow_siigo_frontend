@@ -34,9 +34,6 @@ import {
   HelpCircle,
 } from "lucide-react";
 
-import { useRouter } from "next/navigation";
-import { usePermisos } from "@/hooks/usePermisos";
-
 /* =========================================================
  * TIPOS
  * ========================================================= */
@@ -469,11 +466,6 @@ const CustomVentasEbitdaTooltip = ({ active, payload, label }: any) => {
  * PÁGINA
  * ========================================================= */
 export default function DashboardResumenEjecutivoPage() {
-  const router = useRouter();
-  const { permisos, loading: loadingPermisos } = usePermisos();
-
-  const puedeVerResumenEjecutivo = permisos.includes("ver_resumen_ejecutivo");
-
   const defaults = getDefaultDates();
 
   const [loading, setLoading] = useState(false);
@@ -540,32 +532,18 @@ export default function DashboardResumenEjecutivoPage() {
   }
 
   useEffect(() => {
-    if (loadingPermisos) return;
-
-    if (!puedeVerResumenEjecutivo) {
-      router.replace("/dashboard/client");
-    }
-  }, [loadingPermisos, puedeVerResumenEjecutivo, router]);
-
-
-  useEffect(() => {
-    if (loadingPermisos || !puedeVerResumenEjecutivo) return;
-
     async function init() {
       await cargarFechasSugeridas();
       await cargarCentros();
     }
-
     init();
-  }, [loadingPermisos, puedeVerResumenEjecutivo]);
+  }, []);
 
   useEffect(() => {
-    if (loadingPermisos || !puedeVerResumenEjecutivo) return;
     if (!initReady || !fechaDesde || !fechaHasta) return;
-
     cargarDashboard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadingPermisos, puedeVerResumenEjecutivo, initReady, fechaDesde, fechaHasta]);
+  }, [initReady, fechaDesde, fechaHasta]);
 
   const hayAuxiliar = data?.metadata?.hay_datos_auxiliar_actual ?? true;
   const caja = data?.kpis?.caja_disponible;
@@ -691,23 +669,6 @@ export default function DashboardResumenEjecutivoPage() {
       },
     ];
   }, [data, hayAuxiliar]);
-
-
- if (loadingPermisos) {
-    return (
-      <div className="min-h-screen bg-slate-50 p-6 text-sm text-slate-600">
-        Validando permisos…
-      </div>
-    );
-  }
-
-  if (!puedeVerResumenEjecutivo) {
-    return (
-      <div className="min-h-screen bg-slate-50 p-6 text-sm text-slate-600">
-        Redirigiendo al inicio…
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-slate-50">

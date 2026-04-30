@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { usePermisos } from "@/hooks/usePermisos";
 import { authFetch } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -412,11 +410,6 @@ function CuentaAutocompleteRow({
  * PÁGINA
  * ========================================================= */
 export default function ConfiguracionesVariasPage() {
-  const router = useRouter();
-  const { permisos, loading: loadingPermisos } = usePermisos();
-
-  const puedeVerConfiguraciones = permisos.includes("ver_configuraciones_varias");
-
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -479,15 +472,8 @@ export default function ConfiguracionesVariasPage() {
   }
 
   useEffect(() => {
-    if (loadingPermisos) return;
-
-    if (!puedeVerConfiguraciones) {
-      router.replace("/dashboard/client");
-      return;
-    }
-
     cargarConfig();
-  }, [loadingPermisos, puedeVerConfiguraciones, router]);
+  }, []);
 
   const resumenCaja = useMemo(() => {
     if (config.modo_caja === "inclusion") {
@@ -499,22 +485,6 @@ export default function ConfiguracionesVariasPage() {
     return "Sin parametrización";
   }, [config]);
 
-  if (loadingPermisos) {
-    return (
-      <div className="min-h-screen bg-slate-50 p-6 text-sm text-slate-600">
-        Validando permisos…
-      </div>
-    );
-  }
-
-  if (!puedeVerConfiguraciones) {
-    return (
-      <div className="min-h-screen bg-slate-50 p-6 text-sm text-slate-600">
-        Redirigiendo al inicio…
-      </div>
-    );
-  }
-  
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="space-y-4 p-3 md:p-4">

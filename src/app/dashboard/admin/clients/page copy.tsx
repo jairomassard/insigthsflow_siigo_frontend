@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Eye, EyeOff, Mail, Building2 } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import useAuthGuard from "@/hooks/useAuthGuard";
 import { authFetch } from "@/lib/api";
 
@@ -51,12 +51,6 @@ const PAQUETES: {
     permisos: 25,
   },
 ];
-
-const isValidEmail = (email: string) => {
-  const clean = email.trim();
-  if (!clean) return true;
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean);
-};
 
 export default function ClientsPage() {
   useAuthGuard();
@@ -169,10 +163,6 @@ export default function ClientsPage() {
       return "Debes escribir el nombre del cliente.";
     }
 
-    if (form.email.trim() && !isValidEmail(form.email)) {
-      return "El correo electrónico del cliente no tiene un formato válido.";
-    }
-
     if (!form.paquete) {
       return "Debes seleccionar el paquete contratado.";
     }
@@ -185,28 +175,12 @@ export default function ClientsPage() {
       return "Debes escribir el email del usuario administrador.";
     }
 
-    if (!isValidEmail(form.admin_email)) {
-      return "El email del usuario administrador no tiene un formato válido.";
-    }
-
     if (!form.admin_password.trim()) {
       return "Debes escribir una contraseña inicial para el usuario administrador.";
     }
 
     if (form.admin_password.trim().length < 6) {
       return "La contraseña inicial debe tener mínimo 6 caracteres.";
-    }
-
-    return "";
-  };
-
-  const validarEditarCliente = () => {
-    if (!form.nombre.trim()) {
-      return "Debes escribir el nombre del cliente.";
-    }
-
-    if (form.email.trim() && !isValidEmail(form.email)) {
-      return "El correo electrónico del cliente no tiene un formato válido.";
     }
 
     return "";
@@ -221,13 +195,6 @@ export default function ClientsPage() {
 
     try {
       if (editingId) {
-        const validation = validarEditarCliente();
-
-        if (validation) {
-          setErr(validation);
-          return;
-        }
-
         await authFetch(`/clientes/${editingId}`, {
           method: "PUT",
           body: JSON.stringify(clientePayloadFromForm()),
@@ -254,9 +221,7 @@ export default function ClientsPage() {
 
         setOk(
           `Cliente creado correctamente con paquete ${paqueteNombre}. ` +
-            `Se creó el perfil Administrador, el usuario administrador y se asignaron ${
-              resp?.permisos_asignados ?? "los"
-            } permisos contratados.`
+            `Se creó el perfil Administrador, el usuario administrador y se asignaron ${resp?.permisos_asignados ?? "los"} permisos contratados.`
         );
       }
 
@@ -302,10 +267,6 @@ export default function ClientsPage() {
       admin_email: "",
       admin_password: "",
     });
-
-    setTimeout(() => {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }, 50);
   };
 
   const onDelete = async (idcliente: number) => {
@@ -335,16 +296,14 @@ export default function ClientsPage() {
 
   const paqueteSeleccionado = PAQUETES.find((p) => p.codigo === form.paquete);
 
-  const clienteEditando = editingId
-    ? clientes.find((c) => c.idcliente === editingId)
-    : null;
-
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-slate-900">Clientes</h2>
+            <h2 className="text-2xl font-bold text-slate-900">
+              Clientes
+            </h2>
             <p className="mt-1 text-sm text-slate-600">
               Crea clientes, asigna el paquete contratado y genera el usuario
               administrador inicial con los permisos correspondientes.
@@ -380,47 +339,8 @@ export default function ClientsPage() {
           </h3>
           <p className="text-sm text-slate-500">
             {editingId
-              ? "La edición actualiza los datos básicos del cliente. Aquí puedes consultar, ingresar o corregir el correo electrónico corporativo del cliente."
+              ? "La edición actualiza datos básicos del cliente. El paquete no se cambia desde este formulario."
               : "La creación inicial genera cliente, paquete contratado, perfil Administrador, usuario administrador y permisos."}
-          </p>
-        </div>
-
-        {editingId && (
-          <div className="mb-5 rounded-2xl border border-blue-100 bg-blue-50 p-4">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div className="flex items-start gap-3">
-                <div className="rounded-xl bg-white p-2 text-blue-700 shadow-sm">
-                  <Building2 className="h-5 w-5" />
-                </div>
-
-                <div>
-                  <div className="text-sm font-semibold text-blue-950">
-                    Editando cliente #{editingId}
-                  </div>
-                  <div className="text-sm text-blue-800">
-                    {clienteEditando?.nombre || form.nombre || "Cliente seleccionado"}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm text-slate-700 shadow-sm">
-                <Mail className="h-4 w-4 text-blue-600" />
-                <span className="font-medium">Correo actual:</span>
-                <span>
-                  {clienteEditando?.email || form.email || "Sin correo registrado"}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="mb-4">
-          <h4 className="text-base font-semibold text-slate-900">
-            Datos del cliente / empresa
-          </h4>
-          <p className="text-sm text-slate-500">
-            Estos datos pertenecen a la empresa cliente. El correo de esta
-            sección es diferente al correo del usuario administrador.
           </p>
         </div>
 
@@ -450,19 +370,14 @@ export default function ClientsPage() {
 
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">
-              Correo electrónico del cliente / empresa
+              Email cliente
             </label>
             <input
               type="email"
-              placeholder="contacto@empresa.com"
               className="w-full rounded-xl border border-slate-300 p-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
             />
-            <p className="mt-1 text-xs text-slate-500">
-              Correo corporativo o comercial del cliente. No corresponde
-              necesariamente al usuario administrador.
-            </p>
           </div>
 
           <div>
@@ -764,12 +679,8 @@ export default function ClientsPage() {
                     type="button"
                     onClick={() => setShowPassword((prev) => !prev)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-800"
-                    aria-label={
-                      showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
-                    }
-                    title={
-                      showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
-                    }
+                    aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                    title={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                   >
                     {showPassword ? (
                       <EyeOff className="h-5 w-5" />
@@ -831,9 +742,7 @@ export default function ClientsPage() {
                 <th className="border-b p-3 text-left">ID</th>
                 <th className="border-b p-3 text-left">Nombre</th>
                 <th className="border-b p-3 text-left">NIT</th>
-                <th className="border-b p-3 text-left">
-                  Correo cliente
-                </th>
+                <th className="border-b p-3 text-left">Email</th>
                 <th className="border-b p-3 text-left">País</th>
                 <th className="border-b p-3 text-left">Ciudad</th>
                 <th className="border-b p-3 text-left">Teléfono</th>
@@ -853,21 +762,7 @@ export default function ClientsPage() {
                     {c.nombre}
                   </td>
                   <td className="border-b p-3">{c.nit || "-"}</td>
-                  <td className="border-b p-3">
-                    {c.email ? (
-                      <a
-                        href={`mailto:${c.email}`}
-                        className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
-                      >
-                        <Mail className="h-3.5 w-3.5" />
-                        {c.email}
-                      </a>
-                    ) : (
-                      <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
-                        Sin correo registrado
-                      </span>
-                    )}
-                  </td>
+                  <td className="border-b p-3">{c.email || "-"}</td>
                   <td className="border-b p-3">{c.pais || "-"}</td>
                   <td className="border-b p-3">{c.ciudad || "-"}</td>
                   <td className="border-b p-3">{c.telefono1 || "-"}</td>
@@ -914,7 +809,10 @@ export default function ClientsPage() {
 
               {clientes.length === 0 && (
                 <tr>
-                  <td className="p-5 text-center text-slate-500" colSpan={12}>
+                  <td
+                    className="p-5 text-center text-slate-500"
+                    colSpan={12}
+                  >
                     No hay clientes aún.
                   </td>
                 </tr>

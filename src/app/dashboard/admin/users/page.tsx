@@ -26,6 +26,8 @@ type Usuario = {
   activo: boolean;
 };
 
+type EstadoFiltro = "todos" | "activos" | "inactivos";
+
 export default function UsersPage() {
   useAuthGuard();
 
@@ -38,6 +40,10 @@ export default function UsersPage() {
   const [ok, setOk] = useState("");
 
   const [editingId, setEditingId] = useState<number | null>(null);
+
+  const [filtroCliente, setFiltroCliente] = useState<string>("todos");
+  const [filtroTexto, setFiltroTexto] = useState("");
+  const [filtroEstado, setFiltroEstado] = useState<EstadoFiltro>("todos");
 
   const [form, setForm] = useState({
     idcliente: "",
@@ -83,6 +89,16 @@ export default function UsersPage() {
   useEffect(() => {
     loadAll();
   }, []);
+
+  const nombreCliente = (idcliente: number | null) => {
+    if (!idcliente) return "Sistema / sin cliente";
+    return clientes.find((c) => c.idcliente === idcliente)?.nombre || `Cliente #${idcliente}`;
+  };
+
+  const nombrePerfil = (idperfil: number | null) => {
+    if (!idperfil) return "Sin perfil";
+    return perfiles.find((p) => p.idperfil === idperfil)?.nombre || `Perfil #${idperfil}`;
+  };
 
   const perfilesFiltrados = useMemo(() => {
     const cid = Number(form.idcliente);
@@ -135,12 +151,87 @@ export default function UsersPage() {
       return null;
     }
 
-    if (editingId) {
-      return Math.max(limite - usuariosActivosClienteSeleccionado, 0);
-    }
-
     return Math.max(limite - usuariosActivosClienteSeleccionado, 0);
-  }, [clienteSeleccionado, usuariosActivosClienteSeleccionado, editingId]);
+  }, [clienteSeleccionado, usuariosActivosClienteSeleccionado]);
+
+  const usuariosOrdenados = useMemo(() => {
+    return [...usuarios].sort((a, b) => {
+      const clienteA = nombreCliente(a.idcliente).toLowerCase();
+      const clienteB = nombreCliente(b.idcliente).toLowerCase();
+
+      if (clienteA !== clienteB) {
+        return clienteA.localeCompare(clienteB, "es");
+      }
+
+      const nombreA = `${a.nombre || ""} ${a.apellido || ""}`.toLowerCase();
+      const nombreB = `${b.nombre || ""} ${b.apellido || ""}`.toLowerCase();
+
+      if (nombreA !== nombreB) {
+        return nombreA.localeCompare(nombreB, "es");
+      }
+
+      return a.idusuario - b.idusuario;
+    });
+  }, [usuarios, clientes]);
+
+  const usuariosFiltrados = useMemo(() => {
+    const texto = filtroTexto.trim().toLowerCase();
+
+    return usuariosOrdenados.filter((u) => {
+      const cliente = nombreCliente(u.idcliente);
+      const perfil = nombrePerfil(u.idperfil);
+
+      const cumpleCliente =
+        filtroCliente === "todos" ||
+        (filtroCliente === "sin_cliente" && !u.idcliente) ||
+        String(u.idcliente || "") === filtroCliente;
+
+      const cumpleEstado =
+        filtroEstado === "todos" ||
+        (filtroEstado === "activos" && u.activo) ||
+        (filtroEstado === "inactivos" && !u.activo);
+
+      const textoBusqueda = [
+        u.idusuario,
+        u.nombre,
+        u.apellido,
+        u.email,
+        cliente,
+        perfil,
+        u.activo ? "activo" : "inactivo",
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      const cumpleTexto = !texto || textoBusqueda.includes(texto);
+
+      return cumpleCliente && cumpleEstado && cumpleTexto;
+    });
+  }, [
+    usuariosOrdenados,
+    filtroCliente,
+    filtroTexto,
+    filtroEstado,
+    clientes,
+    perfiles,
+  ]);
+
+  const totalActivosFiltrados = useMemo(
+    () => usuariosFiltrados.filter((u) => u.activo).length,
+    [usuariosFiltrados]
+  );
+
+  const totalInactivosFiltrados = useMemo(
+    () => usuariosFiltrados.filter((u) => !u.activo).length,
+    [usuariosFiltrados]
+  );
+
+  const limpiarFiltros = () => {
+    setFiltroCliente("todos");
+    setFiltroTexto("");
+    setFiltroEstado("todos");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -552,6 +643,92 @@ export default function UsersPage() {
         </div>
       </form>
 
+      <div className="rounded-2xl border bg-white p-5 shadow-sm">
+        <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">
+              Consulta rápida de usuarios
+            </h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Filtra por cliente, usuario, email, perfil o estado para ubicar
+              rápidamente un registro.
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <div className="font-semibold">
+              Resultados: {usuariosFiltrados.length} / {usuarios.length}
+            </div>
+            <div>
+              Activos: {totalActivosFiltrados} · Inactivos:{" "}
+              {totalInactivosFiltrados}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              Filtrar por cliente
+            </label>
+            <select
+              className="w-full rounded-xl border border-slate-300 p-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              value={filtroCliente}
+              onChange={(e) => setFiltroCliente(e.target.value)}
+            >
+              <option value="todos">Todos los clientes</option>
+              <option value="sin_cliente">Sistema / sin cliente</option>
+              {clientes.map((c) => (
+                <option key={c.idcliente} value={String(c.idcliente)}>
+                  {c.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              Buscar usuario
+            </label>
+            <input
+              className="w-full rounded-xl border border-slate-300 p-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              placeholder="Nombre, apellido, email, perfil, cliente o ID..."
+              value={filtroTexto}
+              onChange={(e) => setFiltroTexto(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              Estado
+            </label>
+            <select
+              className="w-full rounded-xl border border-slate-300 p-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              value={filtroEstado}
+              onChange={(e) => setFiltroEstado(e.target.value as EstadoFiltro)}
+            >
+              <option value="todos">Todos</option>
+              <option value="activos">Solo activos</option>
+              <option value="inactivos">Solo inactivos</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="text-sm text-slate-500">
+            La tabla se ordena automáticamente por cliente y luego por nombre.
+          </div>
+
+          <button
+            type="button"
+            onClick={limpiarFiltros}
+            className="rounded-xl bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-300"
+          >
+            Limpiar filtros
+          </button>
+        </div>
+      </div>
+
       {loading ? (
         <div className="rounded-2xl border bg-white p-5 text-sm text-slate-500 shadow-sm">
           Cargando usuarios…
@@ -573,13 +750,9 @@ export default function UsersPage() {
             </thead>
 
             <tbody>
-              {usuarios.map((u) => {
-                const cli = clientes.find(
-                  (c) => c.idcliente === u.idcliente
-                );
-                const pf = perfiles.find(
-                  (p) => p.idperfil === u.idperfil
-                );
+              {usuariosFiltrados.map((u) => {
+                const cliNombre = nombreCliente(u.idcliente);
+                const pfNombre = nombrePerfil(u.idperfil);
 
                 return (
                   <tr
@@ -587,12 +760,10 @@ export default function UsersPage() {
                     className="odd:bg-white even:bg-slate-50"
                   >
                     <td className="border-b p-3">{u.idusuario}</td>
-                    <td className="border-b p-3">
-                      {cli?.nombre || u.idcliente || "-"}
+                    <td className="border-b p-3 font-medium text-slate-900">
+                      {cliNombre}
                     </td>
-                    <td className="border-b p-3">
-                      {pf?.nombre || u.idperfil || "-"}
-                    </td>
+                    <td className="border-b p-3">{pfNombre}</td>
                     <td className="border-b p-3 font-medium text-slate-900">
                       {u.nombre}
                     </td>
@@ -646,13 +817,13 @@ export default function UsersPage() {
                 );
               })}
 
-              {usuarios.length === 0 && (
+              {usuariosFiltrados.length === 0 && (
                 <tr>
                   <td
                     className="p-5 text-center text-slate-500"
                     colSpan={8}
                   >
-                    No hay usuarios.
+                    No hay usuarios que coincidan con los filtros aplicados.
                   </td>
                 </tr>
               )}

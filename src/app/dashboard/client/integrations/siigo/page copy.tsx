@@ -331,10 +331,6 @@ export default function SiigoIntegrationPage() {
       });
   }, []);
 
-  const [debugDsLoading, setDebugDsLoading] = useState(false);
-  const [debugDsMsg, setDebugDsMsg] = useState("");
-  const [debugDsJson, setDebugDsJson] = useState<any>(null);
-  const [debugDsId, setDebugDsId] = useState("");
 
 
   const [loading, setLoading] = useState(true);
@@ -539,91 +535,6 @@ export default function SiigoIntegrationPage() {
   };
 
 
-  const consultarTiposDocumentoDS = async () => {
-    setDebugDsLoading(true);
-    setDebugDsMsg("");
-    setDebugDsJson(null);
-
-    try {
-      const res = await fetchWithIdCliente("/siigo/debug-document-types-ds", {
-        method: "GET",
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data?.error || `HTTP ${res.status}`);
-      }
-
-      setDebugDsMsg("Tipos de documento DS consultados correctamente.");
-      setDebugDsJson(data);
-    } catch (error: any) {
-      setDebugDsMsg(`Error consultando tipos DS: ${error.message}`);
-    } finally {
-      setDebugDsLoading(false);
-    }
-  };
-
-  const consultarDocumentosSoporte = async () => {
-    setDebugDsLoading(true);
-    setDebugDsMsg("");
-    setDebugDsJson(null);
-
-    try {
-      const res = await fetchWithIdCliente(
-        "/siigo/debug-documentos-soporte?page_size=5&page=1",
-        {
-          method: "GET",
-        }
-      );
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data?.error || `HTTP ${res.status}`);
-      }
-
-      setDebugDsMsg("Documentos soporte consultados correctamente. No se guardó información.");
-      setDebugDsJson(data);
-    } catch (error: any) {
-      setDebugDsMsg(`Error consultando documentos soporte: ${error.message}`);
-    } finally {
-      setDebugDsLoading(false);
-    }
-  };
-
-  const consultarDocumentoSoportePorId = async () => {
-    if (!debugDsId.trim()) {
-      setDebugDsMsg("Primero escribe el ID del documento soporte que devuelve Siigo.");
-      return;
-    }
-
-    setDebugDsLoading(true);
-    setDebugDsMsg("");
-    setDebugDsJson(null);
-
-    try {
-      const res = await fetchWithIdCliente(
-        `/siigo/debug-documentos-soporte/${encodeURIComponent(debugDsId.trim())}`,
-        {
-          method: "GET",
-        }
-      );
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data?.error || `HTTP ${res.status}`);
-      }
-
-      setDebugDsMsg("Detalle de documento soporte consultado correctamente. No se guardó información.");
-      setDebugDsJson(data);
-    } catch (error: any) {
-      setDebugDsMsg(`Error consultando detalle DS: ${error.message}`);
-    } finally {
-      setDebugDsLoading(false);
-    }
-  };
 
 
   return (
@@ -1280,7 +1191,6 @@ export default function SiigoIntegrationPage() {
 
         </div>
       </div>
-      
 
       {syncMsgCompras && (
         <div className="mt-2 rounded border border-blue-100 bg-blue-50 p-2 text-sm text-blue-800">
@@ -1299,74 +1209,6 @@ export default function SiigoIntegrationPage() {
         <CargarDocumentosSoporte />
       </div>
 
-      {/* Cargue de Documentos Soporte desde el API - Pruebas debug */}
-      <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50/70 p-5 shadow-sm">
-        <div className="mb-4">
-          <h3 className="text-base font-semibold text-amber-900">
-            Exploración Documento Soporte API
-          </h3>
-          <p className="mt-1 text-sm text-amber-800">
-            Consulta temporal de solo lectura para revisar qué está devolviendo Siigo en el nuevo endpoint
-            de Documento Soporte. Esta acción no guarda, no actualiza y no modifica información en InsightFlow.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={consultarTiposDocumentoDS}
-            disabled={debugDsLoading}
-            className="rounded-xl bg-amber-700 px-4 py-2 text-sm font-medium text-white hover:bg-amber-800 disabled:opacity-60"
-          >
-            Ver tipos DS
-          </button>
-
-          <button
-            type="button"
-            onClick={consultarDocumentosSoporte}
-            disabled={debugDsLoading}
-            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
-          >
-            Consultar primeros DS
-          </button>
-        </div>
-
-        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-          <input
-            value={debugDsId}
-            onChange={(e) => setDebugDsId(e.target.value)}
-            placeholder="ID Siigo del documento soporte"
-            className="w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500"
-          />
-
-          <button
-            type="button"
-            onClick={consultarDocumentoSoportePorId}
-            disabled={debugDsLoading}
-            className="rounded-xl bg-blue-700 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800 disabled:opacity-60"
-          >
-            Consultar por ID
-          </button>
-        </div>
-
-        {debugDsMsg && (
-          <div className="mt-4 rounded-xl border border-amber-200 bg-white p-3 text-sm text-amber-900">
-            {debugDsMsg}
-          </div>
-        )}
-
-        {debugDsJson && (
-          <div className="mt-4">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Respuesta JSON de Siigo
-            </div>
-
-            <pre className="max-h-[520px] overflow-auto rounded-xl border border-slate-200 bg-slate-950 p-4 text-xs text-slate-100">
-              {JSON.stringify(debugDsJson, null, 2)}
-            </pre>
-          </div>
-        )}
-      </div>
 
 
       {/* --- Gestión de Cuentas por Pagar --- */}

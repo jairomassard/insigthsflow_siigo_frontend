@@ -342,6 +342,11 @@ export default function SiigoIntegrationPage() {
   const [syncDsMaxPages, setSyncDsMaxPages] = useState("1");
   const [syncDsBatch, setSyncDsBatch] = useState("5");
 
+  const [insertDsLoading, setInsertDsLoading] = useState(false);
+  const [insertDsMsg, setInsertDsMsg] = useState("");
+  const [insertDsJson, setInsertDsJson] = useState<any>(null);
+  const [insertDsFechaDesde, setInsertDsFechaDesde] = useState("2026-01-01");
+
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -673,6 +678,54 @@ export default function SiigoIntegrationPage() {
       setSyncDsStagingLoading(false);
     }
   };
+
+
+  const insertarDocumentosSoporteDesdeStaging = async (dryRun = true) => {
+  setInsertDsLoading(true);
+  setInsertDsMsg("");
+  setInsertDsJson(null);
+
+  try {
+    const fechaDesde = insertDsFechaDesde.trim() || "2026-01-01";
+
+    const res = await fetchWithIdCliente(
+      `/siigo/insert-documentos-soporte-desde-staging?fecha_desde=${encodeURIComponent(
+        fechaDesde
+      )}&dry_run=${dryRun ? "1" : "0"}`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          fecha_desde: fechaDesde,
+          dry_run: dryRun,
+        }),
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data?.error || data?.detalle || `HTTP ${res.status}`);
+    }
+
+    if (dryRun) {
+      setInsertDsMsg(
+        `Simulación finalizada. Candidatos encontrados: ${data?.candidatos ?? 0}. No se insertó información.`
+      );
+    } else {
+      setInsertDsMsg(
+        `Inserción finalizada. Insertadas: ${data?.insertadas ?? 0}, items insertados: ${
+          data?.items_insertados ?? 0
+        }, omitidas: ${data?.omitidas ?? 0}, errores: ${data?.errores ?? 0}.`
+      );
+    }
+
+    setInsertDsJson(data);
+  } catch (error: any) {
+    setInsertDsMsg(`Error procesando DS desde staging: ${error.message}`);
+  } finally {
+    setInsertDsLoading(false);
+  }
+};
 
 
   return (
@@ -1501,6 +1554,83 @@ export default function SiigoIntegrationPage() {
         )}
       </div>
 
+      {/* Sesion para Documento Soporte desde staging a siigo_compras */}
+      <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50/70 p-5 shadow-sm">
+        <div className="mb-4">
+          <h3 className="text-base font-semibold text-blue-900">
+            Insertar Documentos Soporte nuevos desde staging
+          </h3>
+
+          <p className="mt-1 text-sm text-blue-800">
+            Este proceso toma únicamente documentos soporte nuevos, aceptados, con valor y con ítems desde la tabla
+            staging y los inserta en <strong>siigo_compras</strong> y <strong>siigo_compras_items</strong>.
+            No actualiza documentos existentes y no inserta documentos Failed, Draft, Rejected ni Sent.
+          </p>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-[180px_auto_auto]">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-blue-900">
+              Fecha desde
+            </label>
+            <input
+              type="date"
+              value={insertDsFechaDesde}
+              onChange={(e) => setInsertDsFechaDesde(e.target.value)}
+              className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+            />
+            <p className="mt-1 text-xs text-blue-700">
+              Para esta primera fase usa 2026-01-01.
+            </p>
+          </div>
+
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={() => insertarDocumentosSoporteDesdeStaging(true)}
+              disabled={insertDsLoading}
+              className="w-full rounded-xl bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-900 disabled:opacity-60 md:w-auto"
+            >
+              {insertDsLoading ? "Procesando…" : "Simular inserción"}
+            </button>
+          </div>
+
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={() => insertarDocumentosSoporteDesdeStaging(false)}
+              disabled={insertDsLoading}
+              className="w-full rounded-xl bg-blue-700 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800 disabled:opacity-60 md:w-auto"
+            >
+              {insertDsLoading ? "Insertando…" : "Insertar DS nuevos"}
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-xl border border-blue-200 bg-white p-3 text-sm text-blue-900">
+          <strong>Reglas aplicadas:</strong> solo nuevos, solo Accepted, total mayor a cero,
+          con ítems y fecha mayor o igual a la fecha seleccionada. El saldo inicial se deja
+          pendiente de corrección por sync-accounts-payable y cross-accounts-payable.
+        </div>
+
+        {insertDsMsg && (
+          <div className="mt-4 rounded-xl border border-blue-200 bg-white p-3 text-sm text-blue-900">
+            {insertDsMsg}
+          </div>
+        )}
+
+        {insertDsJson && (
+          <div className="mt-4">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Resultado inserción desde staging
+            </div>
+
+            <pre className="max-h-[420px] overflow-auto rounded-xl border border-slate-200 bg-slate-950 p-4 text-xs text-slate-100">
+              {JSON.stringify(insertDsJson, null, 2)}
+            </pre>
+          </div>
+        )}
+      </div>
 
 
       {/* --- Gestión de Cuentas por Pagar --- */}

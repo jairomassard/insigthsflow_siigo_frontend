@@ -336,6 +336,12 @@ export default function SiigoIntegrationPage() {
   const [debugDsJson, setDebugDsJson] = useState<any>(null);
   const [debugDsId, setDebugDsId] = useState("");
 
+  const [syncDsStagingLoading, setSyncDsStagingLoading] = useState(false);
+  const [syncDsStagingMsg, setSyncDsStagingMsg] = useState("");
+  const [syncDsStagingJson, setSyncDsStagingJson] = useState<any>(null);
+  const [syncDsMaxPages, setSyncDsMaxPages] = useState("1");
+  const [syncDsBatch, setSyncDsBatch] = useState("5");
+
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -622,6 +628,49 @@ export default function SiigoIntegrationPage() {
       setDebugDsMsg(`Error consultando detalle DS: ${error.message}`);
     } finally {
       setDebugDsLoading(false);
+    }
+  };
+
+  const sincronizarDocumentosSoporteStaging = async () => {
+    setSyncDsStagingLoading(true);
+    setSyncDsStagingMsg("");
+    setSyncDsStagingJson(null);
+
+    try {
+      const batch = syncDsBatch.trim() || "5";
+      const maxPages = syncDsMaxPages.trim() || "1";
+
+      const res = await fetchWithIdCliente(
+        `/siigo/sync-documentos-soporte-staging?batch=${encodeURIComponent(
+          batch
+        )}&max_pages=${encodeURIComponent(maxPages)}`,
+        {
+          method: "POST",
+          body: JSON.stringify({}),
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data?.error || data?.detalle || `HTTP ${res.status}`);
+      }
+
+      setSyncDsStagingMsg(
+        `Sincronización staging finalizada. Nuevas: ${
+          data?.nuevas ?? 0
+        }, actualizadas: ${data?.actualizadas ?? 0}, errores: ${
+          data?.errores ?? 0
+        }, omitidas: ${data?.omitidas ?? 0}.`
+      );
+
+      setSyncDsStagingJson(data);
+    } catch (error: any) {
+      setSyncDsStagingMsg(
+        `Error sincronizando documentos soporte a staging: ${error.message}`
+      );
+    } finally {
+      setSyncDsStagingLoading(false);
     }
   };
 
@@ -1367,6 +1416,91 @@ export default function SiigoIntegrationPage() {
           </div>
         )}
       </div>
+
+      {/* Cargue de Doc soporte staging- panel monitoreo */}
+      <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5 shadow-sm">
+        <div className="mb-4">
+          <h3 className="text-base font-semibold text-emerald-900">
+            Sincronización controlada de Documento Soporte a staging
+          </h3>
+
+          <p className="mt-1 text-sm text-emerald-800">
+            Este proceso consulta documentos soporte desde Siigo API y los guarda únicamente
+            en la tabla temporal <strong>siigo_documentos_soporte_api_staging</strong>.
+            No toca compras, no toca ítems de compras y no afecta los reportes actuales.
+          </p>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-[160px_160px_auto]">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-emerald-900">
+              Batch
+            </label>
+            <input
+              value={syncDsBatch}
+              onChange={(e) => setSyncDsBatch(e.target.value)}
+              placeholder="5"
+              className="w-full rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
+            />
+            <p className="mt-1 text-xs text-emerald-700">
+              Documentos por página.
+            </p>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-emerald-900">
+              Máx. páginas
+            </label>
+            <input
+              value={syncDsMaxPages}
+              onChange={(e) => setSyncDsMaxPages(e.target.value)}
+              placeholder="1"
+              className="w-full rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
+            />
+            <p className="mt-1 text-xs text-emerald-700">
+              Usa 1 para la primera prueba.
+            </p>
+          </div>
+
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={sincronizarDocumentosSoporteStaging}
+              disabled={syncDsStagingLoading}
+              className="w-full rounded-xl bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-60 md:w-auto"
+            >
+              {syncDsStagingLoading
+                ? "Sincronizando staging…"
+                : "Sincronizar DS a staging"}
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-xl border border-emerald-200 bg-white p-3 text-sm text-emerald-900">
+          <strong>Recomendación:</strong> para la primera prueba deja Batch en{" "}
+          <strong>5</strong> y Máx. páginas en <strong>1</strong>. Así validamos
+          pocos documentos antes de traer los 1.364 registros que Siigo reportó.
+        </div>
+
+        {syncDsStagingMsg && (
+          <div className="mt-4 rounded-xl border border-emerald-200 bg-white p-3 text-sm text-emerald-900">
+            {syncDsStagingMsg}
+          </div>
+        )}
+
+        {syncDsStagingJson && (
+          <div className="mt-4">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Resultado sincronización staging
+            </div>
+
+            <pre className="max-h-[420px] overflow-auto rounded-xl border border-slate-200 bg-slate-950 p-4 text-xs text-slate-100">
+              {JSON.stringify(syncDsStagingJson, null, 2)}
+            </pre>
+          </div>
+        )}
+      </div>
+
 
 
       {/* --- Gestión de Cuentas por Pagar --- */}

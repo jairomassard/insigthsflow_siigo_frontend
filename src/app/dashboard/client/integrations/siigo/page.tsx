@@ -1097,22 +1097,22 @@ export default function SiigoIntegrationPage() {
                 const fullLog = data.detalle || "";
 
                 // 📝 Generar resumen amigable
-                const lines: string[] = fullLog.split("\n").filter((l: string) => l.trim().length > 0);
-                const totalPasos = lines.length;
-                const exitos = lines.filter((l: string) => l.includes("-> 200")).length;
-                const errores = lines.filter(
-                  (l: string) =>
-                    l.includes("-> 400") ||
-                    l.includes("-> 401") ||
-                    l.includes("-> 403") ||
-                    l.includes("-> 404") ||
-                    l.includes("-> 500") ||
-                    l.includes("ERROR") ||
-                    l.includes("excepción")
-                ).length;
+                const lines: string[] = fullLog
+                  .split("\n")
+                  .filter((l: string) => l.trim().length > 0);
+
+                const statusCodes = lines
+                  .map((line: string) => {
+                    const match = line.match(/->\s+(\d{3})/);
+                    return match ? Number(match[1]) : null;
+                  })
+                  .filter((code: number | null): code is number => code !== null);
+
+                const totalPasos = statusCodes.length;
+                const exitos = statusCodes.filter((code: number) => code >= 200 && code < 400).length;
+                const errores = statusCodes.filter((code: number) => code >= 400).length;
 
                 const resumen = `📊 Sincronización completada: ${totalPasos} pasos ejecutados -> ✅ ${exitos} correctos, ❌ ${errores} con error.`;
-
 
                 setSyncMsgAuto(resumen);     // 👈 mensaje corto para el usuario
                 setSyncLogCompleto(fullLog); // 👈 log técnico aparte

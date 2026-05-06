@@ -461,7 +461,7 @@ export default function SiigoIntegrationPage() {
   const [insertDsMsg, setInsertDsMsg] = useState("");
   const [insertDsJson, setInsertDsJson] = useState<any>(null);
   const [insertDsFechaDesde, setInsertDsFechaDesde] = useState("");
-  const [syncFechaDesdeConfig, setSyncFechaDesdeConfig] = useState("");
+  const [dsFechaDesdeConfig, setDsFechaDesdeConfig] = useState("");
 
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -517,10 +517,9 @@ export default function SiigoIntegrationPage() {
         updated_at: data.updated_at,
       });
 
-      const fechaGlobal = data?.sync_fecha_desde || data?.ds_fecha_desde || "";
-      setSyncFechaDesdeConfig(fechaGlobal);
-      setInsertDsFechaDesde(fechaGlobal);
-
+      const fechaDs = data?.ds_fecha_desde || "";
+      setDsFechaDesdeConfig(fechaDs);
+      setInsertDsFechaDesde(fechaDs);
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -535,10 +534,9 @@ export default function SiigoIntegrationPage() {
 
       setStatus(data);
 
-      const fechaGlobal = data?.sync_fecha_desde || data?.ds_fecha_desde || "";
-      setSyncFechaDesdeConfig(fechaGlobal);
-      setInsertDsFechaDesde(fechaGlobal);
-
+      const fechaDs = data?.ds_fecha_desde || "";
+      setDsFechaDesdeConfig(fechaDs);
+      setInsertDsFechaDesde(fechaDs);
     } catch (e) {
       console.error("Error consultando estado de sincronización:", e);
     }
@@ -560,8 +558,7 @@ export default function SiigoIntegrationPage() {
         base_url: form.base_url || null,
         client_id: form.client_id || null,
         username: form.username || null,
-        sync_fecha_desde: syncFechaDesdeConfig || null,
-        ds_fecha_desde: syncFechaDesdeConfig || null,
+        ds_fecha_desde: dsFechaDesdeConfig || null,
       };
 
       if (form.client_secret.trim()) payload.client_secret = form.client_secret.trim();
@@ -615,9 +612,7 @@ export default function SiigoIntegrationPage() {
     setActionMsg("");
 
     try {
-      const endpointFinal = endpointConFechaGlobal(endpoint);
-
-      const res = await fetchWithIdCliente(endpointFinal, {
+      const res = await fetchWithIdCliente(endpoint, {
         method: "POST",
         body: JSON.stringify({}),
       });
@@ -656,8 +651,7 @@ export default function SiigoIntegrationPage() {
         },
         body: JSON.stringify({
           origen: "manual",
-          sync_fecha_desde: syncFechaDesdeConfig || null,
-          ds_fecha_desde: syncFechaDesdeConfig || null,
+          ds_fecha_desde: dsFechaDesdeConfig || null,
         }),
       });
 
@@ -704,8 +698,7 @@ export default function SiigoIntegrationPage() {
           hora_ejecucion: hora,
           frecuencia_dias: Number(frecuencia),
           activo,
-          sync_fecha_desde: syncFechaDesdeConfig || null,
-          ds_fecha_desde: syncFechaDesdeConfig || null,
+          ds_fecha_desde: dsFechaDesdeConfig || null,
         }),
       });
 
@@ -915,28 +908,6 @@ export default function SiigoIntegrationPage() {
     await loadSyncHistory();
   };
 
-  const endpointConFechaGlobal = (endpoint: string) => {
-    const fecha = syncFechaDesdeConfig.trim();
-
-    if (!fecha) return endpoint;
-
-    const aplica =
-      endpoint.startsWith("/siigo/sync-facturas") ||
-      endpoint.startsWith("/siigo/sync-notas-credito") ||
-      endpoint.startsWith("/siigo/sync-compras");
-
-    if (!aplica) return endpoint;
-
-    const [path, queryString = ""] = endpoint.split("?");
-    const params = new URLSearchParams(queryString);
-
-    if (!params.get("since")) {
-      params.set("since", fecha);
-    }
-
-    return `${path}?${params.toString()}`;
-  };
-
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 pb-12">
@@ -995,10 +966,10 @@ export default function SiigoIntegrationPage() {
 
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            Fecha inicial de datos Siigo
+            Fecha inicial DS API
           </div>
           <div className="mt-2 text-sm font-semibold text-slate-900">
-            {syncFechaDesdeConfig || "Sin límite"}
+            {dsFechaDesdeConfig || "Sin límite"}
           </div>
         </div>
       </div>
@@ -1158,12 +1129,12 @@ export default function SiigoIntegrationPage() {
             </label>
 
             <label className="flex flex-col text-sm font-medium text-slate-700">
-              Fecha inicial de datos Siigo
+              Fecha inicial Documento Soporte API
               <input
                 type="date"
-                value={syncFechaDesdeConfig}
+                value={dsFechaDesdeConfig}
                 onChange={(e) => {
-                  setSyncFechaDesdeConfig(e.target.value);
+                  setDsFechaDesdeConfig(e.target.value);
                   setInsertDsFechaDesde(e.target.value);
                 }}
                 className="mt-1 rounded-xl border border-slate-300 p-2 text-sm"
@@ -1177,12 +1148,12 @@ export default function SiigoIntegrationPage() {
           </div>
 
           <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs leading-5 text-blue-900">
-            <strong>Fecha inicial de datos Siigo:</strong> define desde qué fecha InsightFlow
-            sincronizará documentos transaccionales de Siigo: facturas de venta, notas crédito,
-            compras y documentos soporte. Si se deja vacío, el sistema no limita por fecha y usará
-            todo lo disponible en Siigo.
+            <strong>Documento Soporte API:</strong> si la fecha inicial queda vacía, se insertarán
+            todos los documentos soporte aceptados que no existan en compras. Si defines una fecha,
+            solo se insertarán documentos desde esa fecha. La información siempre pasa primero por
+            staging antes de afectar reportes.
           </div>
-          
+
           <button
             type="submit"
             disabled={savingConfig}

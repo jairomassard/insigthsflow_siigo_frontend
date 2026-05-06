@@ -345,7 +345,9 @@ export default function SiigoIntegrationPage() {
   const [insertDsLoading, setInsertDsLoading] = useState(false);
   const [insertDsMsg, setInsertDsMsg] = useState("");
   const [insertDsJson, setInsertDsJson] = useState<any>(null);
-  const [insertDsFechaDesde, setInsertDsFechaDesde] = useState("2026-01-01");
+  const [insertDsFechaDesde, setInsertDsFechaDesde] = useState("");
+
+  const [dsFechaDesdeConfig, setDsFechaDesdeConfig] = useState("");
 
 
   const [loading, setLoading] = useState(true);
@@ -410,6 +412,11 @@ export default function SiigoIntegrationPage() {
         password_mask: data.password_mask,
         updated_at: data.updated_at,
       });
+
+      const fechaDs = data?.ds_fecha_desde || "";
+      setDsFechaDesdeConfig(fechaDs);
+      setInsertDsFechaDesde(fechaDs);
+
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -442,6 +449,11 @@ export default function SiigoIntegrationPage() {
         //}
 
         setStatus(data);
+
+        const fechaDs = data?.ds_fecha_desde || "";
+        setDsFechaDesdeConfig(fechaDs);
+        setInsertDsFechaDesde(fechaDs);
+
       })
       .catch((err) => {
         console.error("❌ Error al consultar /config/siigo-sync-status:", err);
@@ -460,6 +472,7 @@ export default function SiigoIntegrationPage() {
         base_url: form.base_url || null,
         client_id: form.client_id || null,
         username: form.username || null,
+        ds_fecha_desde: dsFechaDesdeConfig || null,
       };
       if (form.client_secret.trim()) payload.client_secret = form.client_secret.trim();
       if (form.password.trim()) payload.password = form.password.trim();
@@ -681,51 +694,56 @@ export default function SiigoIntegrationPage() {
 
 
   const insertarDocumentosSoporteDesdeStaging = async (dryRun = true) => {
-  setInsertDsLoading(true);
-  setInsertDsMsg("");
-  setInsertDsJson(null);
+    setInsertDsLoading(true);
+    setInsertDsMsg("");
+    setInsertDsJson(null);
 
-  try {
-    const fechaDesde = insertDsFechaDesde.trim() || "2026-01-01";
+    try {
+      const fechaDesde = insertDsFechaDesde.trim();
 
-    const res = await fetchWithIdCliente(
-      `/siigo/insert-documentos-soporte-desde-staging?fecha_desde=${encodeURIComponent(
-        fechaDesde
-      )}&dry_run=${dryRun ? "1" : "0"}`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          fecha_desde: fechaDesde,
-          dry_run: dryRun,
-        }),
+      const query = new URLSearchParams();
+      query.set("dry_run", dryRun ? "1" : "0");
+
+      if (fechaDesde) {
+        query.set("fecha_desde", fechaDesde);
       }
-    );
 
-    const data = await res.json();
-
-    if (!res.ok) {
-      throw new Error(data?.error || data?.detalle || `HTTP ${res.status}`);
-    }
-
-    if (dryRun) {
-      setInsertDsMsg(
-        `Simulación finalizada. Candidatos encontrados: ${data?.candidatos ?? 0}. No se insertó información.`
+      const res = await fetchWithIdCliente(
+        `/siigo/insert-documentos-soporte-desde-staging?${query.toString()}`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            fecha_desde: fechaDesde || null,
+            dry_run: dryRun,
+          }),
+        }
       );
-    } else {
-      setInsertDsMsg(
-        `Inserción finalizada. Insertadas: ${data?.insertadas ?? 0}, items insertados: ${
-          data?.items_insertados ?? 0
-        }, omitidas: ${data?.omitidas ?? 0}, errores: ${data?.errores ?? 0}.`
-      );
-    }
 
-    setInsertDsJson(data);
-  } catch (error: any) {
-    setInsertDsMsg(`Error procesando DS desde staging: ${error.message}`);
-  } finally {
-    setInsertDsLoading(false);
-  }
-};
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data?.error || data?.detalle || `HTTP ${res.status}`);
+      }
+
+      if (dryRun) {
+        setInsertDsMsg(
+          `Simulación finalizada. Candidatos encontrados: ${data?.candidatos ?? 0}. No se insertó información.`
+        );
+      } else {
+        setInsertDsMsg(
+          `Inserción finalizada. Insertadas: ${data?.insertadas ?? 0}, items insertados: ${
+            data?.items_insertados ?? 0
+          }, omitidas: ${data?.omitidas ?? 0}, errores: ${data?.errores ?? 0}.`
+        );
+      }
+
+      setInsertDsJson(data);
+    } catch (error: any) {
+      setInsertDsMsg(`Error procesando DS desde staging: ${error.message}`);
+    } finally {
+      setInsertDsLoading(false);
+    }
+  };
 
 
   return (
@@ -945,16 +963,17 @@ export default function SiigoIntegrationPage() {
 
         {/* Formulario para configurar */}
         <form
-          className="mt-3 space-y-2"
+          className="mt-3 space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4"
           onSubmit={async (e) => {
             e.preventDefault();
             setSaveMsg("");
             setSavingConfig(true);
 
             try {
-              const hora = (e.target as any).hora.value;
-              const frecuencia = (e.target as any).frecuencia.value;
-              const activo = (e.target as any).activo.checked;
+              const formTarget = e.target as any;
+              const hora = formTarget.hora.value;
+              const frecuencia = formTarget.frecuencia.value;
+              const activo = formTarget.activo.checked;
 
               await authFetch("/config/sync", {
                 method: "POST",
@@ -962,14 +981,18 @@ export default function SiigoIntegrationPage() {
                   hora_ejecucion: hora,
                   frecuencia_dias: Number(frecuencia),
                   activo,
+                  ds_fecha_desde: dsFechaDesdeConfig || null,
                 }),
               });
 
               setSaveMsg("✅ Configuración guardada correctamente");
 
-              // Refrescar
               const nuevo = await authFetch("/config/siigo-sync-status");
               setStatus(nuevo);
+
+              const fechaDs = nuevo?.ds_fecha_desde || "";
+              setDsFechaDesdeConfig(fechaDs);
+              setInsertDsFechaDesde(fechaDs);
             } catch (err: any) {
               setSaveMsg("❌ Error al guardar configuración: " + err.message);
             } finally {
@@ -977,27 +1000,42 @@ export default function SiigoIntegrationPage() {
             }
           }}
         >
-          <div className="flex items-center gap-4">
-            <label className="flex flex-col">
+          <div className="grid gap-4 md:grid-cols-4">
+            <label className="flex flex-col text-sm text-slate-700">
               Hora ejecución
               <input
                 type="time"
                 name="hora"
                 defaultValue={status?.hora_ejecucion || "02:00"}
-                className="border rounded p-1"
+                className="mt-1 rounded border border-slate-300 p-2"
               />
             </label>
-            <label className="flex flex-col">
+
+            <label className="flex flex-col text-sm text-slate-700">
               Frecuencia (días)
               <input
                 type="number"
                 min={1}
                 name="frecuencia"
                 defaultValue={status?.frecuencia_dias || 1}
-                className="border rounded p-1 w-20"
+                className="mt-1 w-full rounded border border-slate-300 p-2"
               />
             </label>
-            <label className="flex items-center gap-2 mt-5">
+
+            <label className="flex flex-col text-sm text-slate-700">
+              Fecha inicial DS API
+              <input
+                type="date"
+                value={dsFechaDesdeConfig}
+                onChange={(e) => {
+                  setDsFechaDesdeConfig(e.target.value);
+                  setInsertDsFechaDesde(e.target.value);
+                }}
+                className="mt-1 rounded border border-slate-300 p-2"
+              />
+            </label>
+
+            <label className="flex items-center gap-2 pt-6 text-sm text-slate-700">
               <input
                 type="checkbox"
                 name="activo"
@@ -1007,11 +1045,17 @@ export default function SiigoIntegrationPage() {
             </label>
           </div>
 
+          <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-900">
+            <strong>Documento Soporte API:</strong> si la fecha inicial DS queda vacía,
+            se insertarán todos los documentos soporte aceptados que no existan en compras.
+            Si defines una fecha, solo se insertarán documentos desde esa fecha.
+          </div>
+
           <button
             type="submit"
             disabled={savingConfig}
-            className={`bg-blue-600 hover:bg-blue-700 text-white rounded px-3 py-1 mt-3 ${
-              savingConfig ? "opacity-50 cursor-not-allowed" : ""
+            className={`rounded bg-blue-600 px-3 py-2 text-white hover:bg-blue-700 ${
+              savingConfig ? "cursor-not-allowed opacity-50" : ""
             }`}
           >
             {savingConfig ? "Guardando…" : "Guardar configuración"}
@@ -1041,7 +1085,10 @@ export default function SiigoIntegrationPage() {
                     Authorization: `Bearer ${token}`,
                     "X-ID-CLIENTE": String(idcliente),
                   },
-                  body: JSON.stringify({ origen: "manual" }),
+                  body: JSON.stringify({
+                    origen: "manual",
+                    ds_fecha_desde: dsFechaDesdeConfig || null,
+                  }),
                 });
 
                 const data = await res.json();
@@ -1052,12 +1099,20 @@ export default function SiigoIntegrationPage() {
                 // 📝 Generar resumen amigable
                 const lines: string[] = fullLog.split("\n").filter((l: string) => l.trim().length > 0);
                 const totalPasos = lines.length;
-                const exitos = lines.filter((l: string) => l.includes("→ 200")).length;
+                const exitos = lines.filter((l: string) => l.includes("-> 200")).length;
                 const errores = lines.filter(
-                  (l: string) => l.includes("→ 500") || l.includes("ERROR") || l.includes("excepción")
+                  (l: string) =>
+                    l.includes("-> 400") ||
+                    l.includes("-> 401") ||
+                    l.includes("-> 403") ||
+                    l.includes("-> 404") ||
+                    l.includes("-> 500") ||
+                    l.includes("ERROR") ||
+                    l.includes("excepción")
                 ).length;
 
-                const resumen = `📊 Sincronización completada: ${totalPasos} pasos ejecutados → ✅ ${exitos} correctos, ❌ ${errores} con error.`;
+                const resumen = `📊 Sincronización completada: ${totalPasos} pasos ejecutados -> ✅ ${exitos} correctos, ❌ ${errores} con error.`;
+
 
                 setSyncMsgAuto(resumen);     // 👈 mensaje corto para el usuario
                 setSyncLogCompleto(fullLog); // 👈 log técnico aparte
@@ -1580,7 +1635,7 @@ export default function SiigoIntegrationPage() {
               className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
             />
             <p className="mt-1 text-xs text-blue-700">
-              Para esta primera fase usa 2026-01-01.
+              Usa la misma fecha configurada para Documento Soporte API. Si la dejas vacía, no se limita por fecha.
             </p>
           </div>
 

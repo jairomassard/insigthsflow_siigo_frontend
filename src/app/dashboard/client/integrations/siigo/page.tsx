@@ -1182,7 +1182,7 @@ export default function SiigoIntegrationPage() {
             compras y documentos soporte. Si se deja vacío, el sistema no limita por fecha y usará
             todo lo disponible en Siigo.
           </div>
-          
+
           <button
             type="submit"
             disabled={savingConfig}
@@ -1654,15 +1654,21 @@ export default function SiigoIntegrationPage() {
               {!historyLoading && syncHistory.length > 0 && (
                 <div className="space-y-4">
                   {syncHistory.map((item) => {
+                    const isRunning = item.resultado === "EN_EJECUCION";
+
                     const hasError =
-                      item.resultado === "ERROR" ||
-                      Number(item.pasos_error || 0) > 0;
+                      !isRunning &&
+                      (item.resultado === "ERROR" || Number(item.pasos_error || 0) > 0);
+
+                    const isOk = !isRunning && !hasError;
 
                     return (
                       <div
                         key={item.id}
                         className={`rounded-2xl border p-4 ${
-                          hasError
+                          isRunning
+                            ? "border-blue-200 bg-blue-50/70"
+                            : hasError
                             ? "border-red-200 bg-red-50/70"
                             : "border-emerald-200 bg-emerald-50/70"
                         }`}
@@ -1672,12 +1678,14 @@ export default function SiigoIntegrationPage() {
                             <div className="flex flex-wrap items-center gap-2">
                               <span
                                 className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                                  hasError
+                                  isRunning
+                                    ? "bg-blue-100 text-blue-700"
+                                    : hasError
                                     ? "bg-red-100 text-red-700"
                                     : "bg-emerald-100 text-emerald-700"
                                 }`}
                               >
-                                {hasError ? "Con error" : "Correcta"}
+                                {isRunning ? "En ejecución" : hasError ? "Con error" : "Correcta"}
                               </span>
 
                               <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
@@ -1685,6 +1693,8 @@ export default function SiigoIntegrationPage() {
                                   ? "Automática"
                                   : item.origen === "manual"
                                   ? "Manual"
+                                  : item.origen === "manual_modulo"
+                                  ? "Manual por módulo"
                                   : "Origen no identificado"}
                               </span>
                             </div>
@@ -1692,6 +1702,13 @@ export default function SiigoIntegrationPage() {
                             <div className="mt-2 text-sm font-semibold text-slate-950">
                               Ejecutada: {formatDateTime(item.ejecutado_en, historyTimezone)}
                             </div>
+
+                            {isRunning && (
+                              <div className="mt-2 text-sm text-blue-800">
+                                Este proceso sigue ejecutándose en segundo plano. Presiona{" "}
+                                <strong>Actualizar historial</strong> en unos minutos para ver el resultado final.
+                              </div>
+                            )}
 
                             {hasError && item.endpoint_fallido && (
                               <div className="mt-2 text-sm text-red-800">

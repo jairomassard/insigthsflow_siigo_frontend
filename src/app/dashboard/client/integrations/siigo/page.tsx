@@ -628,7 +628,13 @@ export default function SiigoIntegrationPage() {
         throw new Error(data?.error || data?.detalle || `HTTP ${res.status}`);
       }
 
-      setActionMsg(`${label}: ${data?.mensaje || successFallback}`);
+      if (data?.estado === "EN_EJECUCION" || data?.log_id) {
+        setActionMsg(
+          `${label}: ${data?.mensaje || "Proceso iniciado en segundo plano."} Revisa el historial para ver el resultado final.`
+        );
+      } else {
+        setActionMsg(`${label}: ${data?.mensaje || successFallback}`);
+      }
       await loadStatus();
     } catch (e: any) {
       setActionMsg(`${label}: Error - ${e.message}`);
@@ -1254,6 +1260,26 @@ export default function SiigoIntegrationPage() {
         title="4. Carga inicial y sincronización manual por módulos"
         subtitle="Usa estas acciones cuando necesites cargar o actualizar módulos específicos sin ejecutar todo el proceso completo."
       >
+        <div className="mb-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="text-sm font-semibold text-slate-900">
+              Historial de sincronizaciones manuales
+            </div>
+            <p className="mt-1 text-xs leading-5 text-slate-600">
+              Revisa si una sincronización manual sigue en ejecución, terminó correctamente o falló.
+              Aplica especialmente para procesos en background como facturas, detalle de facturas y compras.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={openHistoryModal}
+            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+          >
+            📜 Ver historial manual
+          </button>
+        </div>
+
         <ActionRow
           title="Catálogos"
           description="Sincroniza vendedores, centros de costo y catálogos base."
@@ -1360,8 +1386,16 @@ export default function SiigoIntegrationPage() {
         />
 
         {actionMsg && (
-          <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-800">
-            {actionMsg}
+          <div className="mt-4 flex flex-col gap-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-800 md:flex-row md:items-center md:justify-between">
+            <div>{actionMsg}</div>
+
+            <button
+              type="button"
+              onClick={openHistoryModal}
+              className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-800 hover:bg-blue-100"
+            >
+              Ver historial
+            </button>
           </div>
         )}
       </Card>

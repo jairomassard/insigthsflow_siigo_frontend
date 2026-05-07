@@ -901,7 +901,7 @@ export default function SiigoIntegrationPage() {
     setHistoryMsg("");
 
     try {
-      const data = await authFetch("/config/siigo-sync-history?limit=10");
+      const data = await authFetch("/config/siigo-sync-history?limit=50");
 
       setSyncHistory(data?.items || []);
       setHistoryTimezone(data?.timezone || "America/Bogota");
@@ -1341,6 +1341,23 @@ export default function SiigoIntegrationPage() {
             postEndpoint(
               "/siigo/sync-facturas?deep=1&batch=100&only_missing=1",
               "Facturas detalladas"
+            )
+          }
+        />
+        <ActionRow
+          title="Completar detalle pendiente de facturas"
+          description="Procesa automáticamente todos los lotes pendientes de detalle, de 100 en 100, hasta finalizar o hasta encontrar facturas que no puedan enriquecerse desde Siigo."
+          buttonLabel="Completar detalle pendiente"
+          loading={
+            actionLoading ===
+            "/siigo/sync-facturas-completar-detalle?batch=100&max_lotes=100"
+          }
+          disabled={!!actionLoading}
+          tone="emerald"
+          onClick={() =>
+            postEndpoint(
+              "/siigo/sync-facturas-completar-detalle?batch=100&max_lotes=100",
+              "Completar detalle pendiente"
             )
           }
         />

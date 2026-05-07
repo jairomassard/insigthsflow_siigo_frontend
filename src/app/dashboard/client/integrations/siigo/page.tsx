@@ -462,6 +462,7 @@ export default function SiigoIntegrationPage() {
   const [insertDsJson, setInsertDsJson] = useState<any>(null);
   const [insertDsFechaDesde, setInsertDsFechaDesde] = useState("");
   const [syncFechaDesdeConfig, setSyncFechaDesdeConfig] = useState("");
+  const [syncActivoConfig, setSyncActivoConfig] = useState(true);
 
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -538,6 +539,7 @@ export default function SiigoIntegrationPage() {
       const fechaGlobal = data?.sync_fecha_desde || data?.ds_fecha_desde || "";
       setSyncFechaDesdeConfig(fechaGlobal);
       setInsertDsFechaDesde(fechaGlobal);
+      setSyncActivoConfig(data?.activo !== false);
 
     } catch (e) {
       console.error("Error consultando estado de sincronización:", e);
@@ -702,7 +704,7 @@ export default function SiigoIntegrationPage() {
       const formTarget = e.target as any;
       const hora = formTarget.hora.value;
       const frecuencia = formTarget.frecuencia.value;
-      const activo = formTarget.activo.checked;
+      const activo = syncActivoConfig;
 
       await authFetch("/config/sync", {
         method: "POST",
@@ -1177,7 +1179,12 @@ export default function SiigoIntegrationPage() {
             </label>
 
             <label className="flex items-center gap-2 pt-6 text-sm font-medium text-slate-700">
-              <input type="checkbox" name="activo" defaultChecked={status?.activo !== false} />
+              <input
+                type="checkbox"
+                name="activo"
+                checked={syncActivoConfig}
+                onChange={(e) => setSyncActivoConfig(e.target.checked)}
+              />
               Sincronización activa
             </label>
           </div>

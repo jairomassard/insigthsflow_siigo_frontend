@@ -79,95 +79,29 @@ interface TopProveedorCount {
   num_facturas: number;
 }
 
-const KPIS_EMPTY: KPIs = {
-  total_compras: 0,
-  total_pagado: 0,
-  total_saldo: 0,
-  total_facturas: 0,
-  facturas_pagadas: 0,
-  facturas_pendientes: 0,
-  facturas_parciales: 0,
-  saldo_parcial: 0,
-  compras_x_factura: 0,
-  valor_compras_x_factura: 0,
-  compras_x_cta_cobro: 0,
-  valor_compras_x_cta_cobro: 0,
-};
-
-function safeNumber(value: unknown): number {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function normalizeArray<T = any>(raw: any): T[] {
-  if (Array.isArray(raw)) return raw;
-  if (Array.isArray(raw?.data)) return raw.data;
-  if (Array.isArray(raw?.items)) return raw.items;
-  if (Array.isArray(raw?.results)) return raw.results;
-  return [];
-}
-
-function normalizeKpis(raw: any): KPIs {
-  return {
-    total_compras: safeNumber(raw?.total_compras),
-    total_pagado: safeNumber(raw?.total_pagado),
-    total_saldo: safeNumber(raw?.total_saldo),
-    total_facturas: safeNumber(raw?.total_facturas),
-    facturas_pagadas: safeNumber(raw?.facturas_pagadas),
-    facturas_pendientes: safeNumber(raw?.facturas_pendientes),
-    facturas_parciales: safeNumber(raw?.facturas_parciales),
-    saldo_parcial: safeNumber(raw?.saldo_parcial),
-    compras_x_factura: safeNumber(raw?.compras_x_factura),
-    valor_compras_x_factura: safeNumber(raw?.valor_compras_x_factura),
-    compras_x_cta_cobro: safeNumber(raw?.compras_x_cta_cobro),
-    valor_compras_x_cta_cobro: safeNumber(raw?.valor_compras_x_cta_cobro),
-  };
-}
-
-function nombreProveedorSafe(value: unknown): string {
-  const text = String(value || "").trim();
-  return text || "Sin proveedor";
-}
-
 function formatCurrency(valor: number): string {
   return `$ ${Math.round(Number(valor || 0)).toLocaleString("es-CO")}`;
 }
 
 function abreviar(valor: number): string {
-  const n = safeNumber(valor);
-
-  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(0)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
-
-  return `${Math.round(n)}`;
+  if (valor >= 1_000_000_000) return `${(valor / 1_000_000_000).toFixed(1)}B`;
+  if (valor >= 1_000_000) return `${(valor / 1_000_000).toFixed(0)}M`;
+  if (valor >= 1_000) return `${(valor / 1_000).toFixed(0)}K`;
+  return `${Math.round(valor)}`;
 }
 
 function toYYYYMM(dateLike: string | Date): string {
   try {
-    const d = new Date(dateLike);
-
-    if (Number.isNaN(d.getTime())) {
-      return String(dateLike || "").slice(0, 7);
-    }
-
-    return format(d, "yyyy-MM");
+    return format(new Date(dateLike), "yyyy-MM");
   } catch {
-    return String(dateLike || "").slice(0, 7);
+    return String(dateLike).slice(0, 7);
   }
 }
 
 function formatMesYYYYMM(mesYYYYMM: string): string {
-  try {
-    const [y, m] = String(mesYYYYMM || "").split("-").map(Number);
-
-    if (!y || !m) return "Periodo no disponible";
-
-    const d = new Date(Date.UTC(y, m - 1, 1, 12));
-    return formatInTimeZone(d, "UTC", "MMM yyyy");
-  } catch {
-    return "Periodo no disponible";
-  }
+  const [y, m] = mesYYYYMM.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m - 1, 1, 12));
+  return formatInTimeZone(d, "UTC", "MMM yyyy");
 }
 
 function formatDateSafe(value?: string | null): string {
@@ -179,18 +113,6 @@ function formatDateSafe(value?: string | null): string {
   if (!y || !m || !d) return "—";
 
   return `${d}-${m}-${y}`;
-}
-
-function formatMesGrafica(value: string): string {
-  try {
-    const d = new Date(value);
-
-    if (Number.isNaN(d.getTime())) return "—";
-
-    return format(d, "MMM yyyy");
-  } catch {
-    return "—";
-  }
 }
 
 function labelEstadoModal(estado: EstadoModal): string {
@@ -206,28 +128,9 @@ function labelTipoDocumento(tipo: TipoDocumentoModal): string {
   return "Todos";
 }
 
-function EmptyState({
-  title,
-  description,
-  height = "h-[300px]",
-}: {
-  title: string;
-  description: string;
-  height?: string;
-}) {
-  return (
-    <div
-      className={`${height} rounded-xl border border-dashed border-slate-300 bg-slate-50 flex flex-col items-center justify-center text-center px-4`}
-    >
-      <div className="text-sm font-semibold text-slate-700">{title}</div>
-      <div className="text-xs text-slate-500 mt-1 max-w-xl">{description}</div>
-    </div>
-  );
-}
-
 export default function ReporteFinancieroComprasGastosPage() {
   const [evolucion, setEvolucion] = useState<EvolucionMes[]>([]);
-  const [kpis, setKpis] = useState<KPIs>(KPIS_EMPTY);
+  const [kpis, setKpis] = useState<KPIs | null>(null);
 
   const [fechaDesde, setFechaDesde] = useState<string>("");
   const [fechaHasta, setFechaHasta] = useState<string>("");
@@ -235,7 +138,6 @@ export default function ReporteFinancieroComprasGastosPage() {
 
   const [centros, setCentros] = useState<CentroCosto[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-  const [errorMsg, setErrorMsg] = useState<string>("");
 
   const [topView, setTopView] = useState<"valor" | "facturas">("valor");
   const [topValor, setTopValor] = useState<TopProveedorValor[]>([]);
@@ -264,10 +166,9 @@ export default function ReporteFinancieroComprasGastosPage() {
     const fetchCentros = async () => {
       try {
         const data = await authFetch(`/catalogos/centros-costo-reales${queryParams}`);
-        setCentros(normalizeArray<CentroCosto>(data));
+        setCentros(data || []);
       } catch (e) {
         console.error("Error cargando centros de costo reales", e);
-        setCentros([]);
       }
     };
 
@@ -277,34 +178,22 @@ export default function ReporteFinancieroComprasGastosPage() {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
-      setErrorMsg("");
-
       try {
         const data = await authFetch(`/reportes/financiero/compras-gastos${queryParams}`);
-
-        setKpis(normalizeKpis(data?.kpis));
-        setEvolucion(normalizeArray<EvolucionMes>(data?.evolucion));
+        setKpis(data.kpis);
+        setEvolucion(data.evolucion || []);
 
         const topVal = await authFetch(
           `/reportes/financiero/compras-gastos/top-proveedores${queryParams}`
         );
-        setTopValor(normalizeArray<TopProveedorValor>(topVal));
+        setTopValor(topVal || []);
 
         const topFac = await authFetch(
           `/reportes/financiero/compras-gastos/top-proveedores-facturas${queryParams}`
         );
-        setTopFacturas(normalizeArray<TopProveedorCount>(topFac));
+        setTopFacturas(topFac || []);
       } catch (e) {
         console.error("Error al cargar el reporte financiero", e);
-
-        setKpis(KPIS_EMPTY);
-        setEvolucion([]);
-        setTopValor([]);
-        setTopFacturas([]);
-
-        setErrorMsg(
-          "No fue posible cargar información de compras y gastos. Si el cliente es nuevo, primero debes sincronizar compras desde Siigo o cargar documentos soporte."
-        );
       } finally {
         setLoading(false);
       }
@@ -314,64 +203,44 @@ export default function ReporteFinancieroComprasGastosPage() {
   }, [queryParams]);
 
   const evolucionSegura = useMemo(() => {
-    return normalizeArray<EvolucionMes>(evolucion)
-      .map((item) => {
-        const d = new Date(item?.mes);
-
-        if (Number.isNaN(d.getTime())) {
-          return null;
-        }
-
-        d.setUTCHours(12);
-
-        return {
-          mes: d.toISOString(),
-          total_compras: safeNumber(item?.total_compras),
-          total_pagadas: safeNumber(item?.total_pagadas),
-          total_pendientes: safeNumber(item?.total_pendientes),
-        };
-      })
-      .filter(Boolean) as EvolucionMes[];
+    return (evolucion || []).map((item) => {
+      const d = new Date(item.mes);
+      d.setUTCHours(12);
+      return { ...item, mes: d.toISOString() };
+    });
   }, [evolucion]);
 
   const topValorData = useMemo(
     () =>
-      normalizeArray<TopProveedorValor>(topValor).map((t) => ({
-        proveedor: nombreProveedorSafe(t?.proveedor_nombre),
-        valor: safeNumber(t?.total_compras),
+      (topValor || []).map((t) => ({
+        proveedor: t.proveedor_nombre,
+        valor: Number(t.total_compras) || 0,
       })),
     [topValor]
   );
 
   const topFacturasData = useMemo(
     () =>
-      normalizeArray<TopProveedorCount>(topFacturas).map((t) => ({
-        proveedor: nombreProveedorSafe(t?.proveedor_nombre),
-        facturas: safeNumber(t?.num_facturas),
+      (topFacturas || []).map((t) => ({
+        proveedor: t.proveedor_nombre,
+        facturas: Number(t.num_facturas) || 0,
       })),
     [topFacturas]
   );
 
-  const hayData =
-    evolucionSegura.length > 0 ||
-    topValorData.length > 0 ||
-    topFacturasData.length > 0 ||
-    safeNumber(kpis.total_compras) > 0 ||
-    safeNumber(kpis.total_facturas) > 0;
-
   const modalResumen = useMemo(() => {
     const cantidad = modalRows.length;
-    const total = modalRows.reduce((acc, r) => acc + safeNumber(r.total), 0);
+    const total = modalRows.reduce((acc, r) => acc + Number(r.total || 0), 0);
 
     const pagado = modalRows.reduce((acc, r) => {
       const pagadoCalc = Number.isFinite(Number(r.pagado_calc))
-        ? safeNumber(r.pagado_calc)
-        : safeNumber(r.total) - safeNumber(r.saldo);
+        ? Number(r.pagado_calc)
+        : Number(r.total || 0) - Number(r.saldo || 0);
 
       return acc + pagadoCalc;
     }, 0);
 
-    const saldo = modalRows.reduce((acc, r) => acc + safeNumber(r.saldo), 0);
+    const saldo = modalRows.reduce((acc, r) => acc + Number(r.saldo || 0), 0);
 
     return { cantidad, total, pagado, saldo };
   }, [modalRows]);
@@ -412,8 +281,7 @@ export default function ReporteFinancieroComprasGastosPage() {
       ? `${base}&centro_costos=${encodeURIComponent(centroCostos)}`
       : base;
 
-    const data = await authFetch(url);
-    return normalizeArray<FacturaDetalle>(data);
+    return await authFetch(url);
   }
 
   async function handleBarClick(
@@ -427,11 +295,6 @@ export default function ReporteFinancieroComprasGastosPage() {
         serie === "total" ? "total" : serie === "pagadas" ? "pagado" : "pendiente";
 
       const mesYYYYMM = toYYYYMM(item.mes);
-
-      if (!mesYYYYMM || mesYYYYMM.length < 7) {
-        return;
-      }
-
       const tipoDocumento: TipoDocumentoModal = "todos";
 
       setModalMes(mesYYYYMM);
@@ -439,7 +302,11 @@ export default function ReporteFinancieroComprasGastosPage() {
       setModalTipoDocumento(tipoDocumento);
       setModalSortBy("fecha_desc");
 
-      const rows = await cargarDetalleMes(mesYYYYMM, estado, tipoDocumento);
+      const rows: FacturaDetalle[] = await cargarDetalleMes(
+        mesYYYYMM,
+        estado,
+        tipoDocumento
+      );
 
       setModalTitle(
         `Facturas ${labelEstadoModal(estado)} • ${labelTipoDocumento(
@@ -447,11 +314,10 @@ export default function ReporteFinancieroComprasGastosPage() {
         )} • ${formatMesYYYYMM(mesYYYYMM)}`
       );
 
-      setModalRows(rows);
+      setModalRows(rows || []);
       setModalOpen(true);
     } catch (e) {
       console.error("Error abriendo modal de facturas", e);
-      setModalRows([]);
     } finally {
       setModalLoading(false);
     }
@@ -468,7 +334,11 @@ export default function ReporteFinancieroComprasGastosPage() {
       setModalEstado(nuevoEstado);
       setModalTipoDocumento(nuevoTipoDocumento);
 
-      const rows = await cargarDetalleMes(modalMes, nuevoEstado, nuevoTipoDocumento);
+      const rows: FacturaDetalle[] = await cargarDetalleMes(
+        modalMes,
+        nuevoEstado,
+        nuevoTipoDocumento
+      );
 
       setModalTitle(
         `Facturas ${labelEstadoModal(nuevoEstado)} • ${labelTipoDocumento(
@@ -476,10 +346,9 @@ export default function ReporteFinancieroComprasGastosPage() {
         )} • ${formatMesYYYYMM(modalMes)}`
       );
 
-      setModalRows(rows);
+      setModalRows(rows || []);
     } catch (e) {
       console.error("Error recargando modal", e);
-      setModalRows([]);
     } finally {
       setModalLoading(false);
     }
@@ -487,19 +356,16 @@ export default function ReporteFinancieroComprasGastosPage() {
 
   async function handleProveedorClick(proveedor: string) {
     try {
-      if (!proveedor) return;
-
       setModalLoading(true);
 
       const url = `/reportes/financiero/compras-gastos/detalle-proveedor${
         queryParams ? queryParams + "&" : "?"
       }proveedor=${encodeURIComponent(proveedor)}&tipo_documento=todos`;
 
-      const data = await authFetch(url);
-      const rows = normalizeArray<FacturaDetalle>(data);
+      const rows: FacturaDetalle[] = await authFetch(url);
 
       setModalTitle(`Facturas de ${proveedor}`);
-      setModalRows(rows);
+      setModalRows(rows || []);
       setModalMes("");
       setModalEstado("total");
       setModalTipoDocumento("todos");
@@ -507,7 +373,6 @@ export default function ReporteFinancieroComprasGastosPage() {
       setModalOpen(true);
     } catch (e) {
       console.error("Error cargando facturas de proveedor", e);
-      setModalRows([]);
     } finally {
       setModalLoading(false);
     }
@@ -549,129 +414,117 @@ export default function ReporteFinancieroComprasGastosPage() {
 
       {loading && <p className="text-sm text-gray-500">Cargando reporte…</p>}
 
-      {errorMsg && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          {errorMsg}
+      {kpis && (
+        <div className="grid grid-cols-2 md:grid-cols-6 lg:grid-cols-12 gap-2">
+          <Card className="min-h-[74px]">
+            <CardContent className="p-3 flex flex-col justify-center">
+              <div className="text-m font-bold text-center">Total Compras</div>
+              <div className="mt-1 text-lg font-extrabold text-blue-600 text-center">
+                {formatCurrency(kpis.total_compras)}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="min-h-[74px]">
+            <CardContent className="p-3 flex flex-col justify-center">
+              <div className="text-m font-bold text-center"># Compras</div>
+              <div className="mt-1 text-lg font-extrabold text-blue-600 text-center">
+                {kpis.total_facturas.toLocaleString("es-CO")}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="min-h-[74px]">
+            <CardContent className="p-3 flex flex-col justify-center">
+              <div className="text-m font-bold text-center">Total Pagado</div>
+              <div className="mt-1 text-lg font-extrabold text-green-600 text-center">
+                {formatCurrency(kpis.total_pagado)}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="min-h-[74px]">
+            <CardContent className="p-3 flex flex-col justify-center">
+              <div className="text-m font-bold text-center">Pagadas</div>
+              <div className="mt-1 text-lg font-extrabold text-green-600 text-center">
+                {kpis.facturas_pagadas.toLocaleString("es-CO")}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="min-h-[74px]">
+            <CardContent className="p-3 flex flex-col justify-center">
+              <div className="text-m font-bold text-center">Total Pendiente</div>
+              <div className="mt-1 text-lg font-extrabold text-red-600 text-center">
+                {formatCurrency(kpis.total_saldo)}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="min-h-[74px]">
+            <CardContent className="p-3 flex flex-col justify-center">
+              <div className="text-m font-bold text-center">Pendientes</div>
+              <div className="mt-1 text-lg font-extrabold text-red-600 text-center">
+                {kpis.facturas_pendientes.toLocaleString("es-CO")}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="min-h-[74px]">
+            <CardContent className="p-3 flex flex-col justify-center">
+              <div className="text-m font-bold text-center">Saldo Parcial</div>
+              <div className="mt-1 text-lg font-extrabold text-orange-600 text-center">
+                {formatCurrency(Number(kpis.saldo_parcial || 0))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="min-h-[74px]">
+            <CardContent className="p-3 flex flex-col justify-center">
+              <div className="text-m font-bold text-center">Parciales</div>
+              <div className="mt-1 text-lg font-extrabold text-orange-600 text-center">
+                {Number(kpis.facturas_parciales || 0).toLocaleString("es-CO")}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="min-h-[74px]">
+            <CardContent className="p-3 flex flex-col justify-center">
+              <div className="text-m font-bold text-center">Valor x Facturas</div>
+              <div className="mt-1 text-lg font-extrabold text-indigo-600 text-center">
+                {formatCurrency(kpis.valor_compras_x_factura)}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="min-h-[74px]">
+            <CardContent className="p-3 flex flex-col justify-center">
+              <div className="text-m font-bold text-center"># Facturas</div>
+              <div className="mt-1 text-lg font-extrabold text-indigo-600 text-center">
+                {kpis.compras_x_factura.toLocaleString("es-CO")}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="min-h-[74px]">
+            <CardContent className="p-3 flex flex-col justify-center">
+              <div className="text-m font-bold text-center">Valor Ctas. Cobro</div>
+              <div className="mt-1 text-lg font-extrabold text-purple-600 text-center">
+                {formatCurrency(kpis.valor_compras_x_cta_cobro)}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="min-h-[74px]">
+            <CardContent className="p-3 flex flex-col justify-center">
+              <div className="text-m font-bold text-center"># Ctas. Cobro</div>
+              <div className="mt-1 text-lg font-extrabold text-purple-600 text-center">
+                {kpis.compras_x_cta_cobro.toLocaleString("es-CO")}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
-
-      {!loading && !errorMsg && !hayData && (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-          Este cliente todavía no tiene información de compras y gastos cargada. El reporte se
-          mostrará en cero hasta que se sincronicen compras desde Siigo o se carguen documentos
-          soporte.
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 md:grid-cols-6 lg:grid-cols-12 gap-2">
-        <Card className="min-h-[74px]">
-          <CardContent className="p-3 flex flex-col justify-center">
-            <div className="text-m font-bold text-center">Total Compras</div>
-            <div className="mt-1 text-lg font-extrabold text-blue-600 text-center">
-              {formatCurrency(kpis.total_compras)}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="min-h-[74px]">
-          <CardContent className="p-3 flex flex-col justify-center">
-            <div className="text-m font-bold text-center"># Compras</div>
-            <div className="mt-1 text-lg font-extrabold text-blue-600 text-center">
-              {safeNumber(kpis.total_facturas).toLocaleString("es-CO")}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="min-h-[74px]">
-          <CardContent className="p-3 flex flex-col justify-center">
-            <div className="text-m font-bold text-center">Total Pagado</div>
-            <div className="mt-1 text-lg font-extrabold text-green-600 text-center">
-              {formatCurrency(kpis.total_pagado)}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="min-h-[74px]">
-          <CardContent className="p-3 flex flex-col justify-center">
-            <div className="text-m font-bold text-center">Pagadas</div>
-            <div className="mt-1 text-lg font-extrabold text-green-600 text-center">
-              {safeNumber(kpis.facturas_pagadas).toLocaleString("es-CO")}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="min-h-[74px]">
-          <CardContent className="p-3 flex flex-col justify-center">
-            <div className="text-m font-bold text-center">Total Pendiente</div>
-            <div className="mt-1 text-lg font-extrabold text-red-600 text-center">
-              {formatCurrency(kpis.total_saldo)}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="min-h-[74px]">
-          <CardContent className="p-3 flex flex-col justify-center">
-            <div className="text-m font-bold text-center">Pendientes</div>
-            <div className="mt-1 text-lg font-extrabold text-red-600 text-center">
-              {safeNumber(kpis.facturas_pendientes).toLocaleString("es-CO")}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="min-h-[74px]">
-          <CardContent className="p-3 flex flex-col justify-center">
-            <div className="text-m font-bold text-center">Saldo Parcial</div>
-            <div className="mt-1 text-lg font-extrabold text-orange-600 text-center">
-              {formatCurrency(kpis.saldo_parcial)}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="min-h-[74px]">
-          <CardContent className="p-3 flex flex-col justify-center">
-            <div className="text-m font-bold text-center">Parciales</div>
-            <div className="mt-1 text-lg font-extrabold text-orange-600 text-center">
-              {safeNumber(kpis.facturas_parciales).toLocaleString("es-CO")}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="min-h-[74px]">
-          <CardContent className="p-3 flex flex-col justify-center">
-            <div className="text-m font-bold text-center">Valor x Facturas</div>
-            <div className="mt-1 text-lg font-extrabold text-indigo-600 text-center">
-              {formatCurrency(kpis.valor_compras_x_factura)}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="min-h-[74px]">
-          <CardContent className="p-3 flex flex-col justify-center">
-            <div className="text-m font-bold text-center"># Facturas</div>
-            <div className="mt-1 text-lg font-extrabold text-indigo-600 text-center">
-              {safeNumber(kpis.compras_x_factura).toLocaleString("es-CO")}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="min-h-[74px]">
-          <CardContent className="p-3 flex flex-col justify-center">
-            <div className="text-m font-bold text-center">Valor Ctas. Cobro</div>
-            <div className="mt-1 text-lg font-extrabold text-purple-600 text-center">
-              {formatCurrency(kpis.valor_compras_x_cta_cobro)}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="min-h-[74px]">
-          <CardContent className="p-3 flex flex-col justify-center">
-            <div className="text-m font-bold text-center"># Ctas. Cobro</div>
-            <div className="mt-1 text-lg font-extrabold text-purple-600 text-center">
-              {safeNumber(kpis.compras_x_cta_cobro).toLocaleString("es-CO")}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
       <Card className="shadow-sm">
         <CardHeader>
@@ -679,95 +532,94 @@ export default function ReporteFinancieroComprasGastosPage() {
         </CardHeader>
 
         <CardContent>
-          {evolucionSegura.length === 0 ? (
-            <EmptyState
-              title="Sin evolución mensual para mostrar"
-              description="Cuando existan compras, facturas de compra o documentos soporte, aquí aparecerá la evolución mensual."
-            />
-          ) : (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart
-                data={evolucionSegura}
-                margin={{ top: 10, bottom: 40, left: 40, right: 20 }}
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart
+              data={evolucionSegura}
+              margin={{ top: 10, bottom: 40, left: 40, right: 20 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+
+              <XAxis
+                dataKey="mes"
+                tickFormatter={(mes) => format(new Date(mes), "MMM yyyy")}
+                angle={-30}
+                textAnchor="end"
+                height={60}
+              />
+
+              <YAxis tickFormatter={(v) => formatCurrency(Number(v))} fontSize={11} />
+
+              <Tooltip
+                formatter={(value: number, name: string) => [
+                  formatCurrency(Number(value)),
+                  name,
+                ]}
+                labelFormatter={(label) => {
+                  try {
+                    return format(new Date(label), "MMM yyyy");
+                  } catch {
+                    return label;
+                  }
+                }}
+              />
+
+              <Legend />
+
+              <Bar
+                dataKey="total_compras"
+                name="Compras Totales"
+                fill="#2563eb"
+                radius={[6, 6, 0, 0]}
+                onClick={(_, idx) => {
+                  const item = evolucionSegura[idx];
+                  if (item) handleBarClick("total", item);
+                }}
               >
-                <CartesianGrid strokeDasharray="3 3" />
-
-                <XAxis
-                  dataKey="mes"
-                  tickFormatter={(mes) => formatMesGrafica(String(mes))}
-                  angle={-30}
-                  textAnchor="end"
-                  height={60}
-                />
-
-                <YAxis tickFormatter={(v) => formatCurrency(Number(v))} fontSize={11} />
-
-                <Tooltip
-                  formatter={(value: any, name: string) => [
-                    formatCurrency(Number(value)),
-                    name,
-                  ]}
-                  labelFormatter={(label) => formatMesGrafica(String(label))}
-                />
-
-                <Legend />
-
-                <Bar
+                <LabelList
                   dataKey="total_compras"
-                  name="Compras Totales"
-                  fill="#2563eb"
-                  radius={[6, 6, 0, 0]}
-                  onClick={(_, idx) => {
-                    const item = evolucionSegura[idx];
-                    if (item) handleBarClick("total", item);
-                  }}
-                >
-                  <LabelList
-                    dataKey="total_compras"
-                    position="top"
-                    formatter={(v: any) => abreviar(Number(v))}
-                    style={{ fontSize: 10, fontWeight: 500 }}
-                  />
-                </Bar>
+                  position="top"
+                  formatter={(v: any) => abreviar(Number(v))}
+                  style={{ fontSize: 10, fontWeight: 500 }}
+                />
+              </Bar>
 
-                <Bar
+              <Bar
+                dataKey="total_pagadas"
+                name="Pagadas"
+                fill="#22c55e"
+                radius={[6, 6, 0, 0]}
+                onClick={(_, idx) => {
+                  const item = evolucionSegura[idx];
+                  if (item) handleBarClick("pagadas", item);
+                }}
+              >
+                <LabelList
                   dataKey="total_pagadas"
-                  name="Pagadas"
-                  fill="#22c55e"
-                  radius={[6, 6, 0, 0]}
-                  onClick={(_, idx) => {
-                    const item = evolucionSegura[idx];
-                    if (item) handleBarClick("pagadas", item);
-                  }}
-                >
-                  <LabelList
-                    dataKey="total_pagadas"
-                    position="top"
-                    formatter={(v: any) => abreviar(Number(v))}
-                    style={{ fontSize: 10, fontWeight: 500 }}
-                  />
-                </Bar>
+                  position="top"
+                  formatter={(v: any) => abreviar(Number(v))}
+                  style={{ fontSize: 10, fontWeight: 500 }}
+                />
+              </Bar>
 
-                <Bar
+              <Bar
+                dataKey="total_pendientes"
+                name="Pendientes"
+                fill="#ef4444"
+                radius={[6, 6, 0, 0]}
+                onClick={(_, idx) => {
+                  const item = evolucionSegura[idx];
+                  if (item) handleBarClick("pendiente", item);
+                }}
+              >
+                <LabelList
                   dataKey="total_pendientes"
-                  name="Pendientes"
-                  fill="#ef4444"
-                  radius={[6, 6, 0, 0]}
-                  onClick={(_, idx) => {
-                    const item = evolucionSegura[idx];
-                    if (item) handleBarClick("pendiente", item);
-                  }}
-                >
-                  <LabelList
-                    dataKey="total_pendientes"
-                    position="top"
-                    formatter={(v: any) => abreviar(Number(v))}
-                    style={{ fontSize: 10, fontWeight: 500 }}
-                  />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
+                  position="top"
+                  formatter={(v: any) => abreviar(Number(v))}
+                  style={{ fontSize: 10, fontWeight: 500 }}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
 
           <div className="text-s text-black-600 tracking-tight text-right">
             * Haga click sobre una barra de interés para mayor información
@@ -806,56 +658,42 @@ export default function ReporteFinancieroComprasGastosPage() {
 
         <CardContent>
           {topView === "valor" ? (
-            topValorData.length === 0 ? (
-              <EmptyState
-                title="Sin proveedores para mostrar"
-                description="Cuando existan compras registradas, aquí aparecerá el ranking de proveedores por valor."
-                height="h-[420px]"
-              />
-            ) : (
-              <div className="w-full h-[420px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    layout="vertical"
-                    data={topValorData}
-                    margin={{ top: 10, bottom: 10, left: 20, right: 20 }}
+            <div className="w-full h-[420px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  layout="vertical"
+                  data={topValorData}
+                  margin={{ top: 10, bottom: 10, left: 20, right: 20 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis type="number" tickFormatter={(v) => formatCurrency(Number(v))} />
+                  <YAxis
+                    type="category"
+                    dataKey="proveedor"
+                    width={220}
+                    tick={{ fontSize: 12 }}
+                  />
+                  <Tooltip formatter={(v: number) => formatCurrency(Number(v))} />
+                  <Bar
+                    dataKey="valor"
+                    name="Compras"
+                    fill="#2563eb"
+                    radius={[0, 6, 6, 0]}
+                    onClick={(_, index) => {
+                      const item = topValorData[index];
+                      if (item) handleProveedorClick(item.proveedor);
+                    }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" tickFormatter={(v) => formatCurrency(Number(v))} />
-                    <YAxis
-                      type="category"
-                      dataKey="proveedor"
-                      width={220}
-                      tick={{ fontSize: 12 }}
-                    />
-                    <Tooltip formatter={(v: any) => formatCurrency(Number(v))} />
-                    <Bar
+                    <LabelList
                       dataKey="valor"
-                      name="Compras"
-                      fill="#2563eb"
-                      radius={[0, 6, 6, 0]}
-                      onClick={(_, index) => {
-                        const item = topValorData[index];
-                        if (item) handleProveedorClick(item.proveedor);
-                      }}
-                    >
-                      <LabelList
-                        dataKey="valor"
-                        position="right"
-                        formatter={(v: any) => abreviar(Number(v))}
-                        style={{ fontSize: 10, fontWeight: 500 }}
-                      />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )
-          ) : topFacturasData.length === 0 ? (
-            <EmptyState
-              title="Sin proveedores para mostrar"
-              description="Cuando existan documentos de compra, aquí aparecerá el ranking de proveedores por número de facturas."
-              height="h-[420px]"
-            />
+                      position="right"
+                      formatter={(v: any) => abreviar(Number(v))}
+                      style={{ fontSize: 10, fontWeight: 500 }}
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           ) : (
             <div className="w-full h-[420px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -872,9 +710,7 @@ export default function ReporteFinancieroComprasGastosPage() {
                     width={220}
                     tick={{ fontSize: 12 }}
                   />
-                  <Tooltip
-                    formatter={(v: any) => `${Number(v || 0).toLocaleString("es-CO")}`}
-                  />
+                  <Tooltip formatter={(v: number) => `${Number(v).toLocaleString("es-CO")}`} />
                   <Bar
                     dataKey="facturas"
                     name="# Facturas"
@@ -888,7 +724,7 @@ export default function ReporteFinancieroComprasGastosPage() {
                     <LabelList
                       dataKey="facturas"
                       position="right"
-                      formatter={(v: any) => `${Number(v || 0).toLocaleString("es-CO")}`}
+                      formatter={(v: any) => `${Number(v).toLocaleString("es-CO")}`}
                     />
                   </Bar>
                 </BarChart>
@@ -1057,13 +893,13 @@ export default function ReporteFinancieroComprasGastosPage() {
                         (esAnomalia ? "font-semibold " : "");
 
                       const pagadoCalc = Number.isFinite(Number(r.pagado_calc))
-                        ? safeNumber(r.pagado_calc)
-                        : safeNumber(r.total) - safeNumber(r.saldo);
+                        ? Number(r.pagado_calc)
+                        : Number(r.total || 0) - Number(r.saldo || 0);
 
                       return (
-                        <tr key={`${r.factura || "factura"}-${i}`} className={rowClass}>
-                          <td className="p-2">{r.proveedor_nombre || "Sin proveedor"}</td>
-                          <td className="p-2">{r.factura || "—"}</td>
+                        <tr key={`${r.factura}-${i}`} className={rowClass}>
+                          <td className="p-2">{r.proveedor_nombre}</td>
+                          <td className="p-2">{r.factura}</td>
                           <td className="p-2">{formatDateSafe(r.fecha)}</td>
                           <td className="p-2">{formatDateSafe(r.vencimiento)}</td>
                           <td className="p-2">
@@ -1075,9 +911,9 @@ export default function ReporteFinancieroComprasGastosPage() {
                             {esAnomalia ? " ⚠️" : ""}
                           </td>
                           <td className="p-2">{r.centro_costo_nombre || "—"}</td>
-                          <td className="p-2 text-right">{formatCurrency(safeNumber(r.total))}</td>
+                          <td className="p-2 text-right">{formatCurrency(r.total)}</td>
                           <td className="p-2 text-right">{formatCurrency(pagadoCalc)}</td>
-                          <td className="p-2 text-right">{formatCurrency(safeNumber(r.saldo))}</td>
+                          <td className="p-2 text-right">{formatCurrency(r.saldo)}</td>
                         </tr>
                       );
                     })}

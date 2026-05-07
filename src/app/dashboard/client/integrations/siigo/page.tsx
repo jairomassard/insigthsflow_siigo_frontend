@@ -1258,7 +1258,7 @@ export default function SiigoIntegrationPage() {
 
       <Card
         title="4. Carga inicial y sincronización manual por módulos"
-        subtitle="Usa estas acciones cuando necesites cargar o actualizar módulos específicos sin ejecutar todo el proceso completo."
+        subtitle="Carga o actualiza la información base desde Siigo. Después de compras, continúa con Documento Soporte API y luego con cuentas por pagar."
       >
         <div className="mb-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 md:flex-row md:items-center md:justify-between">
           <div>
@@ -1365,25 +1365,7 @@ export default function SiigoIntegrationPage() {
           onClick={() => postEndpoint("/siigo/sync-compras", "Compras")}
         />
 
-        <ActionRow
-          title="Cuentas por pagar"
-          description="Trae saldos de cuentas por pagar desde Siigo."
-          buttonLabel="Sincronizar cuentas por pagar"
-          loading={actionLoading === "/siigo/sync-accounts-payable"}
-          disabled={!!actionLoading}
-          tone="blue"
-          onClick={() => postEndpoint("/siigo/sync-accounts-payable", "Cuentas por pagar")}
-        />
 
-        <ActionRow
-          title="Cruce de cuentas por pagar"
-          description="Cruza saldos de Siigo contra compras locales para actualizar estados y saldos."
-          buttonLabel="Cruzar cuentas por pagar"
-          loading={actionLoading === "/siigo/cross-accounts-payable"}
-          disabled={!!actionLoading}
-          tone="emerald"
-          onClick={() => postEndpoint("/siigo/cross-accounts-payable", "Cruce cuentas por pagar")}
-        />
 
         {actionMsg && (
           <div className="mt-4 flex flex-col gap-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-800 md:flex-row md:items-center md:justify-between">
@@ -1524,7 +1506,59 @@ export default function SiigoIntegrationPage() {
       </Card>
 
       <Card
-        title="6. Archivos complementarios"
+        title="6. Cuentas por pagar y cruce"
+        subtitle="Después de sincronizar compras y documentos soporte, actualiza las cuentas por pagar desde Siigo y ejecuta el cruce para ajustar estados y saldos."
+      >
+        <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+          <h3 className="text-sm font-semibold text-blue-950">
+            Orden recomendado
+          </h3>
+
+          <p className="mt-1 text-sm leading-6 text-blue-800">
+            Ejecuta estos procesos después de tener actualizadas las compras y los documentos soporte.
+            El cruce usa la información local de compras y documentos soporte para marcar estados como
+            pendiente, parcial o pagado.
+          </p>
+        </div>
+
+        <ActionRow
+          title="Cuentas por pagar"
+          description="Trae desde Siigo los saldos actuales de cuentas por pagar. Este proceso refleja el estado vivo de las obligaciones pendientes."
+          buttonLabel="Sincronizar cuentas por pagar"
+          loading={actionLoading === "/siigo/sync-accounts-payable"}
+          disabled={!!actionLoading}
+          tone="blue"
+          onClick={() => postEndpoint("/siigo/sync-accounts-payable", "Cuentas por pagar")}
+        />
+
+        <ActionRow
+          title="Cruce de cuentas por pagar"
+          description="Cruza los saldos de Siigo contra compras y documentos soporte locales para actualizar estados y saldos."
+          buttonLabel="Cruzar cuentas por pagar"
+          loading={actionLoading === "/siigo/cross-accounts-payable"}
+          disabled={!!actionLoading}
+          tone="emerald"
+          onClick={() => postEndpoint("/siigo/cross-accounts-payable", "Cruce cuentas por pagar")}
+        />
+
+        {actionMsg && (
+          <div className="mt-4 flex flex-col gap-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-800 md:flex-row md:items-center md:justify-between">
+            <div>{actionMsg}</div>
+
+            <button
+              type="button"
+              onClick={openHistoryModal}
+              className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-800 hover:bg-blue-100"
+            >
+              Ver historial
+            </button>
+          </div>
+        )}
+      </Card>
+
+
+      <Card
+        title="7. Archivos complementarios"
         subtitle="Cargues que todavía dependen de archivos externos. Documento Soporte por Excel se conserva solo como contingencia."
       >
         <details className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -1554,7 +1588,7 @@ export default function SiigoIntegrationPage() {
       </Card>
 
       <Card
-        title="7. Herramientas avanzadas de diagnóstico"
+        title="8. Herramientas avanzadas de diagnóstico"
         subtitle="Sección para soporte técnico. Úsala solo cuando necesites comparar respuestas de Siigo contra la información almacenada en InsightFlow."
       >
         <details className="rounded-xl border border-slate-200 bg-slate-50 p-4">

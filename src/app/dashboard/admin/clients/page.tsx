@@ -1021,11 +1021,16 @@ export default function ClientsPage() {
 
             <tbody>
               {clientes.map((c) => {
-                const paqueteCodigo = normalizarPaqueteCodigo(
-                  c.paquete_codigo || c.paquete_actual?.codigo || null
-                );
-                const paqueteTabla =
-                  PAQUETES.find((p) => p.codigo === paqueteCodigo) || null;
+                const paqueteCodigoRaw =
+                  c.paquete_codigo || c.paquete_actual?.codigo || null;
+
+                const paqueteCodigo = paqueteCodigoRaw
+                  ? normalizarPaqueteCodigo(paqueteCodigoRaw)
+                  : null;
+
+                const paqueteTabla = paqueteCodigo
+                  ? PAQUETES.find((p) => p.codigo === paqueteCodigo) || null
+                  : null;
 
                 return (
                   <tr key={c.idcliente} className="odd:bg-white even:bg-slate-50">

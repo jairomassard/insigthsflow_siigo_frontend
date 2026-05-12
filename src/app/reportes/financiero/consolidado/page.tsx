@@ -85,6 +85,35 @@ function getMesTooltip(raw: string) {
   }
 }
 
+function getPeriodoSeguro(rawMes: any) {
+  const raw = String(rawMes || "");
+
+  // Soporta formatos como:
+  // "2025-11"
+  // "2025-11-01"
+  // "2025-11-01 00:00:00"
+  // "2025-11-01T00:00:00"
+  const match = raw.match(/^(\d{4})-(\d{2})/);
+
+  if (!match) return null;
+
+  const yearText = match[1];
+  const monthText = match[2];
+
+  const year = Number(yearText);
+  const month = Number(monthText);
+
+  if (!year || !month || month < 1 || month > 12) return null;
+
+  const lastDay = new Date(year, month, 0).getDate();
+
+  return {
+    mesLabel: `${yearText}-${monthText}`,
+    desdeMes: `${yearText}-${monthText}-01`,
+    hastaMes: `${yearText}-${monthText}-${String(lastDay).padStart(2, "0")}`,
+  };
+}
+
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
@@ -167,41 +196,27 @@ export default function ReporteFinancieroConsolidadoPage() {
 
   /* --- manejar clic en barras --- */
   const handleBarClick = async (tipo: "ingresos" | "egresos", data: any) => {
-    let d: Date;
+    const periodo = getPeriodoSeguro(data?.mes);
 
-    if (typeof data.mes === "string") {
-      const isoFixed = data.mes.replace(" ", "T");
-      d = new Date(isoFixed);
-    } else if (data.mes instanceof Date) {
-      d = data.mes;
-    } else if (typeof data.mes === "number") {
-      d = new Date(data.mes);
-    } else {
-      console.error("handleBarClick: formato de mes inesperado:", data.mes);
+    if (!periodo) {
+      console.error("handleBarClick: mes inválido recibido:", data?.mes, data);
+      setDetalleFacturas([]);
       return;
     }
-
-    if (isNaN(d.getTime())) {
-      console.error("handleBarClick: fecha inválida calculada:", d);
-      return;
-    }
-
-    const year = d.getUTCFullYear();
-    const month = d.getUTCMonth();
-    const firstOfMonthUTC = new Date(Date.UTC(year, month, 1));
-    const lastOfMonthUTC = new Date(Date.UTC(year, month + 1, 0));
-
-    const desdeMes = format(firstOfMonthUTC, "yyyy-MM-dd");
-    const hastaMes = format(lastOfMonthUTC, "yyyy-MM-dd");
-    const mes = format(firstOfMonthUTC, "yyyy-MM");
 
     setModalTipo(tipo);
-    setModalMes(mes);
+    setModalMes(periodo.mesLabel);
     setModalOpen(true);
 
     try {
-      const qs = new URLSearchParams({ desde: desdeMes, hasta: hastaMes });
-      if (centroCostos) qs.set("centro_costos", String(centroCostos));
+      const qs = new URLSearchParams({
+        desde: periodo.desdeMes,
+        hasta: periodo.hastaMes,
+      });
+
+      if (centroCostos) {
+        qs.set("centro_costos", String(centroCostos));
+      }
 
       if (tipo === "ingresos") {
         const result = await authFetch(`/reportes/facturas_cliente?${qs.toString()}`);

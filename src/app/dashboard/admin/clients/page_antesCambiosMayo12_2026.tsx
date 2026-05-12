@@ -5,17 +5,6 @@ import { Eye, EyeOff, Mail, Building2 } from "lucide-react";
 import useAuthGuard from "@/hooks/useAuthGuard";
 import { authFetch } from "@/lib/api";
 
-type PaqueteCodigo = "operativo" | "financiero" | "completo";
-
-type PaqueteActual = {
-  idcliente_paquete?: number | null;
-  idpaquete?: number;
-  codigo?: PaqueteCodigo | string;
-  nombre?: string;
-  descripcion?: string;
-  activo?: boolean;
-};
-
 type Cliente = {
   idcliente: number;
   nombre: string;
@@ -30,13 +19,9 @@ type Cliente = {
   limite_usuarios?: number | null;
   limite_sesiones?: number | null;
   timezone?: string;
-
-  // Nuevos campos esperados desde GET /clientes
-  paquete_codigo?: PaqueteCodigo | string | null;
-  paquete_nombre?: string | null;
-  idpaquete?: number | null;
-  paquete_actual?: PaqueteActual | null;
 };
+
+type PaqueteCodigo = "operativo" | "financiero" | "completo";
 
 const PAQUETES: {
   codigo: PaqueteCodigo;
@@ -73,21 +58,12 @@ const isValidEmail = (email: string) => {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean);
 };
 
-const normalizarPaqueteCodigo = (value?: string | null): PaqueteCodigo => {
-  const codigo = String(value || "").trim().toLowerCase();
-
-  if (codigo === "financiero") return "financiero";
-  if (codigo === "completo") return "completo";
-  return "operativo";
-};
-
 export default function ClientsPage() {
   useAuthGuard();
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [packageSaving, setPackageSaving] = useState(false);
   const [err, setErr] = useState("");
   const [ok, setOk] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -146,7 +122,7 @@ export default function ClientsPage() {
       setOk("");
       setLoading(true);
       const data = await authFetch("/clientes");
-      setClientes(data || []);
+      setClientes(data);
     } catch (e: any) {
       setErr(e.message || "No se pudo cargar la lista.");
     } finally {
@@ -257,9 +233,7 @@ export default function ClientsPage() {
           body: JSON.stringify(clientePayloadFromForm()),
         });
 
-        setOk(
-          "Cliente actualizado correctamente. Si también cambiaste el paquete, presiona el botón específico de cambio de paquete."
-        );
+        setOk("Cliente actualizado correctamente.");
       } else {
         const validation = validarCrearCliente();
 
@@ -284,11 +258,10 @@ export default function ClientsPage() {
               resp?.permisos_asignados ?? "los"
             } permisos contratados.`
         );
-
-        resetForm();
-        setEditingId(null);
       }
 
+      resetForm();
+      setEditingId(null);
       await load();
     } catch (e: any) {
       setErr(e.message || "Error al guardar.");
@@ -297,66 +270,10 @@ export default function ClientsPage() {
     }
   };
 
-  const cambiarPaqueteCliente = async () => {
-    if (!editingId) return;
-
-    setErr("");
-    setOk("");
-    setPackageSaving(true);
-
-    try {
-      const paqueteActualCodigo = normalizarPaqueteCodigo(
-        clienteEditando?.paquete_codigo ||
-          clienteEditando?.paquete_actual?.codigo ||
-          null
-      );
-
-      if (paqueteActualCodigo === form.paquete) {
-        setOk("El cliente ya tiene seleccionado ese paquete.");
-        return;
-      }
-
-      const paqueteNuevo = PAQUETES.find((p) => p.codigo === form.paquete);
-
-      const resp = await authFetch(`/clientes/${editingId}/paquete`, {
-        method: "PUT",
-        body: JSON.stringify({
-          paquete: form.paquete,
-        }),
-      });
-
-      const nombreNuevo =
-        resp?.paquete_nuevo?.nombre ||
-        paqueteNuevo?.nombre ||
-        form.paquete;
-
-      const permisos = resp?.permisos;
-      const totalPermisos =
-        permisos?.permisos_cliente?.total_sincronizados ??
-        permisos?.codigos_permitidos?.length ??
-        "los";
-
-      setOk(
-        `Paquete actualizado correctamente a ${nombreNuevo}. ` +
-          `Se sincronizaron ${totalPermisos} permisos del paquete y se asignaron al perfil Administrador.`
-      );
-
-      await load();
-    } catch (e: any) {
-      setErr(e.message || "No se pudo cambiar el paquete del cliente.");
-    } finally {
-      setPackageSaving(false);
-    }
-  };
-
   const onEdit = (c: Cliente) => {
     setErr("");
     setOk("");
     setEditingId(c.idcliente);
-
-    const paqueteActual = normalizarPaqueteCodigo(
-      c.paquete_codigo || c.paquete_actual?.codigo || null
-    );
 
     setForm({
       nombre: c.nombre || "",
@@ -378,7 +295,7 @@ export default function ClientsPage() {
       activo: c.activo ? "true" : "false",
       timezone: c.timezone || "America/Bogota",
 
-      paquete: paqueteActual,
+      paquete: "operativo",
 
       admin_nombre: "",
       admin_apellido: "",
@@ -402,7 +319,6 @@ export default function ClientsPage() {
       });
 
       setOk("Cliente eliminado completamente.");
-
       if (editingId === idcliente) {
         resetForm();
         setEditingId(null);
@@ -423,18 +339,6 @@ export default function ClientsPage() {
     ? clientes.find((c) => c.idcliente === editingId)
     : null;
 
-  const paqueteActualEditandoCodigo = normalizarPaqueteCodigo(
-    clienteEditando?.paquete_codigo ||
-      clienteEditando?.paquete_actual?.codigo ||
-      null
-  );
-
-  const paqueteActualEditando =
-    PAQUETES.find((p) => p.codigo === paqueteActualEditandoCodigo) || null;
-
-  const paqueteCambioPendiente =
-    !!editingId && paqueteActualEditandoCodigo !== form.paquete;
-
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border bg-white p-5 shadow-sm">
@@ -449,7 +353,7 @@ export default function ClientsPage() {
 
           <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
             <div className="font-semibold">Modo SuperAdmin</div>
-            <div>Creación y administración de paquetes InsightFlow</div>
+            <div>Creación con paquetes InsightFlow</div>
           </div>
         </div>
       </div>
@@ -476,7 +380,7 @@ export default function ClientsPage() {
           </h3>
           <p className="text-sm text-slate-500">
             {editingId
-              ? "La edición actualiza los datos básicos del cliente. El cambio de paquete se hace con un botón separado para evitar modificaciones accidentales."
+              ? "La edición actualiza los datos básicos del cliente. Aquí puedes consultar, ingresar o corregir el correo electrónico corporativo del cliente."
               : "La creación inicial genera cliente, paquete contratado, perfil Administrador, usuario administrador y permisos."}
           </p>
         </div>
@@ -494,33 +398,17 @@ export default function ClientsPage() {
                     Editando cliente #{editingId}
                   </div>
                   <div className="text-sm text-blue-800">
-                    {clienteEditando?.nombre ||
-                      form.nombre ||
-                      "Cliente seleccionado"}
+                    {clienteEditando?.nombre || form.nombre || "Cliente seleccionado"}
                   </div>
                 </div>
               </div>
 
-              <div className="flex flex-col gap-2 md:items-end">
-                <div className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm text-slate-700 shadow-sm">
-                  <Mail className="h-4 w-4 text-blue-600" />
-                  <span className="font-medium">Correo actual:</span>
-                  <span>
-                    {clienteEditando?.email ||
-                      form.email ||
-                      "Sin correo registrado"}
-                  </span>
-                </div>
-
-                <div className="rounded-xl bg-white px-3 py-2 text-sm text-slate-700 shadow-sm">
-                  <span className="font-medium">Paquete actual: </span>
-                  <span>
-                    {clienteEditando?.paquete_nombre ||
-                      clienteEditando?.paquete_actual?.nombre ||
-                      paqueteActualEditando?.nombre ||
-                      "Sin paquete identificado"}
-                  </span>
-                </div>
+              <div className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm text-slate-700 shadow-sm">
+                <Mail className="h-4 w-4 text-blue-600" />
+                <span className="font-medium">Correo actual:</span>
+                <span>
+                  {clienteEditando?.email || form.email || "Sin correo registrado"}
+                </span>
               </div>
             </div>
           </div>
@@ -736,134 +624,71 @@ export default function ClientsPage() {
           </div>
         </div>
 
-        <div className="my-6 border-t border-slate-200" />
+        {!editingId && (
+          <>
+            <div className="my-6 border-t border-slate-200" />
 
-        <div className="mb-4">
-          <h4 className="text-base font-semibold text-slate-900">
-            Paquete contratado
-          </h4>
-          <p className="text-sm text-slate-500">
-            {editingId
-              ? "Selecciona un nuevo paquete y presiona “Cambiar paquete y actualizar permisos”. Este cambio no se aplica al guardar datos básicos."
-              : "Este paquete define las páginas y reportes disponibles para el cliente."}
-          </p>
-        </div>
+            <div className="mb-4">
+              <h4 className="text-base font-semibold text-slate-900">
+                Paquete contratado
+              </h4>
+              <p className="text-sm text-slate-500">
+                Este paquete define las páginas y reportes disponibles para el
+                cliente.
+              </p>
+            </div>
 
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          {PAQUETES.map((p) => {
-            const selected = form.paquete === p.codigo;
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              {PAQUETES.map((p) => {
+                const selected = form.paquete === p.codigo;
 
-            return (
-              <button
-                key={p.codigo}
-                type="button"
-                onClick={() => setForm({ ...form, paquete: p.codigo })}
-                className={`rounded-2xl border p-4 text-left transition ${
-                  selected
-                    ? "border-blue-500 bg-blue-50 shadow-sm"
-                    : "border-slate-200 bg-white hover:bg-slate-50"
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="font-semibold text-slate-900">
-                      {p.nombre}
-                    </div>
-                    <div className="mt-1 text-xs uppercase tracking-wide text-slate-500">
-                      {p.permisos} permisos incluidos
-                    </div>
-                  </div>
-                  <div
-                    className={`h-4 w-4 rounded-full border ${
+                return (
+                  <button
+                    key={p.codigo}
+                    type="button"
+                    onClick={() => setForm({ ...form, paquete: p.codigo })}
+                    className={`rounded-2xl border p-4 text-left transition ${
                       selected
-                        ? "border-blue-600 bg-blue-600"
-                        : "border-slate-300"
+                        ? "border-blue-500 bg-blue-50 shadow-sm"
+                        : "border-slate-200 bg-white hover:bg-slate-50"
                     }`}
-                  />
-                </div>
-                <p className="mt-3 text-sm text-slate-600">{p.descripcion}</p>
-              </button>
-            );
-          })}
-        </div>
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="font-semibold text-slate-900">
+                          {p.nombre}
+                        </div>
+                        <div className="mt-1 text-xs uppercase tracking-wide text-slate-500">
+                          {p.permisos} permisos incluidos
+                        </div>
+                      </div>
+                      <div
+                        className={`h-4 w-4 rounded-full border ${
+                          selected
+                            ? "border-blue-600 bg-blue-600"
+                            : "border-slate-300"
+                        }`}
+                      />
+                    </div>
+                    <p className="mt-3 text-sm text-slate-600">
+                      {p.descripcion}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
 
-        {paqueteSeleccionado && (
-          <div
-            className={`mt-3 rounded-xl p-3 text-sm ${
-              editingId && paqueteCambioPendiente
-                ? "border border-amber-200 bg-amber-50 text-amber-800"
-                : "bg-slate-50 text-slate-600"
-            }`}
-          >
-            {editingId ? (
-              <>
-                Paquete actual:{" "}
-                <span className="font-semibold text-slate-900">
-                  {clienteEditando?.paquete_nombre ||
-                    clienteEditando?.paquete_actual?.nombre ||
-                    paqueteActualEditando?.nombre ||
-                    "Sin paquete identificado"}
-                </span>
-                . Paquete seleccionado:{" "}
-                <span className="font-semibold text-slate-900">
-                  {paqueteSeleccionado.nombre}
-                </span>
-                .
-                {paqueteCambioPendiente ? (
-                  <span>
-                    {" "}
-                    Hay un cambio pendiente. Presiona el botón de cambio de
-                    paquete para aplicarlo.
-                  </span>
-                ) : (
-                  <span> No hay cambio de paquete pendiente.</span>
-                )}
-              </>
-            ) : (
-              <>
+            {paqueteSeleccionado && (
+              <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
                 Paquete seleccionado:{" "}
                 <span className="font-semibold text-slate-900">
                   {paqueteSeleccionado.nombre}
                 </span>
                 . Al guardar, se creará el perfil Administrador con los permisos
                 contratados.
-              </>
-            )}
-          </div>
-        )}
-
-        {editingId && (
-          <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="text-sm font-semibold text-slate-900">
-                Cambio de paquete y permisos
               </div>
-              <p className="mt-1 text-xs leading-5 text-slate-600">
-                Este proceso actualiza el paquete base contratado, sincroniza
-                permisos del nuevo paquete y los asigna al perfil Administrador.
-                No borra permisos antiguos de forma automática.
-              </p>
-            </div>
+            )}
 
-            <button
-              type="button"
-              onClick={cambiarPaqueteCliente}
-              disabled={packageSaving || !paqueteCambioPendiente}
-              className={`rounded-xl px-4 py-2 text-sm font-semibold text-white ${
-                packageSaving || !paqueteCambioPendiente
-                  ? "cursor-not-allowed bg-slate-400"
-                  : "bg-purple-700 hover:bg-purple-800"
-              }`}
-            >
-              {packageSaving
-                ? "Actualizando paquete..."
-                : "Cambiar paquete y actualizar permisos"}
-            </button>
-          </div>
-        )}
-
-        {!editingId && (
-          <>
             <div className="my-6 border-t border-slate-200" />
 
             <div className="mb-4">
@@ -971,7 +796,7 @@ export default function ClientsPage() {
             {editingId
               ? saving
                 ? "Guardando..."
-                : "Guardar cambios básicos"
+                : "Guardar cambios"
               : saving
                 ? "Creando cliente..."
                 : "Crear cliente con paquete"}
@@ -1000,14 +825,15 @@ export default function ClientsPage() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border bg-white shadow-sm">
-          <table className="w-full min-w-[1250px] text-sm">
+          <table className="w-full min-w-[1100px] text-sm">
             <thead className="bg-slate-50 text-slate-700">
               <tr>
                 <th className="border-b p-3 text-left">ID</th>
                 <th className="border-b p-3 text-left">Nombre</th>
                 <th className="border-b p-3 text-left">NIT</th>
-                <th className="border-b p-3 text-left">Correo cliente</th>
-                <th className="border-b p-3 text-left">Paquete</th>
+                <th className="border-b p-3 text-left">
+                  Correo cliente
+                </th>
                 <th className="border-b p-3 text-left">País</th>
                 <th className="border-b p-3 text-left">Ciudad</th>
                 <th className="border-b p-3 text-left">Teléfono</th>
@@ -1020,96 +846,75 @@ export default function ClientsPage() {
             </thead>
 
             <tbody>
-              {clientes.map((c) => {
-                const paqueteCodigo = normalizarPaqueteCodigo(
-                  c.paquete_codigo || c.paquete_actual?.codigo || null
-                );
-                const paqueteTabla =
-                  PAQUETES.find((p) => p.codigo === paqueteCodigo) || null;
-
-                return (
-                  <tr key={c.idcliente} className="odd:bg-white even:bg-slate-50">
-                    <td className="border-b p-3">{c.idcliente}</td>
-                    <td className="border-b p-3 font-medium text-slate-900">
-                      {c.nombre}
-                    </td>
-                    <td className="border-b p-3">{c.nit || "-"}</td>
-                    <td className="border-b p-3">
-                      {c.email ? (
-                        <a
-                          href={`mailto:${c.email}`}
-                          className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
-                        >
-                          <Mail className="h-3.5 w-3.5" />
-                          {c.email}
-                        </a>
-                      ) : (
-                        <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
-                          Sin correo registrado
-                        </span>
-                      )}
-                    </td>
-                    <td className="border-b p-3">
-                      {c.paquete_nombre || c.paquete_actual?.nombre || paqueteTabla?.nombre ? (
-                        <span className="rounded-full bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700">
-                          {c.paquete_nombre ||
-                            c.paquete_actual?.nombre ||
-                            paqueteTabla?.nombre}
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
-                          Sin paquete
-                        </span>
-                      )}
-                    </td>
-                    <td className="border-b p-3">{c.pais || "-"}</td>
-                    <td className="border-b p-3">{c.ciudad || "-"}</td>
-                    <td className="border-b p-3">{c.telefono1 || "-"}</td>
-                    <td className="border-b p-3">
-                      {typeof c.limite_usuarios === "number"
-                        ? c.limite_usuarios
-                        : "-"}
-                    </td>
-                    <td className="border-b p-3">
-                      {typeof c.limite_sesiones === "number"
-                        ? c.limite_sesiones
-                        : "-"}
-                    </td>
-                    <td className="border-b p-3">{c.timezone || "-"}</td>
-                    <td className="border-b p-3">
-                      <span
-                        className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                          c.activo
-                            ? "bg-green-100 text-green-700"
-                            : "bg-slate-100 text-slate-600"
-                        }`}
+              {clientes.map((c) => (
+                <tr key={c.idcliente} className="odd:bg-white even:bg-slate-50">
+                  <td className="border-b p-3">{c.idcliente}</td>
+                  <td className="border-b p-3 font-medium text-slate-900">
+                    {c.nombre}
+                  </td>
+                  <td className="border-b p-3">{c.nit || "-"}</td>
+                  <td className="border-b p-3">
+                    {c.email ? (
+                      <a
+                        href={`mailto:${c.email}`}
+                        className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
                       >
-                        {c.activo ? "Activo" : "Inactivo"}
+                        <Mail className="h-3.5 w-3.5" />
+                        {c.email}
+                      </a>
+                    ) : (
+                      <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+                        Sin correo registrado
                       </span>
-                    </td>
-                    <td className="border-b p-3">
-                      <div className="flex gap-2">
-                        <button
-                          className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600"
-                          onClick={() => onEdit(c)}
-                        >
-                          Editar
-                        </button>
-                        <button
-                          className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
-                          onClick={() => setConfirmOpen(c.idcliente)}
-                        >
-                          Eliminar
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                    )}
+                  </td>
+                  <td className="border-b p-3">{c.pais || "-"}</td>
+                  <td className="border-b p-3">{c.ciudad || "-"}</td>
+                  <td className="border-b p-3">{c.telefono1 || "-"}</td>
+                  <td className="border-b p-3">
+                    {typeof c.limite_usuarios === "number"
+                      ? c.limite_usuarios
+                      : "-"}
+                  </td>
+                  <td className="border-b p-3">
+                    {typeof c.limite_sesiones === "number"
+                      ? c.limite_sesiones
+                      : "-"}
+                  </td>
+                  <td className="border-b p-3">{c.timezone || "-"}</td>
+                  <td className="border-b p-3">
+                    <span
+                      className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                        c.activo
+                          ? "bg-green-100 text-green-700"
+                          : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {c.activo ? "Activo" : "Inactivo"}
+                    </span>
+                  </td>
+                  <td className="border-b p-3">
+                    <div className="flex gap-2">
+                      <button
+                        className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600"
+                        onClick={() => onEdit(c)}
+                      >
+                        Editar
+                      </button>
+                      <button
+                        className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
+                        onClick={() => setConfirmOpen(c.idcliente)}
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
 
               {clientes.length === 0 && (
                 <tr>
-                  <td className="p-5 text-center text-slate-500" colSpan={13}>
+                  <td className="p-5 text-center text-slate-500" colSpan={12}>
                     No hay clientes aún.
                   </td>
                 </tr>

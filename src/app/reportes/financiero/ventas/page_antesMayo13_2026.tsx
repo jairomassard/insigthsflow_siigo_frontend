@@ -143,10 +143,6 @@ export default function DashboardFinanciero() {
   const [estadoEnModal, setEstadoEnModal] = useState("");
   const [facturasEstado, setFacturasEstado] = useState<any[]>([]);
 
-
-  const [incluyeImpuesto, setIncluyeImpuesto] = useState(true);
-  const [incluyeNotaCredito, setIncluyeNotaCredito] = useState(true);
-
   const load = async () => {
     setLoading(true);
     setErr("");
@@ -159,9 +155,6 @@ export default function DashboardFinanciero() {
       if (sellerId) qs.append("seller_id", sellerId);
       if (costCenter) qs.append("cost_center", costCenter);
       if (clienteSel) qs.append("cliente", clienteSel);
-
-      qs.append("incluye_impuesto", incluyeImpuesto ? "1" : "0");
-      qs.append("incluye_nota_credito", incluyeNotaCredito ? "1" : "0");
 
       const url = `/reportes/facturas_enriquecidas?${qs.toString()}`;
       const res = await authFetch(url);
@@ -255,9 +248,6 @@ export default function DashboardFinanciero() {
       if (costCenter) qs.set("cost_center", costCenter);
       if (clienteSel) qs.set("cliente", clienteSel);
 
-      qs.set("incluye_impuesto", incluyeImpuesto ? "1" : "0");
-      qs.set("incluye_nota_credito", incluyeNotaCredito ? "1" : "0");
-
       const res = await authFetch(`/reportes/facturas_detalle_mes?${qs.toString()}`);
       setDetalleFacturas(res.rows || []);
     } catch (error) {
@@ -294,7 +284,7 @@ export default function DashboardFinanciero() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [desde, hasta, sellerId, costCenter, clienteSel, incluyeImpuesto, incluyeNotaCredito]);
+  }, [desde, hasta, sellerId, costCenter, clienteSel]);
 
   useEffect(() => {
     const onEscape = (e: KeyboardEvent) => {
@@ -312,8 +302,7 @@ export default function DashboardFinanciero() {
   const monthly = useMemo(
     () =>
       series.map((s: any) => ({
-        periodo: s.periodo || s.label,
-        label: s.label || s.periodo,
+        periodo: s.label,
         subtotal: Number(s.subtotal || 0),
         impuestos: Number(s.impuestos || 0),
         descuentos: Number(s.descuentos || 0),
@@ -413,7 +402,7 @@ export default function DashboardFinanciero() {
         </div>
 
         <div className="p-4">
-          <div className="grid gap-3 md:grid-cols-7">
+          <div className="grid gap-3 md:grid-cols-6">
             <Field label="Desde">
               <input
                 type="date"
@@ -477,28 +466,6 @@ export default function DashboardFinanciero() {
               </select>
             </Field>
 
-            <Field label="Opciones Siigo">
-              <div className="flex h-10 items-center gap-4 rounded-lg border border-slate-300 bg-white px-3 text-xs">
-                <label className="inline-flex items-center gap-2 whitespace-nowrap">
-                  <input
-                    type="checkbox"
-                    checked={incluyeImpuesto}
-                    onChange={(e) => setIncluyeImpuesto(e.target.checked)}
-                  />
-                  Incluye impuesto
-                </label>
-
-                <label className="inline-flex items-center gap-2 whitespace-nowrap">
-                  <input
-                    type="checkbox"
-                    checked={incluyeNotaCredito}
-                    onChange={(e) => setIncluyeNotaCredito(e.target.checked)}
-                  />
-                  Incluye nota crédito
-                </label>
-              </div>
-            </Field>
-
             <div className="flex items-end">
               <button
                 onClick={limpiarFiltros}
@@ -528,13 +495,9 @@ export default function DashboardFinanciero() {
           <div className="overflow-x-auto pb-1">
             <div className="grid min-w-[1280px] grid-cols-8 gap-3">
               <KpiCard
-                title={incluyeImpuesto ? "Ventas netas con impuesto" : "Ventas netas sin impuesto"}
+                title="Ventas netas"
                 value={fmtCOP(totalSubtotal)}
-                helper={
-                  incluyeImpuesto
-                    ? "Equivale al comparativo de Siigo con 'Incluye impuesto' activo."
-                    : "Equivale al comparativo de Siigo con 'Incluye impuesto' inactivo."
-                }
+                helper="Valor neto comercial."
                 tone="green"
               />
               <KpiCard
@@ -590,7 +553,7 @@ export default function DashboardFinanciero() {
                     Evolución mensual
                   </h3>
                   <p className="mt-1 text-sm text-slate-500">
-                    Haz clic sobre una barra para ver las facturas del mes. Si hay notas crédito, la barra puede estar neteada contra ellas.
+                    Haz clic sobre una barra para ver las facturas del mes.
                   </p>
                 </div>
 
@@ -612,7 +575,7 @@ export default function DashboardFinanciero() {
                 <ResponsiveContainer width="100%" height={360}>
                   <BarChart data={monthly} margin={{ top: 24, right: 18, left: 8, bottom: 16 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <XAxis dataKey="periodo" tick={{ fontSize: 11 }} />
                     <YAxis tickFormatter={fmtShort} tick={{ fontSize: 11 }} />
                     <Tooltip formatter={(v) => fmtCOP(Number(v))} />
                     <Legend />

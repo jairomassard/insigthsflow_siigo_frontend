@@ -86,42 +86,6 @@ function fmtPct(valor: any): string {
   })}%`;
 }
 
-function getCompraEstadoTone(estado: any, saldo?: any) {
-  const estadoNorm = String(estado || "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-
-  const saldoNum = Number(saldo || 0);
-
-  const isNoPagada =
-    estadoNorm === "no pagada" ||
-    estadoNorm === "no pagado" ||
-    estadoNorm === "pendiente" ||
-    estadoNorm === "vencida" ||
-    estadoNorm === "vencido" ||
-    saldoNum > 0;
-
-  const isPagada =
-    !isNoPagada &&
-    (
-      estadoNorm === "pagada" ||
-      estadoNorm === "pagado" ||
-      estadoNorm === "paid"
-    );
-
-  if (isNoPagada) {
-    return "bg-red-100 text-red-700 border border-red-200";
-  }
-
-  if (isPagada) {
-    return "bg-emerald-100 text-emerald-700 border border-emerald-200";
-  }
-
-  return "bg-amber-100 text-amber-700 border border-amber-200";
-}
-
 function abreviar(valor: number): string {
   const n = Number(valor || 0);
   const abs = Math.abs(n);

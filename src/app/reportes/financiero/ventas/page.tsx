@@ -103,7 +103,14 @@ export default function DashboardFinanciero() {
     total_utilizable: 0,
     pagado: 0,
     pendiente: 0,
+    ventas_sin_impuesto: 0,
+    ventas_con_impuesto: 0,
+    facturas_emitidas_sin_impuesto: 0,
+    facturas_emitidas_con_impuesto: 0,
+    notas_credito_sin_impuesto: 0,
+    notas_credito_con_impuesto: 0,
   });
+
   const [estados, setEstados] = useState<any[]>([]);
   const [topClientes, setTopClientes] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -119,17 +126,38 @@ export default function DashboardFinanciero() {
   const [centros, setCentros] = useState<CentroCosto[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
 
+  const [incluyeImpuesto, setIncluyeImpuesto] = useState(true);
+  const [incluyeNotaCredito, setIncluyeNotaCredito] = useState(true);
+
   const totalSubtotal = toNum(kpis.subtotal);
   const totalImpuestos = toNum(kpis.impuestos);
   const totalAutorretencion = toNum(kpis.autorretencion);
-  const totalFacturado = toNum(kpis.total_facturado);
   const totalRetenciones = toNum(kpis.retenciones);
-  const totalUtilizable = toNum(kpis.total_utilizable);
   const totalPagado = toNum(kpis.pagado);
   const totalPendiente = toNum(kpis.pendiente);
 
-  const pctPagado = totalFacturado ? (totalPagado / totalFacturado) * 100 : 0;
-  const pctPendiente = totalFacturado ? (totalPendiente / totalFacturado) * 100 : 0;
+  const facturasEmitidasSinImpuesto = toNum(kpis.facturas_emitidas_sin_impuesto);
+  const facturasEmitidasConImpuesto = toNum(kpis.facturas_emitidas_con_impuesto);
+  const notasCreditoSinImpuesto = toNum(kpis.notas_credito_sin_impuesto);
+  const notasCreditoConImpuesto = toNum(kpis.notas_credito_con_impuesto);
+
+  const facturasEmitidas = incluyeImpuesto
+    ? facturasEmitidasConImpuesto
+    : facturasEmitidasSinImpuesto;
+
+  const notasCredito = incluyeImpuesto
+    ? notasCreditoConImpuesto
+    : notasCreditoSinImpuesto;
+
+  const baseCobro = facturasEmitidas || toNum(kpis.total_facturado);
+
+  const pctPagado = baseCobro
+    ? Math.min((totalPagado / baseCobro) * 100, 100)
+    : 0;
+
+  const pctPendiente = baseCobro
+    ? Math.min((totalPendiente / baseCobro) * 100, 100)
+    : 0;
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMes, setModalMes] = useState("");
@@ -142,10 +170,6 @@ export default function DashboardFinanciero() {
   const [modalEstadoOpen, setModalEstadoOpen] = useState(false);
   const [estadoEnModal, setEstadoEnModal] = useState("");
   const [facturasEstado, setFacturasEstado] = useState<any[]>([]);
-
-
-  const [incluyeImpuesto, setIncluyeImpuesto] = useState(true);
-  const [incluyeNotaCredito, setIncluyeNotaCredito] = useState(true);
 
   const load = async () => {
     setLoading(true);
@@ -197,11 +221,15 @@ export default function DashboardFinanciero() {
     setModalClienteOpen(true);
 
     const qs = new URLSearchParams();
+
     if (desde) qs.set("desde", desde);
     if (hasta) qs.set("hasta", hasta);
     if (sellerId) qs.set("seller_id", sellerId);
     if (costCenter) qs.set("cost_center", costCenter);
+
     qs.set("cliente", entry.cliente);
+    qs.set("incluye_impuesto", incluyeImpuesto ? "1" : "0");
+    qs.set("incluye_nota_credito", incluyeNotaCredito ? "1" : "0");
 
     const res = await authFetch(`/reportes/facturas_por_cliente?${qs.toString()}`);
     setFacturasCliente(res.rows || []);
@@ -214,11 +242,16 @@ export default function DashboardFinanciero() {
     setModalEstadoOpen(true);
 
     const qs = new URLSearchParams();
+
     if (desde) qs.set("desde", desde);
     if (hasta) qs.set("hasta", hasta);
     if (sellerId) qs.set("seller_id", sellerId);
     if (costCenter) qs.set("cost_center", costCenter);
+    if (clienteSel) qs.set("cliente", clienteSel);
+
     qs.set("estado", entry.estado);
+    qs.set("incluye_impuesto", incluyeImpuesto ? "1" : "0");
+    qs.set("incluye_nota_credito", incluyeNotaCredito ? "1" : "0");
 
     const res = await authFetch(`/reportes/facturas_por_estado?${qs.toString()}`);
     setFacturasEstado(res.rows || []);
@@ -244,10 +277,11 @@ export default function DashboardFinanciero() {
         hastaMesDate.getUTCDate()
       ).padStart(2, "0")}`;
 
-      setModalMes(periodo);
+      setModalMes(entry?.label || periodo);
       setModalOpen(true);
 
       const qs = new URLSearchParams();
+
       qs.set("desde", desdeMes);
       qs.set("hasta", hastaMes);
 
@@ -280,6 +314,7 @@ export default function DashboardFinanciero() {
 
       try {
         const qs = new URLSearchParams();
+
         if (desde) qs.append("desde", desde);
         if (hasta) qs.append("hasta", hasta);
 
@@ -380,8 +415,8 @@ export default function DashboardFinanciero() {
             </h1>
 
             <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-600">
-              Vista ejecutiva de ventas netas, total facturado Siigo, pagos,
-              cartera pendiente, clientes, vendedores y centros de costo.
+              Vista ejecutiva de ventas netas alineadas con Siigo, facturas emitidas,
+              notas crédito, pagos, cartera pendiente, clientes y centros de costo.
             </p>
           </div>
 
@@ -532,51 +567,66 @@ export default function DashboardFinanciero() {
                 value={fmtCOP(totalSubtotal)}
                 helper={
                   incluyeImpuesto
-                    ? "Equivale al comparativo de Siigo con 'Incluye impuesto' activo."
-                    : "Equivale al comparativo de Siigo con 'Incluye impuesto' inactivo."
+                    ? "Equivale al comparativo de Siigo con 'Incluye impuesto' activo: facturas menos notas crédito."
+                    : "Equivale al comparativo de Siigo sin 'Incluye impuesto': facturas menos notas crédito."
                 }
                 tone="green"
               />
+
               <KpiCard
-                title="Impuestos"
+                title="Facturas emitidas"
+                value={fmtCOP(facturasEmitidas)}
+                helper={
+                  incluyeImpuesto
+                    ? "Total de facturas emitidas con impuesto, antes de descontar notas crédito."
+                    : "Subtotal de facturas emitidas sin impuesto, antes de descontar notas crédito."
+                }
+                tone="emerald"
+              />
+
+              <KpiCard
+                title="Notas crédito"
+                value={fmtCOP(Math.abs(notasCredito))}
+                helper={
+                  incluyeImpuesto
+                    ? "Notas crédito del periodo con impuesto."
+                    : "Notas crédito del periodo sin impuesto."
+                }
+                tone="red"
+              />
+
+              <KpiCard
+                title="Impuestos netos"
                 value={fmtCOP(totalImpuestos)}
-                helper="Impuestos asociados."
+                helper="Diferencia entre ventas con impuesto y ventas sin impuesto."
                 tone="yellow"
               />
+
               <KpiCard
                 title="Retenciones"
                 value={fmtCOP(totalRetenciones)}
-                helper="Sin autorretención."
+                helper="Retenciones sin autorretención."
                 tone="orange"
               />
-              <KpiCard
-                title="Total Siigo"
-                value={fmtCOP(totalFacturado)}
-                helper="Total facturado."
-                tone="emerald"
-              />
+
               <KpiCard
                 title="Autorretención"
                 value={fmtCOP(totalAutorretencion)}
-                helper="Autorretenciones."
+                helper="Autorretenciones del periodo."
                 tone="purple"
               />
-              <KpiCard
-                title="Total utilizable"
-                value={fmtCOP(totalUtilizable)}
-                helper="Total menos retenciones."
-                tone="teal"
-              />
+
               <KpiCard
                 title="Pagado"
                 value={fmtCOP(totalPagado)}
-                helper={`${fmtPct(pctPagado)}% del total.`}
+                helper={`${fmtPct(pctPagado)}% sobre facturas emitidas.`}
                 tone="blue"
               />
+
               <KpiCard
                 title="Pendiente"
                 value={fmtCOP(totalPendiente)}
-                helper={`${fmtPct(pctPendiente)}% del total.`}
+                helper={`${fmtPct(pctPendiente)}% sobre facturas emitidas.`}
                 tone="red"
               />
             </div>
@@ -590,13 +640,14 @@ export default function DashboardFinanciero() {
                     Evolución mensual
                   </h3>
                   <p className="mt-1 text-sm text-slate-500">
-                    Haz clic sobre una barra para ver las facturas del mes. Si hay notas crédito, la barra puede estar neteada contra ellas.
+                    Haz clic sobre una barra para ver las facturas del mes. Si hay notas crédito,
+                    la venta neta puede estar descontada contra ellas.
                   </p>
                 </div>
 
                 <div className="flex flex-wrap gap-2 text-xs">
                   <LegendPill colorClass="bg-green-600" label="Ventas netas" />
-                  <LegendPill colorClass="bg-emerald-500" label="Total facturado" />
+                  <LegendPill colorClass="bg-emerald-500" label="Facturas emitidas" />
                   <LegendPill colorClass="bg-blue-500" label="Pagado" />
                   <LegendPill colorClass="bg-red-600" label="Pendiente" />
                 </div>
@@ -636,7 +687,7 @@ export default function DashboardFinanciero() {
                     <Bar
                       dataKey="total_facturado"
                       fill="#10b981"
-                      name="Total facturado"
+                      name="Facturas emitidas"
                       radius={[6, 6, 0, 0]}
                       cursor="pointer"
                       onClick={(data) => handleBarClick(data)}
@@ -718,6 +769,7 @@ export default function DashboardFinanciero() {
                         tick={{ fontSize: 11 }}
                       />
                       <Tooltip formatter={(v) => fmtCOP(Number(v))} />
+
                       <Bar
                         dataKey="total"
                         fill="#2563eb"
@@ -770,9 +822,11 @@ export default function DashboardFinanciero() {
                           let color = "#3b82f6";
                           if (entry.estado === "Pendiente") color = "#dc2626";
                           if (entry.estado === "Pagado") color = "#16a34a";
+
                           return <Cell key={index} fill={color} />;
                         })}
                       </Pie>
+
                       <Tooltip formatter={(v) => fmtCOP(Number(v))} />
                     </PieChart>
                   </ResponsiveContainer>
@@ -1007,6 +1061,7 @@ function LegendPill({ colorClass, label }: { colorClass: string; label: string }
 
 function fmtPct(n: any) {
   const value = Number(n || 0);
+
   return value.toLocaleString("es-CO", {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,

@@ -189,7 +189,7 @@ export default function ReporteClientesPage() {
       if (centroCostoFiltro) params.set("cost_center", centroCostoFiltro);
       if (estadoFiltro) params.set("estado", estadoFiltro);
 
-      params.set("limit_facturas", "8");
+      params.set("limit_facturas", "30");
 
       const url = `/reportes/analisis_clientes?${params.toString()}`;
       const res = await authFetch(url);

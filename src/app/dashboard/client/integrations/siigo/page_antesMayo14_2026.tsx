@@ -7,7 +7,6 @@ import { jwtDecode } from "jwt-decode";
 
 import CargarDocumentosSoporte from "../../../../../components/CargarDocumentosSoporte";
 import CargarNomina from "../../../../../components/CargarNomina";
-import CargarNotasDebitoCompras from "../../../../../components/CargarNotasDebitoCompras";
 
 const fetchWithIdCliente = async (url: string, options: RequestInit = {}) => {
   const token = getToken();
@@ -1701,20 +1700,6 @@ export default function SiigoIntegrationPage() {
               Exporta el reporte mensual de nómina desde Siigo y súbelo indicando mes y año.
             </p>
             <CargarNomina />
-          </div>
-        </details>
-
-        <details className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-4">
-          <summary className="cursor-pointer text-sm font-semibold text-rose-950">
-            Cargar notas débito de compras desde Excel
-          </summary>
-          <div className="mt-3">
-            <p className="mb-3 text-sm leading-6 text-rose-900">
-              Exporta desde Siigo el reporte mensual de movimiento de notas débito de compras.
-              Este cargue permite descontar devoluciones y ajustes aplicados a facturas de compra
-              o documentos soporte. El cargue es incremental y no duplica notas ya cargadas.
-            </p>
-            <CargarNotasDebitoCompras />
           </div>
         </details>
 

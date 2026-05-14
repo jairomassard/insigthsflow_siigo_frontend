@@ -139,7 +139,7 @@ export default function BuscadorFacturasPage() {
   const defaultHasta = today.toISOString().slice(0, 10);
   const defaultDesde = `${today.getFullYear() - 1}-01-01`;
 
-  const [q, setQ] = useState("zapier");
+  const [q, setQ] = useState("");
   const [factura, setFactura] = useState("");
   const [cliente, setCliente] = useState("");
   const [costCenter, setCostCenter] = useState("");
@@ -383,10 +383,6 @@ export default function BuscadorFacturasPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [desde, hasta]);
 
-  useEffect(() => {
-    buscar();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const chartData = useMemo(() => {
     if (series.length > 0) {
@@ -836,13 +832,13 @@ export default function BuscadorFacturasPage() {
                               <a
                                 href={row.public_url}
                                 target="_blank"
-                                rel="noopener noreferrer"
-                                className="font-medium text-blue-600 hover:underline"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
                               >
-                                Ver factura
+                                Ver documento
                               </a>
                             ) : (
-                              <span className="text-slate-400">-</span>
+                              <span className="text-xs text-slate-400">Sin enlace</span>
                             )}
                           </td>
                         </tr>

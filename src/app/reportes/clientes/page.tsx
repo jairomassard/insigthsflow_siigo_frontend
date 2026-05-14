@@ -189,7 +189,7 @@ export default function ReporteClientesPage() {
       if (centroCostoFiltro) params.set("cost_center", centroCostoFiltro);
       if (estadoFiltro) params.set("estado", estadoFiltro);
 
-      params.set("limit_facturas", "30");
+      params.set("limit_facturas", "all");
 
       const url = `/reportes/analisis_clientes?${params.toString()}`;
       const res = await authFetch(url);
@@ -985,7 +985,7 @@ function FacturasRecientesTable({ facturas }: { facturas: FacturaCliente[] }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3">
       <h3 className="mb-2 text-sm font-bold text-slate-900">
-        Facturas recientes
+        Facturas del periodo
       </h3>
 
       <div className="max-h-72 overflow-auto">

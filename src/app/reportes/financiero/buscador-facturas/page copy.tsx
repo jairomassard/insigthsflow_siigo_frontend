@@ -34,12 +34,6 @@ type FacturaRow = {
   id?: number;
   factura_id?: number;
   idfactura: string;
-  
-  documento?: string | null;
-  tipo_movimiento?: "FACTURA" | "NOTA_CREDITO" | string | null;
-  tipo_documento_label?: string | null;
-  documento_afectado?: string | null;
-
   fecha: string;
   vencimiento?: string | null;
   cliente_nombre: string;
@@ -110,8 +104,6 @@ function estadoPagoClasses(estado: string) {
       return "bg-red-100 text-red-800 border border-red-200";
     case "parcial":
       return "bg-amber-100 text-amber-800 border border-amber-200";
-    case "no_aplica":
-      return "bg-slate-100 text-slate-600 border border-slate-200";
     default:
       return "bg-slate-100 text-slate-700 border border-slate-200";
   }
@@ -245,7 +237,7 @@ export default function BuscadorFacturasPage() {
           "Estado factura": estadoFactura || "Todos",
           Desde: desde || "Sin filtro",
           Hasta: hasta || "Sin filtro",
-          "Movimientos encontrados": count,
+          "Facturas encontradas": count,
           Subtotal: totalSubtotal,
           IVA: totalIva,
           Retenciones: totalRetenciones,
@@ -262,11 +254,9 @@ export default function BuscadorFacturasPage() {
           const estadoPago = row.estado_pago_real || row.estado_pago || "";
 
           return {
-            Tipo: row.tipo_documento_label || row.tipo_movimiento || "Factura",
             Fecha: row.fecha || "",
             Vencimiento: row.vencimiento || "",
-            Documento: row.documento || row.idfactura || "",
-            "Documento afectado": row.documento_afectado || "",
+            Factura: row.idfactura || "",
             Cliente: row.cliente_nombre || "",
             "Centro de costo": row.centro_costo_nombre || "",
             "Código centro costo": row.centro_costo_codigo || "",
@@ -293,11 +283,11 @@ export default function BuscadorFacturasPage() {
 
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, hojaResumen, "Resumen");
-      XLSX.utils.book_append_sheet(wb, hojaFacturas, "Movimientos");
+      XLSX.utils.book_append_sheet(wb, hojaFacturas, "Facturas");
       XLSX.utils.book_append_sheet(wb, hojaEvolucion, "Evolucion_Mensual");
 
       const wsResumen = wb.Sheets["Resumen"];
-      const wsFacturas = wb.Sheets["Movimientos"];
+      const wsFacturas = wb.Sheets["Facturas"];
       const wsEvolucion = wb.Sheets["Evolucion_Mensual"];
 
       wsResumen["!cols"] = [
@@ -317,24 +307,22 @@ export default function BuscadorFacturasPage() {
       ];
 
       wsFacturas["!cols"] = [
-        { wch: 16 }, // Tipo
-        { wch: 14 }, // Fecha
-        { wch: 14 }, // Vencimiento
-        { wch: 18 }, // Documento
-        { wch: 22 }, // Documento afectado
-        { wch: 30 }, // Cliente
-        { wch: 24 }, // Centro de costo
-        { wch: 18 }, // Código centro costo
-        { wch: 50 }, // Descripción
-        { wch: 16 }, // Subtotal
-        { wch: 16 }, // IVA
-        { wch: 16 }, // Retenciones
-        { wch: 16 }, // Total
-        { wch: 16 }, // Saldo
-        { wch: 16 }, // Estado pago
-        { wch: 16 }, // Estado factura
-        { wch: 18 }, // Medio de pago
-        { wch: 48 }, // URL
+        { wch: 14 },
+        { wch: 14 },
+        { wch: 18 },
+        { wch: 30 },
+        { wch: 24 },
+        { wch: 18 },
+        { wch: 50 },
+        { wch: 16 },
+        { wch: 16 },
+        { wch: 16 },
+        { wch: 16 },
+        { wch: 16 },
+        { wch: 16 },
+        { wch: 16 },
+        { wch: 18 },
+        { wch: 48 },
       ];
 
       wsEvolucion["!cols"] = [
@@ -412,7 +400,7 @@ export default function BuscadorFacturasPage() {
 
   const kpiCards = [
     {
-      title: "Movimientos encontrados",
+      title: "Facturas encontradas",
       value: count,
       color: "blue" as const,
       icon: FileText,
@@ -454,10 +442,10 @@ export default function BuscadorFacturasPage() {
                 Reporte inteligente
               </span>
               <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
-                Buscador inteligente de facturas y notas crédito
+                Buscador inteligente de facturas
               </h1>
               <p className="mt-1 max-w-3xl text-sm text-slate-600">
-                Busca, analiza y exporta a Excel las facturas y notas crédito filtradas que ves en pantalla.
+                Busca, analiza y exporta a Excel exactamente las facturas filtradas que ves en pantalla.
               </p>
             </div>
 
@@ -729,9 +717,8 @@ export default function BuscadorFacturasPage() {
               <table className="min-w-full text-sm">
                 <thead className="bg-slate-50">
                   <tr className="text-left text-slate-700">
-                    <th className="px-3 py-3 font-semibold">Tipo</th>
                     <th className="px-3 py-3 font-semibold">Fecha</th>
-                    <th className="px-3 py-3 font-semibold">Documento</th>
+                    <th className="px-3 py-3 font-semibold">Factura</th>
                     <th className="px-3 py-3 font-semibold">Cliente</th>
                     <th className="px-3 py-3 font-semibold">Centro de costo</th>
                     <th className="px-3 py-3 font-semibold">Descripción / observaciones</th>
@@ -748,7 +735,7 @@ export default function BuscadorFacturasPage() {
                 <tbody>
                   {rows.length === 0 && !loading ? (
                     <tr>
-                      <td colSpan={13} className="px-3 py-10 text-center text-slate-500">
+                      <td colSpan={12} className="px-3 py-10 text-center text-slate-500">
                         No se encontraron resultados.
                       </td>
                     </tr>
@@ -760,37 +747,14 @@ export default function BuscadorFacturasPage() {
                       const descripcion = row.descripcion || row.observaciones || "-";
 
                       return (
-                          <tr
-                            key={`${row.tipo_movimiento || "DOC"}-${row.documento || row.idfactura}-${row.factura_id ?? row.id ?? idx}`}
-                            className={`border-t border-slate-100 align-top transition hover:bg-slate-50/70 ${
-                              row.tipo_movimiento === "NOTA_CREDITO" ? "bg-rose-50/40" : ""
-                            }`}
-                          >
-                            <td className="whitespace-nowrap px-3 py-3">
-                              <span
-                                className={`rounded-full px-2.5 py-1 text-xs font-bold ${
-                                  row.tipo_movimiento === "NOTA_CREDITO"
-                                    ? "bg-rose-100 text-rose-700 border border-rose-200"
-                                    : "bg-blue-100 text-blue-700 border border-blue-200"
-                                }`}
-                              >
-                                {row.tipo_documento_label || row.tipo_movimiento || "Factura"}
-                              </span>
-                            </td>
-
-                            <td className="whitespace-nowrap px-3 py-3 text-slate-700">
-                              {row.fecha}
-                            </td>
-
-                            <td className="whitespace-nowrap px-3 py-3 font-semibold text-slate-900">
-                              <div>{row.documento || row.idfactura}</div>
-
-                              {row.documento_afectado ? (
-                                <div className="mt-1 text-[11px] font-medium text-slate-500">
-                                  Afecta: {row.documento_afectado}
-                                </div>
-                              ) : null}
-                            </td>
+                        <tr
+                          key={`${row.idfactura}-${row.factura_id ?? row.id ?? idx}`}
+                          className="border-t border-slate-100 align-top transition hover:bg-slate-50/70"
+                        >
+                          <td className="whitespace-nowrap px-3 py-3 text-slate-700">{row.fecha}</td>
+                          <td className="whitespace-nowrap px-3 py-3 font-semibold text-slate-900">
+                            {row.idfactura}
+                          </td>
                           <td className="min-w-[220px] px-3 py-3 text-slate-700">
                             {row.cliente_nombre}
                           </td>

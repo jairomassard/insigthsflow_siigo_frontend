@@ -1698,13 +1698,15 @@ export default function SiigoIntegrationPage() {
           </summary>
 
           <div className="mt-3">
-            <p className="mb-3 text-sm leading-6 text-indigo-900">
-              Exporta el reporte mensual de nómina desde Siigo y súbelo indicando mes y año.
-              Este cargue permite actualizar la información de nómina que alimenta los reportes
-              operativos y financieros de InsightFlow.
+            <p className="mb-4 text-sm leading-6 text-indigo-900">
+              Exporta el reporte mensual de nómina desde Siigo y súbelo indicando mes, año y archivo Excel.
+              Este cargue actualiza la información de nómina utilizada por InsightFlow para reportes
+              financieros y operativos.
             </p>
 
-            <CargarNomina />
+            <div className="rounded-xl border border-indigo-200 bg-white p-4 shadow-sm">
+              <CargarNomina />
+            </div>
 
             <div className="mt-4 flex flex-col gap-3 rounded-xl border border-indigo-200 bg-white p-3 text-sm text-indigo-900 md:flex-row md:items-center md:justify-between">
               <div>

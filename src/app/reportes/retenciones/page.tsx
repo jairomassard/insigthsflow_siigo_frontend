@@ -500,17 +500,6 @@ export default function RetencionesReportPage() {
           </span>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-3 p-5 border-b bg-slate-50/60">
-          {resumenPorPeriodo.map((p) => (
-            <PeriodoMiniCard
-              key={p.periodo}
-              periodo={p.periodo}
-              retefuente={p.retefuente}
-              reteica={p.reteica_conceptos}
-              total={p.total_periodo}
-            />
-          ))}
-        </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -961,46 +950,7 @@ const StatCard = ({ title, value, icon, color, highlight = false }: any) => {
   );
 };
 
-const PeriodoMiniCard = ({
-  periodo,
-  retefuente,
-  reteica,
-  total
-}: {
-  periodo: string;
-  retefuente: number;
-  reteica: number;
-  total: number;
-}) => {
-  return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
-          <CalendarDays size={13} />
-          {periodo}
-        </p>
-        <span className="text-[9px] font-black px-2 py-1 rounded-lg bg-slate-100 text-slate-500">
-          Período
-        </span>
-      </div>
 
-      <div className="space-y-2 text-xs font-bold">
-        <div className="flex justify-between gap-3">
-          <span className="text-slate-500">ReteFuente</span>
-          <span className="text-indigo-700 text-right">{formatCurrency(retefuente)}</span>
-        </div>
-        <div className="flex justify-between gap-3">
-          <span className="text-slate-500">ReteICA</span>
-          <span className="text-pink-700 text-right">{formatCurrency(reteica)}</span>
-        </div>
-        <div className="pt-2 border-t flex justify-between gap-3">
-          <span className="text-slate-700 font-black">Total</span>
-          <span className="text-slate-900 font-black text-right">{formatCurrency(total)}</span>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 const DetallePeriodoCard = ({
   periodo,

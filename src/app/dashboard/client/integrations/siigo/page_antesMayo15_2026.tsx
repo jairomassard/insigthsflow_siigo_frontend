@@ -485,6 +485,8 @@ export default function SiigoIntegrationPage() {
     base_url: "",
     client_id: "",
     client_secret: "",
+    username: "",
+    password: "",
     partner_id: "",
   });
 
@@ -515,6 +517,8 @@ export default function SiigoIntegrationPage() {
         base_url: data.base_url || "",
         client_id: data.client_id || "",
         client_secret: "",
+        username: data.username || "",
+        password: "",
         partner_id: data.partner_id || "",
       });
 
@@ -567,11 +571,13 @@ export default function SiigoIntegrationPage() {
       const payload: any = {
         base_url: form.base_url || null,
         client_id: form.client_id || null,
+        username: form.username || null,
         sync_fecha_desde: syncFechaDesdeConfig || null,
         ds_fecha_desde: syncFechaDesdeConfig || null,
       };
 
       if (form.client_secret.trim()) payload.client_secret = form.client_secret.trim();
+      if (form.password.trim()) payload.password = form.password.trim();
       if (form.partner_id.trim()) payload.partner_id = form.partner_id.trim();
 
       await authFetch("/config/siigo", {
@@ -1114,7 +1120,7 @@ export default function SiigoIntegrationPage() {
 
       <Card
         title="1. Credenciales de conexión Siigo"
-        subtitle="Registra las credenciales API entregadas por Siigo. El Client Secret se guarda cifrado y solo se muestra enmascarado."
+        subtitle="Registra las credenciales API entregadas por Siigo. La contraseña y el client secret se guardan cifrados y solo se muestran enmascarados."
       >
         {loading ? (
           <p className="text-sm text-slate-500">Cargando configuración…</p>
@@ -1171,9 +1177,29 @@ export default function SiigoIntegrationPage() {
               />
             </div>
 
-            <div className="lg:col-span-2 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs leading-5 text-blue-900">
-              Para sincronizar información con Siigo solo se requieren Base URL, Partner ID,
-              Client ID y Client Secret. No es necesario registrar usuario ni contraseña del portal.
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Username</label>
+              <input
+                className="w-full rounded-xl border border-slate-300 p-2 text-sm"
+                value={form.username}
+                onChange={(e) => setForm({ ...form, username: e.target.value })}
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Password{" "}
+                {masks.password_mask ? (
+                  <span className="text-xs text-slate-500">(actual: {masks.password_mask})</span>
+                ) : null}
+              </label>
+              <input
+                className="w-full rounded-xl border border-slate-300 p-2 text-sm"
+                type="password"
+                placeholder="••••••••"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+              />
             </div>
 
             <div className="lg:col-span-2">

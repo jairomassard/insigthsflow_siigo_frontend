@@ -26,9 +26,7 @@ import {
   Receipt,
   FileBarChart2,
   Info,
-  FileText,
-  CalendarDays,
-  Sigma
+  FileText
 } from "lucide-react";
 
 // ---------------- HELPERS ----------------
@@ -59,7 +57,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
             style={{ color: entry.color }}
           >
             <span>{entry.name}:</span>
-            <span>{formatCurrency(Number(entry.value || 0))}</span>
+            <span>{formatCurrency(entry.value)}</span>
           </p>
         ))}
       </div>
@@ -89,6 +87,7 @@ const renderCustomizedLabel = ({
   cx,
   cy,
   midAngle,
+  innerRadius,
   outerRadius,
   value
 }: any) => {
@@ -165,26 +164,6 @@ type ReferenciasContables = {
   nota?: string;
 };
 
-type ResumenPeriodoRow = {
-  periodo: string;
-  retefuente: number;
-  reteica_conceptos: number;
-  total_periodo: number;
-};
-
-type TotalPeriodoRow = {
-  periodo: string;
-  valor: number;
-  conceptos_count?: number;
-  cuentas_count?: number;
-};
-
-type Metadata = {
-  desde?: string;
-  hasta?: string;
-  nota_alcance?: string;
-};
-
 // ---------------- PAGE ----------------
 export default function RetencionesReportPage() {
   useAuthGuard();
@@ -193,12 +172,8 @@ export default function RetencionesReportPage() {
   const [composicion, setComposicion] = useState<ComposicionRow[]>([]);
   const [icaDetalleMensual, setIcaDetalleMensual] = useState<IcaDetalleMensualRow[]>([]);
   const [retefuenteDetalleMensual, setReteFuenteDetalleMensual] = useState<ReteFuenteDetalleMensualRow[]>([]);
-  const [resumenPorPeriodoApi, setResumenPorPeriodoApi] = useState<ResumenPeriodoRow[]>([]);
-  const [totalesIcaPorPeriodoApi, setTotalesIcaPorPeriodoApi] = useState<TotalPeriodoRow[]>([]);
-  const [totalesReteFuentePorPeriodoApi, setTotalesReteFuentePorPeriodoApi] = useState<TotalPeriodoRow[]>([]);
   const [kpis, setKpis] = useState<Kpis>({});
   const [referenciasContables, setReferenciasContables] = useState<ReferenciasContables>({});
-  const [metadata, setMetadata] = useState<Metadata>({});
   const [fechaDesde, setFechaDesde] = useState("2026-01-01");
   const [fechaHasta, setFechaHasta] = useState("2026-12-31");
   const [loading, setLoading] = useState(false);
@@ -216,12 +191,8 @@ export default function RetencionesReportPage() {
       setComposicion(res.composicion ?? []);
       setIcaDetalleMensual(res.ica_detalle_mensual ?? []);
       setReteFuenteDetalleMensual(res.retefuente_detalle_mensual ?? []);
-      setResumenPorPeriodoApi(res.resumen_por_periodo ?? []);
-      setTotalesIcaPorPeriodoApi(res.totales_ica_por_periodo ?? []);
-      setTotalesReteFuentePorPeriodoApi(res.totales_retefuente_por_periodo ?? []);
       setKpis(res.kpis ?? {});
       setReferenciasContables(res.referencias_contables ?? {});
-      setMetadata(res.metadata ?? {});
     } catch (err) {
       console.error("Error consultando reporte de retenciones:", err);
     } finally {
@@ -256,7 +227,6 @@ export default function RetencionesReportPage() {
 
   useEffect(() => {
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fechaDesde, fechaHasta]);
 
   const topConceptos = useMemo(() => {
@@ -271,10 +241,10 @@ export default function RetencionesReportPage() {
     for (const row of icaDetalleMensual) {
       const key = `${row.label}__${row.cuenta}__${row.concepto}`;
       if (!map.has(key)) {
-        map.set(key, { ...row, valor: Number(row.valor || 0) });
+        map.set(key, { ...row });
       } else {
         const existing = map.get(key)!;
-        existing.valor += Number(row.valor || 0);
+        existing.valor += row.valor;
       }
     }
 
@@ -290,10 +260,10 @@ export default function RetencionesReportPage() {
     for (const row of retefuenteDetalleMensual) {
       const key = `${row.label}__${row.cuenta}__${row.concepto}`;
       if (!map.has(key)) {
-        map.set(key, { ...row, valor: Number(row.valor || 0) });
+        map.set(key, { ...row });
       } else {
         const existing = map.get(key)!;
-        existing.valor += Number(row.valor || 0);
+        existing.valor += row.valor;
       }
     }
 
@@ -303,98 +273,6 @@ export default function RetencionesReportPage() {
     });
   }, [retefuenteDetalleMensual]);
 
-  const resumenPorPeriodo = useMemo<ResumenPeriodoRow[]>(() => {
-    if (resumenPorPeriodoApi.length > 0) {
-      return resumenPorPeriodoApi.map((row) => ({
-        periodo: row.periodo,
-        retefuente: Number(row.retefuente || 0),
-        reteica_conceptos: Number(row.reteica_conceptos || 0),
-        total_periodo: Number(row.total_periodo || 0)
-      }));
-    }
-
-    return evolucion.map((row) => ({
-      periodo: row.label,
-      retefuente: Number(row.retefuente || 0),
-      reteica_conceptos: Number(row.reteica_conceptos || 0),
-      total_periodo: Number(row.retefuente || 0) + Number(row.reteica_conceptos || 0)
-    }));
-  }, [resumenPorPeriodoApi, evolucion]);
-
-  const totalesIcaPorPeriodo = useMemo<TotalPeriodoRow[]>(() => {
-    if (totalesIcaPorPeriodoApi.length > 0) {
-      return totalesIcaPorPeriodoApi.map((row) => ({
-        periodo: row.periodo,
-        valor: Number(row.valor || 0),
-        conceptos_count: row.conceptos_count || 0,
-        cuentas_count: row.cuentas_count || 0
-      }));
-    }
-
-    const map = new Map<string, TotalPeriodoRow & { conceptos: Set<string>; cuentas: Set<string> }>();
-
-    for (const row of detalleIcaAgrupado) {
-      if (!map.has(row.label)) {
-        map.set(row.label, {
-          periodo: row.label,
-          valor: 0,
-          conceptos_count: 0,
-          cuentas_count: 0,
-          conceptos: new Set<string>(),
-          cuentas: new Set<string>()
-        });
-      }
-
-      const item = map.get(row.label)!;
-      item.valor += Number(row.valor || 0);
-      item.conceptos.add(row.concepto);
-      item.cuentas.add(row.cuenta);
-      item.conceptos_count = item.conceptos.size;
-      item.cuentas_count = item.cuentas.size;
-    }
-
-    return Array.from(map.values())
-      .map(({ conceptos, cuentas, ...rest }) => rest)
-      .sort((a, b) => a.periodo.localeCompare(b.periodo));
-  }, [totalesIcaPorPeriodoApi, detalleIcaAgrupado]);
-
-  const totalesReteFuentePorPeriodo = useMemo<TotalPeriodoRow[]>(() => {
-    if (totalesReteFuentePorPeriodoApi.length > 0) {
-      return totalesReteFuentePorPeriodoApi.map((row) => ({
-        periodo: row.periodo,
-        valor: Number(row.valor || 0),
-        conceptos_count: row.conceptos_count || 0,
-        cuentas_count: row.cuentas_count || 0
-      }));
-    }
-
-    const map = new Map<string, TotalPeriodoRow & { conceptos: Set<string>; cuentas: Set<string> }>();
-
-    for (const row of detalleReteFuenteAgrupado) {
-      if (!map.has(row.label)) {
-        map.set(row.label, {
-          periodo: row.label,
-          valor: 0,
-          conceptos_count: 0,
-          cuentas_count: 0,
-          conceptos: new Set<string>(),
-          cuentas: new Set<string>()
-        });
-      }
-
-      const item = map.get(row.label)!;
-      item.valor += Number(row.valor || 0);
-      item.conceptos.add(row.concepto);
-      item.cuentas.add(row.cuenta);
-      item.conceptos_count = item.conceptos.size;
-      item.cuentas_count = item.cuentas.size;
-    }
-
-    return Array.from(map.values())
-      .map(({ conceptos, cuentas, ...rest }) => rest)
-      .sort((a, b) => a.periodo.localeCompare(b.periodo));
-  }, [totalesReteFuentePorPeriodoApi, detalleReteFuenteAgrupado]);
-
   return (
     <div className="space-y-4 p-4 bg-slate-50 min-h-screen">
       {/* HEADER */}
@@ -403,14 +281,15 @@ export default function RetencionesReportPage() {
           <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
             Dashboard Retenciones
             <span className="text-[10px] bg-indigo-600 text-white px-3 py-1 rounded-full uppercase tracking-widest">
-              v2.4
+              v2.3
             </span>
           </h1>
           <p className="text-slate-500 text-xs font-medium mt-1">
-            Control gerencial de retenciones DIAN 2365 e ICA operativo 236805. Incluye acumulados por período.
+            Control detallado de retenciones DIAN (2365) e ICA operativo del período (236805).
           </p>
         </div>
 
+        {/* BOTÓN SINCRONIZAR AUXILIAR */}
         <div className="flex flex-col items-end gap-2">
           <div className="flex items-center gap-2">
             <input
@@ -438,7 +317,7 @@ export default function RetencionesReportPage() {
       <div className="flex flex-wrap gap-4 bg-white p-4 rounded-[2rem] border shadow-sm items-end">
         <div className="flex flex-col flex-1 min-w-[220px]">
           <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1">
-            Rango fiscal de análisis
+            Rango Fiscal de Análisis
           </label>
           <div className="flex gap-2">
             <input
@@ -461,94 +340,32 @@ export default function RetencionesReportPage() {
           className="bg-slate-900 text-white font-black px-6 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 hover:bg-black transition-all shadow-md active:scale-95"
         >
           <RefreshCcw size={16} className={loading ? "animate-spin" : ""} />
-          {loading ? "Consultando..." : "Actualizar tablero"}
+          {loading ? "Consultando..." : "Actualizar Tablero"}
         </button>
       </div>
 
       {/* KPIS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard
-          title="Total ReteFuente 2365"
+          title="Total ReteFuente (2365)"
           value={kpis.total_retefuente}
           icon={<Landmark size={20} />}
           color="indigo"
         />
         <StatCard
-          title="ICA retenido 236805"
+          title="ICA retenido por conceptos (236805)"
           value={kpis.total_reteica_conceptos}
           icon={<Building2 size={20} />}
           color="pink"
         />
         <StatCard
-          title="Total retenciones del período"
+          title="Total Retenciones del Período"
           value={kpis.total_general}
           icon={<Wallet size={20} />}
           color="slate"
           highlight
         />
       </div>
-
-      {/* RESUMEN POR PERIODO */}
-      <Card className="rounded-[2rem] shadow-xl border-none overflow-hidden bg-white">
-        <div className="bg-slate-900 text-white px-6 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-          <span className="flex items-center gap-2 font-black text-sm uppercase tracking-widest">
-            <Sigma size={18} className="text-emerald-400" />
-            Resumen acumulado por período
-          </span>
-          <span className="text-[10px] font-bold bg-white/10 px-3 py-1 rounded-full border border-white/20 uppercase tracking-tighter w-fit">
-            Lectura gerencial
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-3 p-5 border-b bg-slate-50/60">
-          {resumenPorPeriodo.map((p) => (
-            <PeriodoMiniCard
-              key={p.periodo}
-              periodo={p.periodo}
-              retefuente={p.retefuente}
-              reteica={p.reteica_conceptos}
-              total={p.total_periodo}
-            />
-          ))}
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-white border-b text-slate-400 font-black text-[10px] uppercase">
-              <tr>
-                <th className="p-5 text-left">Periodo</th>
-                <th className="p-5 text-right">ReteFuente 2365</th>
-                <th className="p-5 text-right">ReteICA 236805</th>
-                <th className="p-5 text-right">Total período</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-bold">
-              {resumenPorPeriodo.map((row) => (
-                <tr key={row.periodo} className="hover:bg-slate-50 transition-colors">
-                  <td className="p-5 text-slate-600 font-mono text-xs">{row.periodo}</td>
-                  <td className="p-5 text-right text-indigo-700 font-black">
-                    {formatCurrency(row.retefuente)}
-                  </td>
-                  <td className="p-5 text-right text-pink-700 font-black">
-                    {formatCurrency(row.reteica_conceptos)}
-                  </td>
-                  <td className="p-5 text-right text-slate-900 font-black">
-                    {formatCurrency(row.total_periodo)}
-                  </td>
-                </tr>
-              ))}
-
-              {resumenPorPeriodo.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="p-8 text-center text-slate-400 text-xs font-bold">
-                    No hay información para el rango seleccionado.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
 
       {/* REFERENCIA CONTABLE 236898 */}
       {!!referenciasContables?.nota && (
@@ -578,59 +395,61 @@ export default function RetencionesReportPage() {
       )}
 
       {/* TENDENCIA MENSUAL */}
-      <Card className="rounded-[2rem] shadow-xl border-none bg-white p-2">
-        <CardHeader className="pb-0">
-          <CardTitle className="text-sm font-black text-slate-500 uppercase tracking-tight">
-            📈 Tendencia mensual de retenciones
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={360}>
-            <BarChart
-              data={evolucion}
-              margin={{ top: 30, right: 10, left: 0, bottom: 0 }}
-              barCategoryGap="10%"
-            >
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-              <XAxis
-                dataKey="label"
-                axisLine={false}
-                tickLine={false}
-                tick={{ fontSize: 11, fontWeight: "bold" }}
-              />
-              <YAxis hide />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: "#f8fafc" }} />
-              <Legend iconType="circle" wrapperStyle={{ fontSize: "11px", paddingTop: "20px" }} />
-
-              <Bar
-                dataKey="retefuente"
-                name="ReteFuente 2365"
-                fill="#4f46e5"
-                radius={[6, 6, 0, 0]}
-                barSize={46}
+      <div className="grid grid-cols-1 gap-5">
+        <Card className="rounded-[2rem] shadow-xl border-none bg-white p-2">
+          <CardHeader className="pb-0">
+            <CardTitle className="text-sm font-black text-slate-500 uppercase tracking-tight">
+              📈 Tendencia mensual de retenciones
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={360}>
+              <BarChart
+                data={evolucion}
+                margin={{ top: 30, right: 10, left: 0, bottom: 0 }}
+                barCategoryGap="10%"
               >
-                <LabelList
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis
+                  dataKey="label"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 11, fontWeight: "bold" }}
+                />
+                <YAxis hide />
+                <Tooltip content={<CustomTooltip />} cursor={{ fill: "#f8fafc" }} />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: "11px", paddingTop: "20px" }} />
+
+                <Bar
                   dataKey="retefuente"
-                  content={(props: any) => <CustomLabel {...props} />}
-                />
-              </Bar>
+                  name="ReteFuente (2365)"
+                  fill="#4f46e5"
+                  radius={[6, 6, 0, 0]}
+                  barSize={46}
+                >
+                  <LabelList
+                    dataKey="retefuente"
+                    content={(props: any) => <CustomLabel {...props} />}
+                  />
+                </Bar>
 
-              <Bar
-                dataKey="reteica_conceptos"
-                name="ICA retenido 236805"
-                fill="#ec4899"
-                radius={[6, 6, 0, 0]}
-                barSize={46}
-              >
-                <LabelList
+                <Bar
                   dataKey="reteica_conceptos"
-                  content={(props: any) => <CustomLabel {...props} />}
-                />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
+                  name="ICA retenido por conceptos (236805)"
+                  fill="#ec4899"
+                  radius={[6, 6, 0, 0]}
+                  barSize={46}
+                >
+                  <LabelList
+                    dataKey="reteica_conceptos"
+                    content={(props: any) => <CustomLabel {...props} />}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* TRAZABILIDAD + TORTA */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
@@ -657,7 +476,7 @@ export default function RetencionesReportPage() {
               </thead>
               <tbody className="divide-y divide-slate-100 font-bold">
                 {composicion.map((f, i) => (
-                  <tr key={`${f.cuenta}-${i}`} className="hover:bg-indigo-50/30 transition-colors">
+                  <tr key={i} className="hover:bg-indigo-50/30 transition-colors">
                     <td className="p-5 text-slate-500 font-mono text-xs">{f.cuenta}</td>
                     <td className="p-5 text-slate-700">{f.concepto}</td>
                     <td className="p-5 text-center">
@@ -668,14 +487,6 @@ export default function RetencionesReportPage() {
                     </td>
                   </tr>
                 ))}
-
-                {composicion.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="p-8 text-center text-slate-400 text-xs font-bold">
-                      No hay composición de retenciones para el rango seleccionado.
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </div>
@@ -711,7 +522,7 @@ export default function RetencionesReportPage() {
             <div className="w-full space-y-1.5 px-3 pb-4 mt-2 max-h-[420px] overflow-y-auto custom-scrollbar">
               {topConceptos.map((item, idx) => (
                 <div
-                  key={`${item.cuenta}-${idx}`}
+                  key={idx}
                   className="flex justify-between items-center p-2 rounded-xl bg-slate-50 border border-slate-100 font-bold text-xs"
                 >
                   <span className="flex items-center gap-2 truncate max-w-[190px]" title={item.concepto}>
@@ -726,12 +537,6 @@ export default function RetencionesReportPage() {
                   </span>
                 </div>
               ))}
-
-              {topConceptos.length === 0 && (
-                <p className="text-center text-slate-400 text-xs font-bold py-6">
-                  Sin conceptos para graficar.
-                </p>
-              )}
             </div>
           </CardContent>
         </Card>
@@ -739,38 +544,14 @@ export default function RetencionesReportPage() {
 
       {/* DETALLE MENSUAL ICA */}
       <Card className="rounded-[2rem] shadow-2xl border-none overflow-hidden bg-white">
-        <div className="bg-slate-900 text-white px-6 py-4 flex flex-col md:flex-row md:justify-between md:items-center gap-2">
+        <div className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center">
           <span className="flex items-center gap-2 font-black text-sm uppercase tracking-widest">
             <FileBarChart2 size={18} className="text-pink-400" />
             Detalle mensual de ICA
           </span>
-          <span className="text-[10px] font-bold bg-white/10 px-3 py-1 rounded-full border border-white/20 uppercase tracking-tighter w-fit">
+          <span className="text-[10px] font-bold bg-white/10 px-3 py-1 rounded-full border border-white/20 uppercase tracking-tighter">
             236805
           </span>
-        </div>
-
-        <div className="p-5 bg-pink-50/40 border-b">
-          <p className="text-[10px] font-black text-pink-700 uppercase tracking-widest mb-3">
-            Totales ICA por período consultado
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-            {totalesIcaPorPeriodo.map((row) => (
-              <DetallePeriodoCard
-                key={row.periodo}
-                periodo={row.periodo}
-                valor={row.valor}
-                conceptos={row.conceptos_count || 0}
-                cuentas={row.cuentas_count || 0}
-                color="pink"
-              />
-            ))}
-
-            {totalesIcaPorPeriodo.length === 0 && (
-              <div className="col-span-full p-5 bg-white rounded-2xl border text-center text-xs font-bold text-slate-400">
-                No hay ICA operativo para el rango seleccionado.
-              </div>
-            )}
-          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -786,7 +567,7 @@ export default function RetencionesReportPage() {
             </thead>
             <tbody className="divide-y divide-slate-100 font-bold">
               {detalleIcaAgrupado.map((f, i) => (
-                <tr key={`${f.label}-${f.cuenta}-${i}`} className="hover:bg-pink-50/30 transition-colors">
+                <tr key={i} className="hover:bg-pink-50/30 transition-colors">
                   <td className="p-5 text-slate-500 font-mono text-xs">{f.label}</td>
                   <td className="p-5 text-slate-500 font-mono text-xs">{f.cuenta}</td>
                   <td className="p-5 text-slate-700">{f.concepto}</td>
@@ -798,14 +579,6 @@ export default function RetencionesReportPage() {
                   </td>
                 </tr>
               ))}
-
-              {detalleIcaAgrupado.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="p-8 text-center text-slate-400 text-xs font-bold">
-                    No hay detalle mensual de ICA para el rango seleccionado.
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
@@ -813,38 +586,14 @@ export default function RetencionesReportPage() {
 
       {/* DETALLE MENSUAL RETEFUENTE */}
       <Card className="rounded-[2rem] shadow-2xl border-none overflow-hidden bg-white">
-        <div className="bg-slate-900 text-white px-6 py-4 flex flex-col md:flex-row md:justify-between md:items-center gap-2">
+        <div className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center">
           <span className="flex items-center gap-2 font-black text-sm uppercase tracking-widest">
             <FileBarChart2 size={18} className="text-indigo-400" />
             Detalle mensual de ReteFuente
           </span>
-          <span className="text-[10px] font-bold bg-white/10 px-3 py-1 rounded-full border border-white/20 uppercase tracking-tighter w-fit">
+          <span className="text-[10px] font-bold bg-white/10 px-3 py-1 rounded-full border border-white/20 uppercase tracking-tighter">
             2365
           </span>
-        </div>
-
-        <div className="p-5 bg-indigo-50/40 border-b">
-          <p className="text-[10px] font-black text-indigo-700 uppercase tracking-widest mb-3">
-            Totales ReteFuente por período consultado
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-            {totalesReteFuentePorPeriodo.map((row) => (
-              <DetallePeriodoCard
-                key={row.periodo}
-                periodo={row.periodo}
-                valor={row.valor}
-                conceptos={row.conceptos_count || 0}
-                cuentas={row.cuentas_count || 0}
-                color="indigo"
-              />
-            ))}
-
-            {totalesReteFuentePorPeriodo.length === 0 && (
-              <div className="col-span-full p-5 bg-white rounded-2xl border text-center text-xs font-bold text-slate-400">
-                No hay ReteFuente para el rango seleccionado.
-              </div>
-            )}
-          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -860,7 +609,7 @@ export default function RetencionesReportPage() {
             </thead>
             <tbody className="divide-y divide-slate-100 font-bold">
               {detalleReteFuenteAgrupado.map((f, i) => (
-                <tr key={`${f.label}-${f.cuenta}-${i}`} className="hover:bg-indigo-50/30 transition-colors">
+                <tr key={i} className="hover:bg-indigo-50/30 transition-colors">
                   <td className="p-5 text-slate-500 font-mono text-xs">{f.label}</td>
                   <td className="p-5 text-slate-500 font-mono text-xs">{f.cuenta}</td>
                   <td className="p-5 text-slate-700">{f.concepto}</td>
@@ -872,37 +621,9 @@ export default function RetencionesReportPage() {
                   </td>
                 </tr>
               ))}
-
-              {detalleReteFuenteAgrupado.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="p-8 text-center text-slate-400 text-xs font-bold">
-                    No hay detalle mensual de ReteFuente para el rango seleccionado.
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
-      </Card>
-
-      {/* NOTA DE ALCANCE */}
-      <Card className="rounded-[2rem] shadow-sm border bg-white">
-        <CardContent className="p-5">
-          <div className="flex items-start gap-3">
-            <div className="p-2 rounded-xl bg-slate-100 text-slate-500">
-              <Info size={18} />
-            </div>
-            <div>
-              <p className="text-xs font-black text-slate-700 uppercase tracking-widest">
-                Alcance del reporte
-              </p>
-              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                {metadata?.nota_alcance ||
-                  "Reporte gerencial basado en auxiliares contables cargados. No reemplaza la liquidación tributaria oficial ni la validación del contador."}
-              </p>
-            </div>
-          </div>
-        </CardContent>
       </Card>
     </div>
   );
@@ -932,7 +653,7 @@ const TipoBadge = ({ tipo }: { tipo: string }) => {
 };
 
 const StatCard = ({ title, value, icon, color, highlight = false }: any) => {
-  const themes: Record<string, string> = {
+  const themes: any = {
     indigo: "text-indigo-600 bg-white border-slate-100",
     pink: "text-pink-600 bg-white border-slate-100",
     slate: "text-white bg-slate-900 shadow-slate-300"
@@ -958,102 +679,5 @@ const StatCard = ({ title, value, icon, color, highlight = false }: any) => {
         </p>
       </CardContent>
     </Card>
-  );
-};
-
-const PeriodoMiniCard = ({
-  periodo,
-  retefuente,
-  reteica,
-  total
-}: {
-  periodo: string;
-  retefuente: number;
-  reteica: number;
-  total: number;
-}) => {
-  return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
-          <CalendarDays size={13} />
-          {periodo}
-        </p>
-        <span className="text-[9px] font-black px-2 py-1 rounded-lg bg-slate-100 text-slate-500">
-          Período
-        </span>
-      </div>
-
-      <div className="space-y-2 text-xs font-bold">
-        <div className="flex justify-between gap-3">
-          <span className="text-slate-500">ReteFuente</span>
-          <span className="text-indigo-700 text-right">{formatCurrency(retefuente)}</span>
-        </div>
-        <div className="flex justify-between gap-3">
-          <span className="text-slate-500">ReteICA</span>
-          <span className="text-pink-700 text-right">{formatCurrency(reteica)}</span>
-        </div>
-        <div className="pt-2 border-t flex justify-between gap-3">
-          <span className="text-slate-700 font-black">Total</span>
-          <span className="text-slate-900 font-black text-right">{formatCurrency(total)}</span>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const DetallePeriodoCard = ({
-  periodo,
-  valor,
-  conceptos,
-  cuentas,
-  color
-}: {
-  periodo: string;
-  valor: number;
-  conceptos: number;
-  cuentas: number;
-  color: "indigo" | "pink";
-}) => {
-  const theme =
-    color === "pink"
-      ? {
-          icon: "bg-pink-100 text-pink-700",
-          value: "text-pink-700",
-          badge: "bg-pink-100 text-pink-700"
-        }
-      : {
-          icon: "bg-indigo-100 text-indigo-700",
-          value: "text-indigo-700",
-          badge: "bg-indigo-100 text-indigo-700"
-        };
-
-  return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
-      <div className="flex justify-between items-start mb-3">
-        <div className={`p-2 rounded-xl ${theme.icon}`}>
-          <CalendarDays size={16} />
-        </div>
-        <span className={`text-[9px] font-black px-2 py-1 rounded-lg ${theme.badge}`}>
-          {periodo}
-        </span>
-      </div>
-
-      <p className={`text-xl font-black tracking-tighter ${theme.value}`}>
-        {formatCurrency(valor)}
-      </p>
-      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
-        Total acumulado del período
-      </p>
-
-      <div className="flex gap-2 mt-3 text-[10px] font-black text-slate-500">
-        <span className="px-2 py-1 rounded-lg bg-slate-100">
-          {conceptos} conceptos
-        </span>
-        <span className="px-2 py-1 rounded-lg bg-slate-100">
-          {cuentas} cuentas
-        </span>
-      </div>
-    </div>
   );
 };

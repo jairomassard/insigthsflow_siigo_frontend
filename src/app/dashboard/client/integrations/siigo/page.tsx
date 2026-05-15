@@ -1692,15 +1692,33 @@ export default function SiigoIntegrationPage() {
         title="7. Archivos complementarios"
         subtitle="Cargues que todavía dependen de archivos externos. Documento Soporte por Excel se conserva solo como contingencia."
       >
-        <details className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <summary className="cursor-pointer text-sm font-semibold text-slate-900">
+        <details className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-indigo-950">
             Cargar nómina desde Excel
           </summary>
+
           <div className="mt-3">
-            <p className="mb-3 text-sm leading-6 text-slate-600">
+            <p className="mb-3 text-sm leading-6 text-indigo-900">
               Exporta el reporte mensual de nómina desde Siigo y súbelo indicando mes y año.
+              Este cargue permite actualizar la información de nómina que alimenta los reportes
+              operativos y financieros de InsightFlow.
             </p>
+
             <CargarNomina />
+
+            <div className="mt-4 flex flex-col gap-3 rounded-xl border border-indigo-200 bg-white p-3 text-sm text-indigo-900 md:flex-row md:items-center md:justify-between">
+              <div>
+                El resultado de este cargue queda registrado en el historial de sincronizaciones.
+              </div>
+
+              <button
+                type="button"
+                onClick={openHistoryModal}
+                className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-800 hover:bg-indigo-100"
+              >
+                Ver historial
+              </button>
+            </div>
           </div>
         </details>
 
@@ -1708,13 +1726,29 @@ export default function SiigoIntegrationPage() {
           <summary className="cursor-pointer text-sm font-semibold text-rose-950">
             Cargar notas débito de compras desde Excel
           </summary>
+
           <div className="mt-3">
             <p className="mb-3 text-sm leading-6 text-rose-900">
               Exporta desde Siigo el reporte mensual de movimiento de notas débito de compras.
               Este cargue permite descontar devoluciones y ajustes aplicados a facturas de compra
               o documentos soporte. El cargue es incremental y no duplica notas ya cargadas.
             </p>
+
             <CargarNotasDebitoCompras />
+
+            <div className="mt-4 flex flex-col gap-3 rounded-xl border border-rose-200 bg-white p-3 text-sm text-rose-900 md:flex-row md:items-center md:justify-between">
+              <div>
+                El resultado de este cargue queda registrado en el historial de sincronizaciones.
+              </div>
+
+              <button
+                type="button"
+                onClick={openHistoryModal}
+                className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800 hover:bg-rose-100"
+              >
+                Ver historial
+              </button>
+            </div>
           </div>
         </details>
 

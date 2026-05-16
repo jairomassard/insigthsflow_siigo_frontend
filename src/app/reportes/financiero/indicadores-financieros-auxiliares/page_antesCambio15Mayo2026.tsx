@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import { authFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import {
@@ -26,12 +27,6 @@ import {
   Download,
   ShieldCheck,
   BarChart3,
-  Info,
-  Settings,
-  X,
-  Save,
-  SlidersHorizontal,
-  CheckCircle2,
   AlertTriangle,
 } from "lucide-react";
 
@@ -57,81 +52,142 @@ function formatCurrency(valor: number | null | undefined): string {
 
 function abreviarMoneda(valor: number | null | undefined): string {
   const n = Number(valor || 0);
-  if (Math.abs(n) >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(1)}B`;
+  if (Math.abs(n) >= 1_000_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
   if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
   if (Math.abs(n) >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
   return formatCurrency(n);
 }
 
+function colorSemaforo(key: string, valor: number | null): string {
+  if (valor === null) return "bg-slate-50 border-slate-200";
+
+  switch (key) {
+    case "liquidez":
+      return valor < 1
+        ? "bg-red-50 border-red-200"
+        : valor < 2
+        ? "bg-yellow-50 border-yellow-200"
+        : "bg-green-50 border-green-200";
+
+    case "apalancamiento":
+      return valor > 0.8
+        ? "bg-red-50 border-red-200"
+        : valor > 0.6
+        ? "bg-yellow-50 border-yellow-200"
+        : "bg-green-50 border-green-200";
+
+    case "rentabilidad":
+      return valor < 0
+        ? "bg-red-50 border-red-200"
+        : valor < 0.1
+        ? "bg-yellow-50 border-yellow-200"
+        : "bg-green-50 border-green-200";
+
+    case "autonomia":
+      return valor < 0.3
+        ? "bg-red-50 border-red-200"
+        : valor < 0.5
+        ? "bg-yellow-50 border-yellow-200"
+        : "bg-green-50 border-green-200";
+
+    case "solvencia":
+    case "cobertura_activo_pasivo":
+      return valor < 1
+        ? "bg-red-50 border-red-200"
+        : valor < 1.5
+        ? "bg-yellow-50 border-yellow-200"
+        : "bg-green-50 border-green-200";
+
+    case "capital_trabajo":
+      return valor < 0 ? "bg-red-50 border-red-200" : "bg-green-50 border-green-200";
+
+    default:
+      return "bg-slate-50 border-slate-200";
+  }
+}
+
+function iconoSemaforo(key: string, valor: number | null): string {
+  if (valor === null) return "⚪";
+
+  switch (key) {
+    case "liquidez":
+      return valor < 1 ? "🔴" : valor < 2 ? "🟡" : "🟢";
+    case "apalancamiento":
+      return valor > 0.8 ? "🔴" : valor > 0.6 ? "🟡" : "🟢";
+    case "rentabilidad":
+      return valor < 0 ? "🔴" : valor < 0.1 ? "🟡" : "🟢";
+    case "autonomia":
+      return valor < 0.3 ? "🔴" : valor < 0.5 ? "🟡" : "🟢";
+    case "solvencia":
+    case "cobertura_activo_pasivo":
+      return valor < 1 ? "🔴" : valor < 1.5 ? "🟡" : "🟢";
+    case "capital_trabajo":
+      return valor < 0 ? "🔴" : "🟢";
+    default:
+      return "⚪";
+  }
+}
+
+function diagCorto(key: string, valor: number | null): string {
+  if (valor === null) return "Sin datos";
+
+  switch (key) {
+    case "liquidez":
+      return valor > 3 ? "Exceso de liquidez" : valor >= 1 ? "Liquidez saludable" : "Riesgo de iliquidez";
+    case "apalancamiento":
+      return valor > 0.8 ? "Endeudamiento alto" : valor > 0.6 ? "Apalancamiento moderado" : "Deuda controlada";
+    case "rentabilidad":
+      return valor < 0 ? "Pérdidas netas" : valor < 0.1 ? "Rentabilidad baja" : "Rentabilidad sólida";
+    case "autonomia":
+      return valor < 0.3 ? "Alta deuda externa" : valor < 0.5 ? "Dependencia moderada" : "Buena autonomía";
+    case "solvencia":
+      return valor < 1 ? "Riesgo de insolvencia" : valor < 1.5 ? "Solvencia ajustada" : "Buena solvencia";
+    case "capital_trabajo":
+      return valor < 0 ? "Capital de trabajo negativo" : "Colchón operativo positivo";
+    case "cobertura_activo_pasivo":
+      return valor < 1 ? "Activos insuficientes para cubrir pasivos" : "Cobertura adecuada";
+    case "porcentaje_pasivo_corto":
+      return valor > 0.7 ? "Alta presión de corto plazo" : valor > 0.4 ? "Estructura equilibrada" : "Predomina deuda de largo plazo";
+    case "porcentaje_activo_no_corriente":
+      return valor > 0.7 ? "Alto peso de activos fijos" : valor > 0.4 ? "Composición balanceada" : "Predominio de activos corrientes";
+    case "endeudamiento_largo_plazo":
+      return valor > 1 ? "Presión alta a largo plazo" : "Presión razonable a largo plazo";
+    default:
+      return "";
+  }
+}
+
 function nombreMesCorto(mes: string): string {
-  if (!mes || !mes.includes("-")) return mes || "";
   const [year, month] = mes.split("-");
   const fecha = new Date(Number(year), Number(month) - 1, 1);
   return fecha.toLocaleDateString("es-CO", { month: "short", year: "2-digit" });
 }
 
 function nombreIndicador(k: string): string {
-  const labels: Record<string, string> = {
-    liquidez: "Liquidez corriente",
-    apalancamiento: "Apalancamiento",
-    rentabilidad: "Rentabilidad neta",
-    autonomia: "Autonomía financiera",
-    capital_trabajo: "Capital de trabajo",
-    cobertura_activo_pasivo: "Cobertura activo/pasivo",
-    porcentaje_activo_no_corriente: "Activo no corriente",
-    porcentaje_pasivo_corto: "Pasivo corto plazo",
-    solvencia: "Solvencia",
-    endeudamiento_largo_plazo: "Endeudamiento largo plazo",
-    activo_total: "Activo total",
-    pasivo_total: "Pasivo total",
-    patrimonio: "Patrimonio",
-    utilidad_neta: "Utilidad neta",
-  };
-
-  return labels[k] || k.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
-}
-
-function valorIndicador(k: string, v: number | null | undefined) {
-  if (["capital_trabajo", "activo_total", "pasivo_total", "patrimonio", "utilidad_neta"].includes(k)) {
-    return abreviarMoneda(v);
-  }
-  return fmt2(v);
-}
-
-function toInputValue(v: any): string {
-  if (v === null || v === undefined) return "";
-  return String(v);
-}
-
-function parseNumberOrNull(v: string): number | null {
-  if (v === null || v === undefined) return null;
-  const clean = String(v).trim().replace(",", ".");
-  if (!clean) return null;
-  const num = Number(clean);
-  return Number.isFinite(num) ? num : null;
+  return k.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
 }
 
 const INDICADOR_INFO: Record<string, string> = {
   liquidez:
-    "Mide cuántas veces el activo corriente cubre el pasivo corriente. Su lectura depende del ciclo operativo de la empresa.",
+    "Mide la capacidad de la empresa para cubrir sus obligaciones de corto plazo con sus activos corrientes.",
   apalancamiento:
-    "Mide qué proporción de los activos está financiada con deuda. La lectura depende del modelo de negocio y la estructura de capital.",
+    "Mide qué tan financiada está la empresa con deuda frente a su estructura total de recursos.",
   rentabilidad:
-    "Mide el margen neto del período seleccionado: utilidad neta dividida entre ingresos.",
+    "Mide la capacidad del negocio para generar utilidad neta a partir de sus ingresos durante el período.",
   autonomia:
-    "Refleja qué proporción del activo está financiada con recursos propios.",
+    "Refleja qué tanto del activo está financiado con recursos propios en lugar de deuda.",
   capital_trabajo:
-    "Activo corriente menos pasivo corriente. Muestra la diferencia entre recursos corrientes y obligaciones corrientes.",
+    "Es la diferencia entre activo corriente y pasivo corriente. Indica el colchón operativo disponible en el corto plazo.",
   cobertura_activo_pasivo:
-    "Mide la relación global entre activos y pasivos.",
+    "Mide cuántas veces los activos alcanzan a cubrir el total de pasivos de la empresa.",
   porcentaje_activo_no_corriente:
-    "Indica qué proporción del activo total está concentrada en activos no corrientes o de permanencia.",
+    "Indica qué proporción del activo total está concentrada en activos no corrientes o de largo plazo.",
   porcentaje_pasivo_corto:
-    "Mide qué parte del pasivo total vence en el corto plazo.",
+    "Mide qué parte del pasivo total vence en el corto plazo, mostrando la presión inmediata de obligaciones.",
   solvencia:
-    "Mide la cobertura general de pasivos con activos.",
+    "Evalúa la capacidad general de la empresa para responder por sus deudas con su estructura patrimonial y de activos.",
   endeudamiento_largo_plazo:
-    "Mide la relación entre deuda de largo plazo y patrimonio.",
+    "Mide el peso relativo de las obligaciones de largo plazo dentro de la estructura financiera del negocio.",
   activo_total:
     "Representa el total de recursos económicos controlados por la empresa al corte seleccionado.",
   pasivo_total:
@@ -139,161 +195,42 @@ const INDICADOR_INFO: Record<string, string> = {
   patrimonio:
     "Corresponde al valor residual de la empresa después de restar los pasivos al activo total.",
   utilidad_neta:
-    "Resultado final del período después de costos, gastos y demás partidas del estado de resultados.",
+    "Es el resultado final del período después de costos, gastos y demás partidas del estado de resultados.",
 };
 
-const CAMPOS_BASE = [
-  "activo_total",
-  "pasivo_total",
-  "patrimonio",
-  "ingresos",
-  "costos",
-  "gastos",
-  "utilidad_neta",
-  "activo_corriente",
-  "activo_no_corriente",
-  "pasivo_corto",
-  "pasivo_largo",
-];
+function valorIndicador(k: string, v: number | null | undefined) {
+  if (k === "capital_trabajo") return abreviarMoneda(v);
+  if (["activo_total", "pasivo_total", "patrimonio", "utilidad_neta"].includes(k)) {
+    return abreviarMoneda(v);
+  }
+  return fmt2(v);
+}
 
-const CONFIG_FIELDS = [
-  "liquidez_min",
-  "liquidez_max",
-  "apalancamiento_max",
-  "rentabilidad_min",
-  "autonomia_min",
-  "solvencia_min",
-  "cobertura_activo_pasivo_min",
-  "capital_trabajo_min",
-  "porcentaje_pasivo_corto_max",
-  "porcentaje_activo_no_corriente_max",
-  "endeudamiento_largo_plazo_max",
-] as const;
-
-type ConfigField = typeof CONFIG_FIELDS[number];
-
-type InterpretacionDetalle = {
-  estado?: string;
-  severidad?: "ok" | "warning" | "neutral" | string;
-  texto?: string;
-  valor?: number | null;
-  minimo?: number | null;
-  maximo?: number | null;
-};
-
-type ConfigFinanciera = Partial<Record<ConfigField, number | null>> & {
-  id?: number;
-  idcliente?: number;
-  activo?: boolean;
-  created_at?: string;
-  updated_at?: string;
-};
-
-const CONFIG_LABELS: Record<ConfigField, { label: string; help: string; placeholder: string }> = {
-  liquidez_min: {
-    label: "Liquidez mínima",
-    help: "Valor mínimo esperado para Activo corriente / Pasivo corriente.",
-    placeholder: "Ej: 1.20",
-  },
-  liquidez_max: {
-    label: "Liquidez máxima",
-    help: "Valor máximo interno para controlar exceso de recursos corrientes, si aplica.",
-    placeholder: "Ej: 3.00",
-  },
-  apalancamiento_max: {
-    label: "Apalancamiento máximo",
-    help: "Máximo aceptado para Pasivo total / Activo total.",
-    placeholder: "Ej: 0.70",
-  },
-  rentabilidad_min: {
-    label: "Rentabilidad mínima",
-    help: "Mínimo esperado para Utilidad neta / Ingresos.",
-    placeholder: "Ej: 0.08",
-  },
-  autonomia_min: {
-    label: "Autonomía mínima",
-    help: "Mínimo esperado para Patrimonio / Activo total.",
-    placeholder: "Ej: 0.30",
-  },
-  solvencia_min: {
-    label: "Solvencia mínima",
-    help: "Mínimo esperado para Activo total / Pasivo total.",
-    placeholder: "Ej: 1.30",
-  },
-  cobertura_activo_pasivo_min: {
-    label: "Cobertura activo/pasivo mínima",
-    help: "Mínimo esperado para cobertura global de pasivos con activos.",
-    placeholder: "Ej: 1.30",
-  },
-  capital_trabajo_min: {
-    label: "Capital de trabajo mínimo",
-    help: "Valor mínimo esperado en pesos para Activo corriente - Pasivo corriente.",
-    placeholder: "Ej: 80000000",
-  },
-  porcentaje_pasivo_corto_max: {
-    label: "Pasivo corto plazo máximo",
-    help: "Máximo aceptado para Pasivo corriente / Pasivo total.",
-    placeholder: "Ej: 0.65",
-  },
-  porcentaje_activo_no_corriente_max: {
-    label: "Activo no corriente máximo",
-    help: "Máximo aceptado para Activo no corriente / Activo total, si aplica.",
-    placeholder: "Ej: 0.75",
-  },
-  endeudamiento_largo_plazo_max: {
-    label: "Endeudamiento largo plazo máximo",
-    help: "Máximo aceptado para Pasivo no corriente / Patrimonio.",
-    placeholder: "Ej: 1.00",
-  },
-};
-
-function getIndicadorTone(detalle?: InterpretacionDetalle, parametrosConfigurados = false) {
-  if (!parametrosConfigurados) {
+function getIndicadorTone(key: string, valor: number | null) {
+  if (valor === null) {
     return {
-      card: "bg-white border-slate-200",
-      chip: "bg-slate-100 text-slate-600",
+      chip: "bg-slate-100 text-slate-500",
       iconWrap: "bg-slate-100 text-slate-500",
-      icon: "—",
-      label: "Informativo",
     };
   }
 
-  if (!detalle || detalle.estado === "sin_dato") {
+  const base = colorSemaforo(key, valor);
+
+  if (base.includes("red")) {
     return {
-      card: "bg-slate-50 border-slate-200",
-      chip: "bg-slate-100 text-slate-600",
-      iconWrap: "bg-slate-100 text-slate-500",
-      icon: "⚪",
-      label: "Sin dato",
+      chip: "bg-red-100 text-red-700",
+      iconWrap: "bg-red-100 text-red-700",
     };
   }
-
-  if (detalle.estado === "dentro_rango" || detalle.severidad === "ok") {
+  if (base.includes("yellow")) {
     return {
-      card: "bg-emerald-50 border-emerald-200",
-      chip: "bg-emerald-100 text-emerald-700",
-      iconWrap: "bg-emerald-100 text-emerald-700",
-      icon: "🟢",
-      label: "Dentro del rango",
+      chip: "bg-yellow-100 text-yellow-700",
+      iconWrap: "bg-yellow-100 text-yellow-700",
     };
   }
-
-  if (detalle.estado === "por_debajo" || detalle.estado === "por_encima" || detalle.severidad === "warning") {
-    return {
-      card: "bg-amber-50 border-amber-200",
-      chip: "bg-amber-100 text-amber-700",
-      iconWrap: "bg-amber-100 text-amber-700",
-      icon: "🟡",
-      label: "Fuera del rango",
-    };
-  }
-
   return {
-    card: "bg-white border-slate-200",
-    chip: "bg-slate-100 text-slate-600",
-    iconWrap: "bg-slate-100 text-slate-500",
-    icon: "—",
-    label: "Sin parámetro",
+    chip: "bg-emerald-100 text-emerald-700",
+    iconWrap: "bg-emerald-100 text-emerald-700",
   };
 }
 
@@ -370,7 +307,7 @@ const ExecutiveStatCard = ({
   title: string;
   value: string;
   detail: string;
-  icon: ReactNode;
+  icon: React.ReactNode;
   color: "emerald" | "blue" | "sky" | "indigo";
   description: string;
   highlight?: boolean;
@@ -425,30 +362,19 @@ const IndicadorCard = ({
   v,
   explicacion,
   interpretacion,
-  detalle,
-  parametrosConfigurados,
   compact = false,
 }: {
   k: string;
   v: number | null | undefined;
   explicacion?: string;
   interpretacion?: string;
-  detalle?: InterpretacionDetalle;
-  parametrosConfigurados: boolean;
   compact?: boolean;
 }) => {
-  const tone = getIndicadorTone(detalle, parametrosConfigurados);
-
-  const detalleRango = useMemo(() => {
-    if (!parametrosConfigurados || !detalle) return "";
-    const partes = [];
-    if (detalle.minimo !== null && detalle.minimo !== undefined) partes.push(`Mín: ${fmtNum(detalle.minimo)}`);
-    if (detalle.maximo !== null && detalle.maximo !== undefined) partes.push(`Máx: ${fmtNum(detalle.maximo)}`);
-    return partes.join(" · ");
-  }, [detalle, parametrosConfigurados]);
+  const num = typeof v === "number" ? v : null;
+  const tone = getIndicadorTone(k, num);
 
   return (
-    <div className={`rounded-[1.6rem] border p-5 shadow-sm transition-all hover:shadow-md ${tone.card}`}>
+    <div className={`rounded-[1.6rem] border p-5 shadow-sm transition-all hover:shadow-md ${colorSemaforo(k, num)}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-700">
@@ -461,7 +387,7 @@ const IndicadorCard = ({
         </div>
 
         <div className={`px-2.5 py-1 rounded-xl text-sm font-black ${tone.iconWrap}`}>
-          {tone.icon}
+          {iconoSemaforo(k, num)}
         </div>
       </div>
 
@@ -469,15 +395,14 @@ const IndicadorCard = ({
         {valorIndicador(k, v)}
       </p>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <div className="mt-3 flex items-center gap-2">
         <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${tone.chip}`}>
-          {tone.label}
+          {diagCorto(k, num)}
         </span>
-        {detalleRango && (
-          <span className="inline-flex items-center rounded-full bg-white/80 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-500 border border-white">
-            {detalleRango}
-          </span>
-        )}
+        <InfoHint
+          text={`Diagnóstico corto: ${diagCorto(k, num)}.`}
+          align="right"
+        />
       </div>
 
       {explicacion && (
@@ -486,183 +411,11 @@ const IndicadorCard = ({
         </p>
       )}
 
-      {(interpretacion || detalle?.texto) && (
+      {interpretacion && (
         <div className="mt-3 rounded-2xl bg-white/80 p-3 text-xs leading-5 text-slate-700 border border-white/70">
-          {detalle?.texto || interpretacion}
+          {interpretacion}
         </div>
       )}
-    </div>
-  );
-};
-
-const ModoInterpretacionBanner = ({
-  parametrosConfigurados,
-  modoInterpretacion,
-  onOpenConfig,
-}: {
-  parametrosConfigurados: boolean;
-  modoInterpretacion: string;
-  onOpenConfig: () => void;
-}) => {
-  return (
-    <Card className={`rounded-[2rem] border shadow-sm ${parametrosConfigurados ? "bg-emerald-50/70 border-emerald-200" : "bg-slate-50 border-slate-200"}`}>
-      <CardContent className="p-5">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className={`p-3 rounded-2xl ${parametrosConfigurados ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>
-              {parametrosConfigurados ? <CheckCircle2 size={20} /> : <Info size={20} />}
-            </div>
-            <div>
-              <p className="text-sm font-black text-slate-800 uppercase tracking-widest">
-                Modo de interpretación: {parametrosConfigurados ? "Parametrizado" : "Informativo"}
-              </p>
-              <p className="mt-1 text-sm text-slate-600 leading-6 max-w-4xl">
-                {parametrosConfigurados
-                  ? "Los indicadores se comparan contra los rangos definidos por esta empresa. Las alertas no usan reglas genéricas de InsightFlow."
-                  : "La empresa aún no ha configurado rangos financieros propios. Los indicadores se muestran sin dictamen automático y deben interpretarse según la industria, el modelo operativo y el criterio financiero de la empresa."}
-              </p>
-              <p className="mt-1 text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                Backend: {modoInterpretacion || (parametrosConfigurados ? "parametrizado" : "sin_parametros")}
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={onOpenConfig}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-xs font-black text-white shadow-lg transition-all hover:bg-black active:scale-95"
-          >
-            <Settings size={16} />
-            Configurar parámetros
-          </button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-};
-
-const ConfigModal = ({
-  open,
-  onClose,
-  form,
-  setForm,
-  saving,
-  onSave,
-}: {
-  open: boolean;
-  onClose: () => void;
-  form: Record<string, string>;
-  setForm: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-  saving: boolean;
-  onSave: () => void;
-}) => {
-  if (!open) return null;
-
-  const groups: { title: string; description: string; fields: ConfigField[] }[] = [
-    {
-      title: "Liquidez y solvencia",
-      description: "Rangos mínimos o máximos para evaluar capacidad de cobertura.",
-      fields: ["liquidez_min", "liquidez_max", "solvencia_min", "cobertura_activo_pasivo_min", "capital_trabajo_min"],
-    },
-    {
-      title: "Endeudamiento y estructura",
-      description: "Límites internos para deuda y composición del balance.",
-      fields: ["apalancamiento_max", "porcentaje_pasivo_corto_max", "porcentaje_activo_no_corriente_max", "endeudamiento_largo_plazo_max", "autonomia_min"],
-    },
-    {
-      title: "Rentabilidad",
-      description: "Objetivo mínimo para margen neto del período.",
-      fields: ["rentabilidad_min"],
-    },
-  ];
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-      <div className="max-h-[92vh] w-full max-w-5xl overflow-hidden rounded-[2rem] bg-white shadow-2xl border border-slate-200">
-        <div className="flex items-start justify-between gap-4 bg-slate-900 px-6 py-5 text-white">
-          <div>
-            <h2 className="flex items-center gap-2 text-lg font-black uppercase tracking-widest">
-              <SlidersHorizontal size={20} className="text-emerald-400" />
-              Parámetros financieros empresariales
-            </h2>
-            <p className="mt-1 text-xs text-slate-300 leading-5">
-              Define rangos propios para activar la interpretación contra objetivos internos. Deja vacío lo que no aplique.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-2xl bg-white/10 p-2 text-white transition hover:bg-white/20"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="max-h-[68vh] overflow-y-auto p-6 space-y-5">
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 leading-6">
-            <strong>Importante:</strong> estos parámetros no son normas universales ni reemplazan el criterio del financiero o contador. Son objetivos internos definidos por la empresa para que InsightFlow compare los indicadores contra esos rangos.
-          </div>
-
-          {groups.map((group) => (
-            <div key={group.title} className="rounded-[1.5rem] border border-slate-200 bg-slate-50/70 p-5">
-              <div className="mb-4">
-                <h3 className="text-sm font-black uppercase tracking-widest text-slate-800">{group.title}</h3>
-                <p className="mt-1 text-xs text-slate-500">{group.description}</p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {group.fields.map((field) => (
-                  <label key={field} className="block rounded-2xl border bg-white p-4 shadow-sm">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] font-black uppercase tracking-widest text-slate-700">
-                        {CONFIG_LABELS[field].label}
-                      </span>
-                      <InfoHint text={CONFIG_LABELS[field].help} align="right" />
-                    </div>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={form[field] || ""}
-                      placeholder={CONFIG_LABELS[field].placeholder}
-                      onChange={(e) =>
-                        setForm((prev) => ({ ...prev, [field]: e.target.value }))
-                      }
-                      className="mt-3 rounded-xl bg-slate-50 text-xs font-bold"
-                    />
-                    <p className="mt-2 text-[10px] leading-4 text-slate-400">
-                      {CONFIG_LABELS[field].help}
-                    </p>
-                  </label>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t bg-slate-50 px-6 py-4">
-          <p className="text-[11px] text-slate-500 leading-5">
-            Los valores tipo porcentaje deben ingresarse como decimal. Ejemplo: 70% = 0.70, 8% = 0.08.
-          </p>
-          <div className="flex gap-2 justify-end">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-xs font-black text-slate-700 hover:bg-slate-100"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={onSave}
-              disabled={saving}
-              className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-xs font-black text-white shadow-lg hover:bg-emerald-700 disabled:opacity-60"
-            >
-              <Save size={16} />
-              {saving ? "Guardando..." : "Guardar parámetros"}
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };
@@ -677,20 +430,12 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
   const [indicadores, setIndicadores] = useState<Record<string, number | null>>({});
   const [explicaciones, setExplicaciones] = useState<Record<string, string>>({});
   const [interpretaciones, setInterpretaciones] = useState<Record<string, string>>({});
-  const [interpretacionesDetalle, setInterpretacionesDetalle] = useState<Record<string, InterpretacionDetalle>>({});
   const [conclusiones, setConclusiones] = useState<string[]>([]);
   const [evolucionMensual, setEvolucionMensual] = useState<any[]>([]);
   const [meta, setMeta] = useState<any>(null);
   const [metaBalance, setMetaBalance] = useState<any>(null);
   const [resumenBalance, setResumenBalance] = useState<any>(null);
-  const [configFinanciera, setConfigFinanciera] = useState<ConfigFinanciera | null>(null);
-  const [parametrosConfigurados, setParametrosConfigurados] = useState<boolean>(false);
-  const [modoInterpretacion, setModoInterpretacion] = useState<string>("sin_parametros");
   const [loading, setLoading] = useState<boolean>(false);
-
-  const [modalOpen, setModalOpen] = useState(false);
-  const [savingConfig, setSavingConfig] = useState(false);
-  const [configForm, setConfigForm] = useState<Record<string, string>>({});
 
   const cargar = async () => {
     setLoading(true);
@@ -703,76 +448,17 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
       setIndicadores(data.indicadores || {});
       setExplicaciones(data.explicaciones || {});
       setInterpretaciones(data.interpretaciones || {});
-      setInterpretacionesDetalle(data.interpretaciones_detalle || {});
       setConclusiones(data.conclusiones || []);
       setEvolucionMensual(data.evolucion_mensual || []);
       setMeta(data.meta || null);
       setMetaBalance(data.meta_balance || null);
       setResumenBalance(data.resumen_balance || null);
-      setConfigFinanciera(data.config_financiera || null);
-      setParametrosConfigurados(Boolean(data.parametros_configurados));
-      setModoInterpretacion(data.modo_interpretacion || data.meta?.modo_interpretacion || "sin_parametros");
     } catch (e) {
       console.error("Error cargando indicadores desde auxiliares:", e);
     } finally {
       setLoading(false);
     }
   };
-
-  const cargarConfig = async () => {
-    try {
-      const data = await authFetch("/reportes/auxiliares/indicadores-financieros/config");
-      const config = data.config || null;
-      setConfigFinanciera(config);
-      setParametrosConfigurados(Boolean(data.parametros_configurados));
-      setModoInterpretacion(data.modo_interpretacion || "sin_parametros");
-
-      const nextForm: Record<string, string> = {};
-      CONFIG_FIELDS.forEach((field) => {
-        nextForm[field] = toInputValue(config?.[field]);
-      });
-      setConfigForm(nextForm);
-    } catch (e) {
-      console.error("Error consultando configuración financiera:", e);
-    }
-  };
-
-  const abrirModalConfig = async () => {
-    await cargarConfig();
-    setModalOpen(true);
-  };
-
-  const guardarConfig = async () => {
-    setSavingConfig(true);
-    try {
-      const payload: Record<string, number | null | boolean> = { activo: true };
-      CONFIG_FIELDS.forEach((field) => {
-        payload[field] = parseNumberOrNull(configForm[field] || "");
-      });
-
-      const data = await authFetch("/reportes/auxiliares/indicadores-financieros/config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      setConfigFinanciera(data.config || null);
-      setParametrosConfigurados(Boolean(data.parametros_configurados));
-      setModoInterpretacion(data.modo_interpretacion || "sin_parametros");
-      setModalOpen(false);
-      await cargar();
-    } catch (e) {
-      console.error("Error guardando configuración financiera:", e);
-      alert("No fue posible guardar la configuración financiera.");
-    } finally {
-      setSavingConfig(false);
-    }
-  };
-
-  useEffect(() => {
-    cargar();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const exportarExcel = () => {
     const hojaResumen = XLSX.utils.json_to_sheet(
@@ -785,21 +471,31 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
 
     const hojaIndicadores = XLSX.utils.json_to_sheet(
       Object.entries(indicadores)
-        .filter(([k]) => !CAMPOS_BASE.includes(k))
+        .filter(([k]) =>
+          ![
+            "activo_total",
+            "pasivo_total",
+            "patrimonio",
+            "ingresos",
+            "costos",
+            "gastos",
+            "utilidad_neta",
+            "activo_corriente",
+            "activo_no_corriente",
+            "pasivo_corto",
+            "pasivo_largo",
+          ].includes(k)
+        )
         .map(([k, v]) => ({
           Indicador: k.replace(/_/g, " ").toUpperCase(),
           Valor: typeof v === "number" && isFinite(v) ? v.toFixed(2) : "—",
           Explicacion: explicaciones[k] || "",
-          Modo_Interpretacion: parametrosConfigurados ? "Parametrizado" : "Informativo",
           Interpretacion: interpretaciones[k] || "",
-          Estado: interpretacionesDetalle[k]?.estado || "",
-          Minimo_Empresa: interpretacionesDetalle[k]?.minimo ?? "",
-          Maximo_Empresa: interpretacionesDetalle[k]?.maximo ?? "",
         }))
     );
 
     const hojaConclusiones = XLSX.utils.json_to_sheet(
-      (conclusiones || []).map((c, i) => ({ N: i + 1, Lectura: c }))
+      conclusiones.map((c, i) => ({ N: i + 1, Diagnostico: c }))
     );
 
     const hojaEvolucion = XLSX.utils.json_to_sheet(
@@ -807,15 +503,6 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
         Mes: r.mes,
         Utilidad_Neta: r.utilidad_neta,
         Rentabilidad: r.rentabilidad,
-      }))
-    );
-
-    const hojaConfig = XLSX.utils.json_to_sheet(
-      CONFIG_FIELDS.map((field) => ({
-        Parametro: field,
-        Nombre: CONFIG_LABELS[field].label,
-        Valor: configFinanciera?.[field] ?? "",
-        Ayuda: CONFIG_LABELS[field].help,
       }))
     );
 
@@ -836,12 +523,8 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, hojaResumen, "Resumen_Tecnico");
     XLSX.utils.book_append_sheet(wb, hojaIndicadores, "Indicadores");
+    XLSX.utils.book_append_sheet(wb, hojaConclusiones, "Conclusiones");
     XLSX.utils.book_append_sheet(wb, hojaEvolucion, "Evolucion_Mensual");
-    XLSX.utils.book_append_sheet(wb, hojaConfig, "Parametros_Empresa");
-
-    if ((conclusiones || []).length > 0) {
-      XLSX.utils.book_append_sheet(wb, hojaConclusiones, "Lectura_Parametrizada");
-    }
 
     if ((resumenBalance?.narrativa || []).length > 0) {
       XLSX.utils.book_append_sheet(wb, hojaLecturaEjecutiva, "Lectura_Ejecutiva");
@@ -918,15 +601,6 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
 
   return (
     <div className="space-y-4 p-5 bg-slate-50 min-h-screen">
-      <ConfigModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        form={configForm}
-        setForm={setConfigForm}
-        saving={savingConfig}
-        onSave={guardarConfig}
-      />
-
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-[2rem] border shadow-sm">
         <div>
@@ -937,20 +611,12 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
             </span>
           </h1>
           <p className="text-slate-500 text-xs font-medium mt-1">
-            Indicadores calculados desde auxiliares. Sin parámetros empresariales, no se emite dictamen automático.
+            Lectura ejecutiva del balance y del resultado del período con KPIs automáticos.
           </p>
         </div>
 
         <div className="flex flex-col items-end gap-2">
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <button
-              onClick={abrirModalConfig}
-              className="flex items-center gap-2 px-4 py-3 bg-slate-100 text-slate-800 rounded-2xl text-xs font-black hover:bg-slate-200 transition-all border border-slate-200"
-            >
-              <Settings size={16} />
-              Parámetros
-            </button>
-
+          <div className="flex items-center gap-2">
             <button
               onClick={exportarExcel}
               disabled={!resumen.length}
@@ -970,7 +636,7 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
             </button>
           </div>
 
-          <p className="text-slate-400 text-[10px] font-semibold italic text-right">
+          <p className="text-slate-400 text-[10px] font-semibold italic">
             Balance al corte final + Estado de resultados del período seleccionado
           </p>
         </div>
@@ -1018,15 +684,9 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
 
         <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-slate-700 max-w-2xl">
           Esta página combina la lógica de <strong>balance al corte</strong> con la de{" "}
-          <strong>resultado del período</strong>. La interpretación automática solo se activa si la empresa define sus propios parámetros.
+          <strong>resultado del período</strong> para producir una lectura financiera más completa.
         </div>
       </div>
-
-      <ModoInterpretacionBanner
-        parametrosConfigurados={parametrosConfigurados}
-        modoInterpretacion={modoInterpretacion}
-        onOpenConfig={abrirModalConfig}
-      />
 
       {/* META */}
       {meta && (
@@ -1051,40 +711,43 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
         </CardHeader>
         <CardContent className="space-y-3 text-sm leading-6 text-slate-700">
           <p>
-            Esta página calcula indicadores financieros desde la información contable cargada. InsightFlow no emite un dictamen universal sobre la empresa; cuando existen parámetros empresariales, compara los indicadores contra esos rangos internos.
+            Esta página combina dos lógicas contables distintas para evitar confusiones:
           </p>
           <div className="grid gap-3 md:grid-cols-3">
             <div className="rounded-2xl border border-amber-200 bg-white p-4">
               <p className="font-semibold">Balance al corte final</p>
               <p className="text-slate-600">
-                Activo, pasivo, patrimonio, liquidez, solvencia, autonomía y capital de trabajo se calculan con saldos acumulados hasta la fecha final seleccionada.
+                Activo, pasivo, patrimonio, liquidez, solvencia, autonomía y capital de trabajo
+                se calculan con la lógica del balance general acumulado hasta la fecha final seleccionada.
               </p>
             </div>
             <div className="rounded-2xl border border-amber-200 bg-white p-4">
               <p className="font-semibold">Resultado del período</p>
               <p className="text-slate-600">
-                Ingresos, costos, gastos, utilidad neta y rentabilidad se calculan con los movimientos del período elegido.
+                Ingresos, costos, gastos, utilidad neta y rentabilidad se calculan solo con los movimientos
+                del período elegido.
               </p>
             </div>
             <div className="rounded-2xl border border-amber-200 bg-white p-4">
-              <p className="font-semibold">Parámetros empresariales</p>
+              <p className="font-semibold">Consistencia</p>
               <p className="text-slate-600">
-                Si la empresa configura sus rangos, los indicadores se interpretan contra esos objetivos. Si no, se muestran en modo informativo.
+                Los indicadores compartidos con Balance General deben coincidir para el mismo corte.
+                La evolución mensual, por ahora, refleja el comportamiento del P&amp;L.
               </p>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* LECTURA EJECUTIVA DEL BALANCE */}
-      {parametrosConfigurados && resumenBalance?.narrativa?.length > 0 && (
+      {/* LECTURA EJECUTIVA */}
+      {resumenBalance?.narrativa?.length > 0 && (
         <Card className="rounded-[2rem] border-none overflow-hidden bg-white shadow-2xl">
           <div className="bg-slate-900 px-8 py-5 text-white">
             <h3 className="font-black text-lg uppercase tracking-widest">
               Lectura Ejecutiva del Balance al Corte
             </h3>
             <p className="mt-1 text-xs text-slate-300">
-              Lectura disponible solo bajo parámetros empresariales configurados.
+              Interpretación automática del estado de situación financiera al cierre seleccionado.
             </p>
           </div>
           <CardContent className="p-6">
@@ -1102,70 +765,62 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
         </Card>
       )}
 
-      {/* ALERTAS DEL BALANCE */}
-      {parametrosConfigurados && resumenBalance?.alertas?.length > 0 && (
-        <Card className="rounded-[2rem] border-amber-200 bg-amber-50/70 shadow-sm">
-          <CardContent className="p-6">
-            <div className="flex items-start gap-3">
-              <div className="p-3 rounded-2xl bg-amber-100 text-amber-700">
-                <AlertTriangle size={20} />
-              </div>
-              <div>
-                <h3 className="text-sm font-black text-amber-900 uppercase tracking-wide">
-                  Alertas del balance
-                </h3>
-                <div className="mt-3 space-y-2">
-                  {resumenBalance.alertas.map((txt: string, i: number) => (
-                    <div key={i} className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm text-slate-700">
-                      {txt}
-                    </div>
-                  ))}
-                </div>
-              </div>
+      {/* ALERTAS */}
+      {resumenBalance?.alertas?.length > 0 && (
+        <Card className="rounded-[2rem] border border-amber-200 bg-amber-50 shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-sm font-black text-amber-800 uppercase tracking-wide flex items-center gap-2">
+              <AlertTriangle size={16} />
+              Alertas y observaciones del balance
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-2xl border border-amber-200 bg-white p-4">
+              <ul className="space-y-2 text-sm text-slate-800">
+                {resumenBalance.alertas.map((txt: string, i: number) => (
+                  <li key={i} className="flex gap-2">
+                    <span>•</span>
+                    <span>{txt}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           </CardContent>
         </Card>
       )}
 
       {/* TARJETAS EJECUTIVAS */}
-      {Object.keys(indicadores).length > 0 && (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {tarjetasEjecutivas.map((t) => (
-            <ExecutiveStatCard
-              key={t.key}
-              title={t.titulo}
-              value={valorIndicador(t.key, t.valor)}
-              detail={t.detalle}
-              icon={t.icon}
-              color={t.color}
-              highlight={t.highlight}
-              description={INDICADOR_INFO[t.key] || t.detalle}
-            />
-          ))}
-        </div>
-      )}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        {tarjetasEjecutivas.map((item) => (
+          <ExecutiveStatCard
+            key={item.key}
+            title={item.titulo}
+            value={abreviarMoneda(item.valor)}
+            detail={item.detalle}
+            icon={item.icon}
+            color={item.color}
+            highlight={item.highlight}
+            description={INDICADOR_INFO[item.key] || item.detalle}
+          />
+        ))}
+      </div>
 
-      {/* INDICADORES */}
+      {/* INDICADORES CLAVE */}
       {Object.keys(indicadores).length > 0 && (
         <Card className="rounded-[2rem] shadow-xl border-none bg-white p-2">
           <CardHeader className="pb-0">
-            <CardTitle className="text-sm font-black text-slate-500 uppercase tracking-tight flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+            <CardTitle className="text-sm font-black text-slate-500 uppercase tracking-tight flex justify-between">
               <span>📊 Indicadores Financieros Clave</span>
-              <div className="flex flex-wrap gap-2 text-[10px]">
-                {parametrosConfigurados ? (
-                  <>
-                    <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-emerald-700">
-                      <div className="w-2 h-2 rounded-full bg-emerald-500"></div> Dentro del rango
-                    </span>
-                    <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-amber-700">
-                      <div className="w-2 h-2 rounded-full bg-amber-400"></div> Fuera del rango
-                    </span>
-                  </>
-                ) : (
-                  <span className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-slate-600">
-                    <Info size={12} /> Modo informativo sin dictamen
-                  </span>
-                )}
+              <div className="flex gap-4 text-[10px]">
+                <span className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500"></div> Saludable
+                </span>
+                <span className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full bg-yellow-400"></div> Atención
+                </span>
+                <span className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full bg-red-500"></div> Riesgo
+                </span>
               </div>
             </CardTitle>
           </CardHeader>
@@ -1187,8 +842,6 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
                     v={indicadores[k]}
                     explicacion={explicaciones[k]}
                     interpretacion={interpretaciones[k]}
-                    detalle={interpretacionesDetalle[k]}
-                    parametrosConfigurados={parametrosConfigurados}
                   />
                 ))}
               </div>
@@ -1210,8 +863,6 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
                     v={indicadores[k]}
                     explicacion={explicaciones[k]}
                     interpretacion={interpretaciones[k]}
-                    detalle={interpretacionesDetalle[k]}
-                    parametrosConfigurados={parametrosConfigurados}
                     compact
                   />
                 ))}
@@ -1299,7 +950,9 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
           </div>
 
           <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-            La evolución mensual muestra utilidad neta y rentabilidad del período. Los indicadores de balance corresponden al corte final seleccionado, no a cada mes individual.
+            La evolución mensual de esta página muestra, por ahora, el comportamiento de utilidad neta
+            y rentabilidad del período. Los indicadores de balance del encabezado corresponden al corte
+            final seleccionado, no a cada mes individual.
           </div>
         </CardContent>
       </Card>
@@ -1339,16 +992,16 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
         </Card>
       )}
 
-      {/* LECTURA PARAMETRIZADA */}
-      {parametrosConfigurados && conclusiones.length > 0 && (
+      {/* DIAGNÓSTICO */}
+      {conclusiones.length > 0 && (
         <Card className="rounded-[2rem] shadow-sm border bg-white">
           <CardContent className="p-6 space-y-6">
             <div>
               <h3 className="text-sm font-black text-slate-700 uppercase tracking-wide">
-                Lectura contra parámetros empresariales
+                Diagnóstico financiero automático
               </h3>
               <p className="text-xs text-slate-500 mt-1">
-                Esta lectura se genera únicamente contra los rangos definidos por la empresa.
+                Lectura ejecutiva generada a partir de la estructura del balance y el comportamiento del período.
               </p>
             </div>
 
@@ -1410,12 +1063,6 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
                 </p>
               </div>
             </div>
-
-            {resumenBalance?.nota_interpretacion && (
-              <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 text-xs text-slate-500 leading-5">
-                {resumenBalance.nota_interpretacion}
-              </div>
-            )}
           </CardContent>
         </Card>
       )}

@@ -98,6 +98,14 @@ function valorIndicador(k: string, v: number | null | undefined) {
   return fmt2(v);
 }
 
+function valorEjecutivoCompleto(k: string, v: number | null | undefined) {
+  if (["activo_total", "pasivo_total", "patrimonio", "utilidad_neta"].includes(k)) {
+    return formatCurrency(v);
+  }
+
+  return valorIndicador(k, v);
+}
+
 function toInputValue(v: any): string {
   if (v === null || v === undefined) return "";
   return String(v);
@@ -405,7 +413,7 @@ const ExecutiveStatCard = ({
         >
           {title}
         </p>
-        <p className="text-[1.9rem] leading-none font-black mt-1 tracking-tighter">
+        <p className="mt-2 text-[1.55rem] 2xl:text-[1.75rem] leading-tight font-black tracking-tight break-words">
           {value}
         </p>
         <p
@@ -1134,7 +1142,7 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
             <ExecutiveStatCard
               key={t.key}
               title={t.titulo}
-              value={valorIndicador(t.key, t.valor)}
+              value={valorEjecutivoCompleto(t.key, t.valor)}
               detail={t.detalle}
               icon={t.icon}
               color={t.color}

@@ -60,6 +60,8 @@ type KPIRunway = {
   actual: number;
   burn_promedio_3m: number;
   unidad: string;
+  requiere_parametrizacion?: boolean;
+  mensaje?: string;
 };
 
 type Kpis = {
@@ -508,7 +510,12 @@ export default function DashboardResumenEjecutivoPage() {
         value: formatMonths(runway.actual),
         description:
           "Meses estimados de operación con la caja actual según el gasto promedio de los últimos 3 meses.",
-        delta: `Gasto promedio 3M: ${formatCurrency(runway.burn_promedio_3m)}`,
+        delta:
+          runway?.requiere_parametrizacion
+            ? "Pendiente de parametrización"
+            : Number(runway?.burn_promedio_3m || 0) > 0
+              ? `Gasto promedio 3M: ${formatCurrency(runway.burn_promedio_3m)}`
+              : "Gasto promedio no disponible",
         accent: "from-rose-100 via-pink-50 to-white",
         chip: "bg-rose-50 text-rose-700 border-rose-200",
         bar: "bg-rose-500",

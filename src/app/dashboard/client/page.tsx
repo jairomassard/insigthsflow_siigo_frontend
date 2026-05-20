@@ -278,7 +278,7 @@ export default function ClientHome() {
             {tiene("ver_reporte_estado_resultados") && (
               <FeatureCard
                 icon="📑"
-                title="Estado de Resultados (P&L)"
+                title="Estado de Resultados (PyG)"
                 href="/reportes/estado-resultados"
                 description="Consulta ingresos, costos, gastos y utilidad del período en un solo reporte."
               />
@@ -301,7 +301,7 @@ export default function ClientHome() {
             {tiene("ver_reporte_indicadores_auxiliares") && (
               <FeatureCard
                 icon="📊"
-                title="Indicadores Financieros Auxiliares"
+                title="Indicadores Financieros"
                 href="/reportes/financiero/indicadores-financieros-auxiliares"
                 description="Consulta indicadores financieros calculados directamente desde los auxiliares contables."
               />

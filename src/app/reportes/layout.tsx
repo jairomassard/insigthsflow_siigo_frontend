@@ -244,7 +244,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           ? [
               {
                 href: "/reportes/estado-resultados",
-                label: "Estado de Resultados (P&L)",
+                label: "Estado de Resultados (PyG)",
                 icon: <FileBarChart2 className="w-4 h-4" />,
               },
             ]
@@ -271,7 +271,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           ? [
               {
                 href: "/reportes/financiero/indicadores-financieros-auxiliares",
-                label: "Indicadores Financieros Auxiliares",
+                label: "Indicadores Financieros",
                 icon: <FileBarChart2 className="w-4 h-4" />,
               },
             ]

@@ -58,10 +58,17 @@ type KPICaja = {
 
 type KPIRunway = {
   actual: number;
-  burn_promedio_3m: number;
+  burn_promedio_3m?: number;
+  burn_promedio?: number;
+  gasto_promedio?: number;
+  gasto_promedio_3m?: number;
+  egresos_promedio?: number;
+  egresos_promedio_3m?: number;
+  meses_promedio?: number;
   unidad: string;
   requiere_parametrizacion?: boolean;
   mensaje?: string;
+  formula?: string;
 };
 
 type Kpis = {
@@ -178,6 +185,34 @@ function formatPercent(valor?: number): string {
 function formatMonths(valor?: number): string {
   return `${Number(valor || 0).toFixed(1)} meses`;
 }
+
+function getGastoPromedioRunway(
+  runway?: KPIRunway,
+  cajaActual?: number,
+): number {
+  const directo = Number(
+    runway?.burn_promedio_3m ||
+      runway?.gasto_promedio_3m ||
+      runway?.egresos_promedio_3m ||
+      runway?.burn_promedio ||
+      runway?.gasto_promedio ||
+      runway?.egresos_promedio ||
+      0,
+  );
+
+  if (directo > 0) return directo;
+
+  const meses = Number(runway?.actual || 0);
+  const caja = Number(cajaActual || 0);
+
+  if (meses > 0 && caja > 0) {
+    return caja / meses;
+  }
+
+  return 0;
+}
+
+
 
 function abreviar(valor: number): string {
   const n = Number(valor || 0);
@@ -434,6 +469,8 @@ export default function DashboardResumenEjecutivoPage() {
     const ventas = data.kpis.ventas_netas;
     const caja = data.kpis.caja_disponible;
     const runway = data.kpis.cash_runway;
+    const gastoPromedioRunway = getGastoPromedioRunway(runway, caja.actual);
+    const mesesPromedioRunway = Number(runway?.meses_promedio || 3);
 
     return [
       {
@@ -513,8 +550,8 @@ export default function DashboardResumenEjecutivoPage() {
         delta:
           runway?.requiere_parametrizacion
             ? "Pendiente de parametrización"
-            : Number(runway?.burn_promedio_3m || 0) > 0
-              ? `Gasto promedio 3M: ${formatCurrency(runway.burn_promedio_3m)}`
+            : gastoPromedioRunway > 0
+              ? `Gasto promedio ${mesesPromedioRunway}M: ${formatCurrency(gastoPromedioRunway)}`
               : "Gasto promedio no disponible",
         accent: "from-rose-100 via-pink-50 to-white",
         chip: "bg-rose-50 text-rose-700 border-rose-200",
@@ -689,7 +726,7 @@ export default function DashboardResumenEjecutivoPage() {
           subtitulo:
             "Meses que la empresa podría operar con la caja actual, usando como referencia el gasto promedio reciente.",
           lectura: formatMonths(runway.actual),
-          interpretacion: `Con la caja actual y el gasto promedio reciente, la empresa tendría aproximadamente ${formatMonths(runway.actual)} de autonomía. El gasto promedio de referencia es ${formatCurrency(runway.burn_promedio_3m)}.`,
+          interpretacion: `Con la caja actual y el gasto promedio reciente, la empresa tendría aproximadamente ${formatMonths(runway.actual)} de autonomía. El gasto promedio de referencia es ${formatCurrency(getGastoPromedioRunway(runway, caja.actual))}.`,
           tarjetas: [
             {
               label: "Autonomía estimada",
@@ -698,7 +735,7 @@ export default function DashboardResumenEjecutivoPage() {
             },
             {
               label: "Gasto promedio 3 meses",
-              value: formatCurrency(runway.burn_promedio_3m),
+              value: formatCurrency(getGastoPromedioRunway(runway, caja.actual)),
               accent: "bg-slate-50 text-slate-700 border-slate-200",
             },
             {

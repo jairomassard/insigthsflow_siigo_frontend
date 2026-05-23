@@ -687,9 +687,7 @@ export default function ReporteFinancieroComprasGastosPage() {
           <h1 className="truncate text-xl font-black tracking-tight text-slate-900 lg:text-2xl">
             📊 Reporte Egresos por Compras & Gastos
           </h1>
-          <p className="mt-0.5 text-xs text-slate-500">
-            Vista compacta optimizada para exhibición en tablet 13.4" · 1366×768
-          </p>
+
         </div>
 
         <div className="grid w-full gap-2 lg:w-[650px] lg:grid-cols-3">

@@ -147,16 +147,23 @@ function formatCurrencyCompact(valor: number): string {
   return `$ ${abreviar(valor)}`;
 }
 
-function KpiCard({
-  label,
-  value,
-  tone = "blue",
-  title,
-}: {
+type KpiTone = "blue" | "green" | "red" | "orange" | "indigo" | "purple";
+
+interface KpiInfo {
+  id: string;
   label: string;
   value: string;
-  tone?: "blue" | "green" | "red" | "orange" | "indigo" | "purple";
-  title?: string;
+  fullValue: string;
+  tone: KpiTone;
+  description: string;
+}
+
+function KpiCard({
+  item,
+  onSelect,
+}: {
+  item: KpiInfo;
+  onSelect: (item: KpiInfo) => void;
 }) {
   const toneClasses: Record<string, { box: string; value: string }> = {
     blue: { box: "bg-blue-50 border-blue-200", value: "text-blue-700" },
@@ -167,23 +174,28 @@ function KpiCard({
     purple: { box: "bg-purple-50 border-purple-200", value: "text-purple-700" },
   };
 
-  const toneClass = toneClasses[tone] || toneClasses.blue;
+  const toneClass = toneClasses[item.tone] || toneClasses.blue;
 
   return (
-    <div
-      title={title || value}
-      className={`min-w-0 rounded-xl border px-1.5 py-1.5 shadow-sm ${toneClass.box}`}
+    <button
+      type="button"
+      title={item.fullValue}
+      onClick={() => onSelect(item)}
+      className={`group min-w-0 rounded-xl border px-1.5 py-1.5 text-left shadow-sm transition duration-150 hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98] ${toneClass.box}`}
       style={{ minHeight: 62 }}
     >
-      <div className="flex h-full min-h-[50px] flex-col items-center justify-center text-center">
-        <div className="w-full truncate text-[9px] font-extrabold uppercase leading-tight tracking-tight text-slate-800">
-          {label}
+      <div className="relative flex h-full min-h-[50px] flex-col items-center justify-center text-center">
+        <span className="absolute right-0.5 top-0 text-[10px] font-black text-slate-400 group-hover:text-slate-700">
+          ⓘ
+        </span>
+        <div className="w-full truncate pr-3 text-[9px] font-extrabold uppercase leading-tight tracking-tight text-slate-800">
+          {item.label}
         </div>
         <div className={`mt-1 w-full truncate text-[15px] font-black leading-tight tracking-tight ${toneClass.value}`}>
-          {value}
+          {item.value}
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -296,6 +308,8 @@ export default function ReporteFinancieroComprasGastosPage() {
   const [modalRows, setModalRows] = useState<FacturaDetalle[]>([]);
   const [modalLoading, setModalLoading] = useState<boolean>(false);
 
+  const [selectedKpi, setSelectedKpi] = useState<KpiInfo | null>(null);
+
   const queryParams = useMemo(() => {
     const q: string[] = [];
     if (fechaDesde) q.push(`desde=${encodeURIComponent(fechaDesde)}`);
@@ -402,6 +416,115 @@ export default function ReporteFinancieroComprasGastosPage() {
     topFacturasData.length > 0 ||
     safeNumber(kpis.total_compras) > 0 ||
     safeNumber(kpis.total_facturas) > 0;
+
+  const periodoTexto = useMemo(() => {
+    if (fechaDesde && fechaHasta) return `${formatDateSafe(fechaDesde)} a ${formatDateSafe(fechaHasta)}`;
+    if (fechaDesde) return `Desde ${formatDateSafe(fechaDesde)}`;
+    if (fechaHasta) return `Hasta ${formatDateSafe(fechaHasta)}`;
+    return "Periodo completo según la información cargada";
+  }, [fechaDesde, fechaHasta]);
+
+  const kpiItems = useMemo<KpiInfo[]>(
+    () => [
+      {
+        id: "total_compras",
+        label: "Compras",
+        value: formatCurrencyCompact(kpis.total_compras),
+        fullValue: formatCurrency(kpis.total_compras),
+        tone: "blue",
+        description: "Valor total de compras y gastos del periodo filtrado.",
+      },
+      {
+        id: "total_facturas",
+        label: "# Compras",
+        value: safeNumber(kpis.total_facturas).toLocaleString("es-CO"),
+        fullValue: `${safeNumber(kpis.total_facturas).toLocaleString("es-CO")} documentos`,
+        tone: "blue",
+        description: "Cantidad total de documentos de compra encontrados en el periodo.",
+      },
+      {
+        id: "total_pagado",
+        label: "Pagado",
+        value: formatCurrencyCompact(kpis.total_pagado),
+        fullValue: formatCurrency(kpis.total_pagado),
+        tone: "green",
+        description: "Valor calculado como pagado dentro del total de compras y gastos.",
+      },
+      {
+        id: "facturas_pagadas",
+        label: "# Pagadas",
+        value: safeNumber(kpis.facturas_pagadas).toLocaleString("es-CO"),
+        fullValue: `${safeNumber(kpis.facturas_pagadas).toLocaleString("es-CO")} documentos`,
+        tone: "green",
+        description: "Cantidad de documentos que aparecen como pagados.",
+      },
+      {
+        id: "total_saldo",
+        label: "Pendiente",
+        value: formatCurrencyCompact(kpis.total_saldo),
+        fullValue: formatCurrency(kpis.total_saldo),
+        tone: "red",
+        description: "Saldo pendiente por pagar en el periodo filtrado.",
+      },
+      {
+        id: "facturas_pendientes",
+        label: "# Pend.",
+        value: safeNumber(kpis.facturas_pendientes).toLocaleString("es-CO"),
+        fullValue: `${safeNumber(kpis.facturas_pendientes).toLocaleString("es-CO")} documentos`,
+        tone: "red",
+        description: "Cantidad de documentos que todavía tienen saldo pendiente.",
+      },
+      {
+        id: "saldo_parcial",
+        label: "Saldo Parc.",
+        value: formatCurrencyCompact(kpis.saldo_parcial),
+        fullValue: formatCurrency(kpis.saldo_parcial),
+        tone: "orange",
+        description: "Saldo de documentos con pago parcial.",
+      },
+      {
+        id: "facturas_parciales",
+        label: "# Parc.",
+        value: safeNumber(kpis.facturas_parciales).toLocaleString("es-CO"),
+        fullValue: `${safeNumber(kpis.facturas_parciales).toLocaleString("es-CO")} documentos`,
+        tone: "orange",
+        description: "Cantidad de documentos con estado parcial.",
+      },
+      {
+        id: "valor_compras_x_factura",
+        label: "Val. Fact.",
+        value: formatCurrencyCompact(kpis.valor_compras_x_factura),
+        fullValue: formatCurrency(kpis.valor_compras_x_factura),
+        tone: "indigo",
+        description: "Valor total correspondiente a facturas de compra.",
+      },
+      {
+        id: "compras_x_factura",
+        label: "# Fact.",
+        value: safeNumber(kpis.compras_x_factura).toLocaleString("es-CO"),
+        fullValue: `${safeNumber(kpis.compras_x_factura).toLocaleString("es-CO")} facturas`,
+        tone: "indigo",
+        description: "Cantidad de facturas de compra registradas.",
+      },
+      {
+        id: "valor_compras_x_cta_cobro",
+        label: "Val. Ctas.",
+        value: formatCurrencyCompact(kpis.valor_compras_x_cta_cobro),
+        fullValue: formatCurrency(kpis.valor_compras_x_cta_cobro),
+        tone: "purple",
+        description: "Valor total correspondiente a cuentas de cobro o documentos soporte.",
+      },
+      {
+        id: "compras_x_cta_cobro",
+        label: "# Ctas.",
+        value: safeNumber(kpis.compras_x_cta_cobro).toLocaleString("es-CO"),
+        fullValue: `${safeNumber(kpis.compras_x_cta_cobro).toLocaleString("es-CO")} documentos`,
+        tone: "purple",
+        description: "Cantidad de cuentas de cobro o documentos soporte registrados.",
+      },
+    ],
+    [kpis]
+  );
 
   const modalResumen = useMemo(() => {
     const cantidad = modalRows.length;
@@ -623,74 +746,62 @@ export default function ReporteFinancieroComprasGastosPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-12 gap-1.5 rounded-2xl border border-slate-200 bg-white/70 p-1.5 shadow-sm">
-        <KpiCard
-          label="Compras"
-          value={formatCurrencyCompact(kpis.total_compras)}
-          title={formatCurrency(kpis.total_compras)}
-          tone="blue"
-        />
-        <KpiCard
-          label="# Compras"
-          value={safeNumber(kpis.total_facturas).toLocaleString("es-CO")}
-          tone="blue"
-        />
-        <KpiCard
-          label="Pagado"
-          value={formatCurrencyCompact(kpis.total_pagado)}
-          title={formatCurrency(kpis.total_pagado)}
-          tone="green"
-        />
-        <KpiCard
-          label="# Pagadas"
-          value={safeNumber(kpis.facturas_pagadas).toLocaleString("es-CO")}
-          tone="green"
-        />
-        <KpiCard
-          label="Pendiente"
-          value={formatCurrencyCompact(kpis.total_saldo)}
-          title={formatCurrency(kpis.total_saldo)}
-          tone="red"
-        />
-        <KpiCard
-          label="# Pend."
-          value={safeNumber(kpis.facturas_pendientes).toLocaleString("es-CO")}
-          tone="red"
-        />
-        <KpiCard
-          label="Saldo Parc."
-          value={formatCurrencyCompact(kpis.saldo_parcial)}
-          title={formatCurrency(kpis.saldo_parcial)}
-          tone="orange"
-        />
-        <KpiCard
-          label="# Parc."
-          value={safeNumber(kpis.facturas_parciales).toLocaleString("es-CO")}
-          tone="orange"
-        />
-        <KpiCard
-          label="Val. Fact."
-          value={formatCurrencyCompact(kpis.valor_compras_x_factura)}
-          title={formatCurrency(kpis.valor_compras_x_factura)}
-          tone="indigo"
-        />
-        <KpiCard
-          label="# Fact."
-          value={safeNumber(kpis.compras_x_factura).toLocaleString("es-CO")}
-          tone="indigo"
-        />
-        <KpiCard
-          label="Val. Ctas."
-          value={formatCurrencyCompact(kpis.valor_compras_x_cta_cobro)}
-          title={formatCurrency(kpis.valor_compras_x_cta_cobro)}
-          tone="purple"
-        />
-        <KpiCard
-          label="# Ctas."
-          value={safeNumber(kpis.compras_x_cta_cobro).toLocaleString("es-CO")}
-          tone="purple"
-        />
+      <div className="grid grid-cols-2 gap-1.5 rounded-2xl border border-slate-200 bg-white/70 p-1.5 shadow-sm sm:grid-cols-3 md:grid-cols-6 xl:grid-cols-12">
+        {kpiItems.map((item) => (
+          <KpiCard key={item.id} item={item} onSelect={setSelectedKpi} />
+        ))}
       </div>
+
+      {selectedKpi && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/20 px-3 pb-4 sm:items-center"
+          onClick={() => setSelectedKpi(null)}
+        >
+          <div
+            className="w-full max-w-[420px] rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">
+                  Detalle del KPI
+                </p>
+                <h2 className="mt-1 text-lg font-black text-slate-900">
+                  {selectedKpi.label}
+                </h2>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedKpi(null)}
+                className="rounded-full border border-slate-200 px-3 py-1 text-sm font-black text-slate-600 hover:bg-slate-100"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-center">
+              <div className="text-xs font-bold uppercase text-slate-500">Valor completo</div>
+              <div className="mt-1 break-words text-2xl font-black tracking-tight text-slate-900">
+                {selectedKpi.fullValue}
+              </div>
+            </div>
+
+            <div className="mt-3 space-y-2 text-sm text-slate-600">
+              <p>{selectedKpi.description}</p>
+              <p>
+                <span className="font-bold text-slate-800">Periodo:</span> {periodoTexto}
+              </p>
+              {centroCostos && (
+                <p>
+                  <span className="font-bold text-slate-800">Centro de costos:</span>{" "}
+                  {centros.find((cc) => String(cc.id) === String(centroCostos))?.nombre || centroCostos}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.08fr_0.92fr]">
         <Card className="shadow-sm">

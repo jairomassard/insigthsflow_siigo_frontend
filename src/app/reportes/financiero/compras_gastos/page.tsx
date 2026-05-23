@@ -158,26 +158,32 @@ function KpiCard({
   tone?: "blue" | "green" | "red" | "orange" | "indigo" | "purple";
   title?: string;
 }) {
-  const toneMap = {
-    blue: "text-blue-600 bg-blue-50 border-blue-100",
-    green: "text-green-600 bg-green-50 border-green-100",
-    red: "text-red-600 bg-red-50 border-red-100",
-    orange: "text-orange-600 bg-orange-50 border-orange-100",
-    indigo: "text-indigo-600 bg-indigo-50 border-indigo-100",
-    purple: "text-purple-600 bg-purple-50 border-purple-100",
+  const toneClasses: Record<string, { box: string; value: string }> = {
+    blue: { box: "bg-blue-50 border-blue-200", value: "text-blue-700" },
+    green: { box: "bg-green-50 border-green-200", value: "text-green-700" },
+    red: { box: "bg-red-50 border-red-200", value: "text-red-700" },
+    orange: { box: "bg-orange-50 border-orange-200", value: "text-orange-700" },
+    indigo: { box: "bg-indigo-50 border-indigo-200", value: "text-indigo-700" },
+    purple: { box: "bg-purple-50 border-purple-200", value: "text-purple-700" },
   };
 
+  const toneClass = toneClasses[tone] || toneClasses.blue;
+
   return (
-    <Card className={`h-[64px] min-w-0 border shadow-sm ${toneMap[tone]}`} title={title}>
-      <CardContent className="h-full p-2 flex flex-col items-center justify-center text-center leading-none">
-        <div className="w-full truncate text-[10px] font-extrabold uppercase tracking-tight text-slate-700">
+    <div
+      title={title || value}
+      className={`min-w-0 rounded-xl border px-1.5 py-1.5 shadow-sm ${toneClass.box}`}
+      style={{ minHeight: 62 }}
+    >
+      <div className="flex h-full min-h-[50px] flex-col items-center justify-center text-center">
+        <div className="w-full truncate text-[9px] font-extrabold uppercase leading-tight tracking-tight text-slate-800">
           {label}
         </div>
-        <div className={`mt-1 w-full truncate text-[15px] font-black tracking-tight ${toneMap[tone].split(" ")[0]}`}>
+        <div className={`mt-1 w-full truncate text-[15px] font-black leading-tight tracking-tight ${toneClass.value}`}>
           {value}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 

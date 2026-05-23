@@ -6,13 +6,6 @@ import useAuthGuard from "@/hooks/useAuthGuard";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-
-import {
   BarChart,
   Bar,
   XAxis,
@@ -1155,6 +1148,11 @@ function ClienteCard({
   const [ordenFacturas, setOrdenFacturas] = useState<"fecha" | "vencimiento" | "saldo">(
     "fecha"
   );
+  const [mostrarFacturas, setMostrarFacturas] = useState<boolean>(ampliado);
+
+  useEffect(() => {
+    if (ampliado) setMostrarFacturas(true);
+  }, [ampliado]);
 
   const facturasOrdenadas = [...(cliente.facturas || [])].sort(
     (a: FacturaDetalle, b: FacturaDetalle) => {
@@ -1268,18 +1266,25 @@ function ClienteCard({
           </BarChart>
         </ResponsiveContainer>
 
-        <Accordion
-          type="single"
-          collapsible
-          className="mt-3"
-          defaultValue={ampliado ? "facturas" : undefined}
-        >
-          <AccordionItem value="facturas">
-            <AccordionTrigger className="text-sm font-medium">
-              Ver detalle de facturas
-            </AccordionTrigger>
+        <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/70">
+          <button
+            type="button"
+            onClick={() => setMostrarFacturas((prev) => !prev)}
+            className="flex w-full items-center justify-between px-3 py-3 text-left text-sm font-semibold text-slate-800 transition hover:bg-white"
+          >
+            <span>
+              {mostrarFacturas ? "Ocultar facturas" : "Ver facturas"}
+              <span className="ml-2 text-xs font-normal text-slate-500">
+                ({cliente.facturas?.length || 0})
+              </span>
+            </span>
+            <span className="rounded-full bg-white px-2 py-1 text-xs text-slate-500 shadow-sm">
+              {mostrarFacturas ? "−" : "+"}
+            </span>
+          </button>
 
-            <AccordionContent>
+          {mostrarFacturas && (
+            <div className="border-t border-slate-200 bg-white p-3">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <span className="text-sm font-medium text-gray-700">Ordenar por:</span>
 
@@ -1307,7 +1312,7 @@ function ClienteCard({
                 </div>
               </div>
 
-              <div className={`${ampliado ? "max-h-none" : "max-h-[320px]"} overflow-auto`}>
+              <div className={`${ampliado ? "max-h-[360px]" : "max-h-[320px]"} overflow-auto rounded-lg border border-slate-200`}>
                 <table className="w-full min-w-[920px] border-collapse text-sm">
                   <thead className="sticky top-0 z-10">
                     <tr className="bg-gray-100">
@@ -1374,12 +1379,12 @@ function ClienteCard({
                                 href={f.public_url}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="text-blue-600 hover:underline"
+                                className="font-semibold text-blue-600 hover:underline"
                               >
                                 Ver
                               </a>
                             ) : (
-                              "-"
+                              <span className="text-slate-400">-</span>
                             )}
                           </td>
                         </tr>
@@ -1388,9 +1393,9 @@ function ClienteCard({
                   </tbody>
                 </table>
               </div>
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

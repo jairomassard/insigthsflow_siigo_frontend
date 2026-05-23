@@ -143,44 +143,6 @@ function abreviar(valor: number): string {
   return `${Math.round(n)}`;
 }
 
-function formatCurrencyCompact(valor: number): string {
-  return `$ ${abreviar(valor)}`;
-}
-
-function KpiCard({
-  label,
-  value,
-  tone = "blue",
-  title,
-}: {
-  label: string;
-  value: string;
-  tone?: "blue" | "green" | "red" | "orange" | "indigo" | "purple";
-  title?: string;
-}) {
-  const toneMap = {
-    blue: "text-blue-600 bg-blue-50 border-blue-100",
-    green: "text-green-600 bg-green-50 border-green-100",
-    red: "text-red-600 bg-red-50 border-red-100",
-    orange: "text-orange-600 bg-orange-50 border-orange-100",
-    indigo: "text-indigo-600 bg-indigo-50 border-indigo-100",
-    purple: "text-purple-600 bg-purple-50 border-purple-100",
-  };
-
-  return (
-    <Card className={`h-[64px] min-w-0 border shadow-sm ${toneMap[tone]}`} title={title}>
-      <CardContent className="h-full p-2 flex flex-col items-center justify-center text-center leading-none">
-        <div className="w-full truncate text-[10px] font-extrabold uppercase tracking-tight text-slate-700">
-          {label}
-        </div>
-        <div className={`mt-1 w-full truncate text-[15px] font-black tracking-tight ${toneMap[tone].split(" ")[0]}`}>
-          {value}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 function toYYYYMM(dateLike: string | Date): string {
   try {
     const d = new Date(dateLike);
@@ -552,52 +514,36 @@ export default function ReporteFinancieroComprasGastosPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1366px] space-y-3 px-2 py-2 text-[13px] lg:px-3">
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
-        <div className="min-w-0">
-          <h1 className="truncate text-xl font-black tracking-tight text-slate-900 lg:text-2xl">
-            📊 Reporte Egresos por Compras & Gastos
-          </h1>
-          <p className="mt-0.5 text-xs text-slate-500">
-            Vista compacta optimizada para exhibición en tablet 13.4" · 1366×768
-          </p>
-        </div>
+    <div className="space-y-4">
+      <h1 className="text-2xl font-bold">📊 Reporte Egresos por Compras & Gastos</h1>
 
-        <div className="grid w-full gap-2 lg:w-[650px] lg:grid-cols-3">
+      <div className="grid gap-2 md:grid-cols-3">
         <div className="flex flex-col">
-          <label className="mb-1 text-[11px] font-bold uppercase tracking-tight text-slate-500">Fecha desde</label>
+          <label className="text-sm font-medium">Fecha desde</label>
           <Input
             type="date"
-            className="h-9 text-xs"
             value={fechaDesde}
             onChange={(e) => setFechaDesde(e.target.value)}
           />
         </div>
 
         <div className="flex flex-col">
-          <label className="mb-1 text-[11px] font-bold uppercase tracking-tight text-slate-500">Fecha hasta</label>
+          <label className="text-sm font-medium">Fecha hasta</label>
           <Input
             type="date"
-            className="h-9 text-xs"
             value={fechaHasta}
             onChange={(e) => setFechaHasta(e.target.value)}
           />
         </div>
 
         <div className="flex flex-col">
-          <label className="mb-1 text-[11px] font-bold uppercase tracking-tight text-slate-500">
-            Centro de Costos
-          </label>
-          <Select
-            value={centroCostos}
-            onChange={(e) => setCentroCostos(e.target.value)}
-          >
+          <label className="text-sm font-medium">Centro de Costos</label>
+          <Select value={centroCostos} onChange={(e) => setCentroCostos(e.target.value)}>
             <option value="">Todos</option>
             {centros.map((cc) => (
               <SelectItem key={cc.id} value={cc.id} label={cc.nombre} />
             ))}
           </Select>
-        </div>
         </div>
       </div>
 
@@ -617,92 +563,132 @@ export default function ReporteFinancieroComprasGastosPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-12 gap-1.5 rounded-2xl border border-slate-200 bg-white/70 p-1.5 shadow-sm">
-        <KpiCard
-          label="Compras"
-          value={formatCurrencyCompact(kpis.total_compras)}
-          title={formatCurrency(kpis.total_compras)}
-          tone="blue"
-        />
-        <KpiCard
-          label="# Compras"
-          value={safeNumber(kpis.total_facturas).toLocaleString("es-CO")}
-          tone="blue"
-        />
-        <KpiCard
-          label="Pagado"
-          value={formatCurrencyCompact(kpis.total_pagado)}
-          title={formatCurrency(kpis.total_pagado)}
-          tone="green"
-        />
-        <KpiCard
-          label="# Pagadas"
-          value={safeNumber(kpis.facturas_pagadas).toLocaleString("es-CO")}
-          tone="green"
-        />
-        <KpiCard
-          label="Pendiente"
-          value={formatCurrencyCompact(kpis.total_saldo)}
-          title={formatCurrency(kpis.total_saldo)}
-          tone="red"
-        />
-        <KpiCard
-          label="# Pend."
-          value={safeNumber(kpis.facturas_pendientes).toLocaleString("es-CO")}
-          tone="red"
-        />
-        <KpiCard
-          label="Saldo Parc."
-          value={formatCurrencyCompact(kpis.saldo_parcial)}
-          title={formatCurrency(kpis.saldo_parcial)}
-          tone="orange"
-        />
-        <KpiCard
-          label="# Parc."
-          value={safeNumber(kpis.facturas_parciales).toLocaleString("es-CO")}
-          tone="orange"
-        />
-        <KpiCard
-          label="Val. Fact."
-          value={formatCurrencyCompact(kpis.valor_compras_x_factura)}
-          title={formatCurrency(kpis.valor_compras_x_factura)}
-          tone="indigo"
-        />
-        <KpiCard
-          label="# Fact."
-          value={safeNumber(kpis.compras_x_factura).toLocaleString("es-CO")}
-          tone="indigo"
-        />
-        <KpiCard
-          label="Val. Ctas."
-          value={formatCurrencyCompact(kpis.valor_compras_x_cta_cobro)}
-          title={formatCurrency(kpis.valor_compras_x_cta_cobro)}
-          tone="purple"
-        />
-        <KpiCard
-          label="# Ctas."
-          value={safeNumber(kpis.compras_x_cta_cobro).toLocaleString("es-CO")}
-          tone="purple"
-        />
+      <div className="grid grid-cols-2 md:grid-cols-6 lg:grid-cols-12 gap-2">
+        <Card className="min-h-[74px]">
+          <CardContent className="p-3 flex flex-col justify-center">
+            <div className="text-m font-bold text-center">Total Compras</div>
+            <div className="mt-1 text-lg font-extrabold text-blue-600 text-center">
+              {formatCurrency(kpis.total_compras)}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="min-h-[74px]">
+          <CardContent className="p-3 flex flex-col justify-center">
+            <div className="text-m font-bold text-center"># Compras</div>
+            <div className="mt-1 text-lg font-extrabold text-blue-600 text-center">
+              {safeNumber(kpis.total_facturas).toLocaleString("es-CO")}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="min-h-[74px]">
+          <CardContent className="p-3 flex flex-col justify-center">
+            <div className="text-m font-bold text-center">Total Pagado</div>
+            <div className="mt-1 text-lg font-extrabold text-green-600 text-center">
+              {formatCurrency(kpis.total_pagado)}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="min-h-[74px]">
+          <CardContent className="p-3 flex flex-col justify-center">
+            <div className="text-m font-bold text-center">Pagadas</div>
+            <div className="mt-1 text-lg font-extrabold text-green-600 text-center">
+              {safeNumber(kpis.facturas_pagadas).toLocaleString("es-CO")}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="min-h-[74px]">
+          <CardContent className="p-3 flex flex-col justify-center">
+            <div className="text-m font-bold text-center">Total Pendiente</div>
+            <div className="mt-1 text-lg font-extrabold text-red-600 text-center">
+              {formatCurrency(kpis.total_saldo)}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="min-h-[74px]">
+          <CardContent className="p-3 flex flex-col justify-center">
+            <div className="text-m font-bold text-center">Pendientes</div>
+            <div className="mt-1 text-lg font-extrabold text-red-600 text-center">
+              {safeNumber(kpis.facturas_pendientes).toLocaleString("es-CO")}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="min-h-[74px]">
+          <CardContent className="p-3 flex flex-col justify-center">
+            <div className="text-m font-bold text-center">Saldo Parcial</div>
+            <div className="mt-1 text-lg font-extrabold text-orange-600 text-center">
+              {formatCurrency(kpis.saldo_parcial)}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="min-h-[74px]">
+          <CardContent className="p-3 flex flex-col justify-center">
+            <div className="text-m font-bold text-center">Parciales</div>
+            <div className="mt-1 text-lg font-extrabold text-orange-600 text-center">
+              {safeNumber(kpis.facturas_parciales).toLocaleString("es-CO")}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="min-h-[74px]">
+          <CardContent className="p-3 flex flex-col justify-center">
+            <div className="text-m font-bold text-center">Valor x Facturas</div>
+            <div className="mt-1 text-lg font-extrabold text-indigo-600 text-center">
+              {formatCurrency(kpis.valor_compras_x_factura)}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="min-h-[74px]">
+          <CardContent className="p-3 flex flex-col justify-center">
+            <div className="text-m font-bold text-center"># Facturas</div>
+            <div className="mt-1 text-lg font-extrabold text-indigo-600 text-center">
+              {safeNumber(kpis.compras_x_factura).toLocaleString("es-CO")}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="min-h-[74px]">
+          <CardContent className="p-3 flex flex-col justify-center">
+            <div className="text-m font-bold text-center">Valor Ctas. Cobro</div>
+            <div className="mt-1 text-lg font-extrabold text-purple-600 text-center">
+              {formatCurrency(kpis.valor_compras_x_cta_cobro)}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="min-h-[74px]">
+          <CardContent className="p-3 flex flex-col justify-center">
+            <div className="text-m font-bold text-center"># Ctas. Cobro</div>
+            <div className="mt-1 text-lg font-extrabold text-purple-600 text-center">
+              {safeNumber(kpis.compras_x_cta_cobro).toLocaleString("es-CO")}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.08fr_0.92fr]">
-        <Card className="shadow-sm">
-        <CardHeader className="px-3 py-2">
-          <CardTitle className="text-base font-black">Evolución Mensual</CardTitle>
+      <Card className="shadow-sm">
+        <CardHeader>
+          <CardTitle>Evolución Mensual</CardTitle>
         </CardHeader>
 
-        <CardContent className="px-3 pb-3 pt-0">
+        <CardContent>
           {evolucionSegura.length === 0 ? (
             <EmptyState
               title="Sin evolución mensual para mostrar"
               description="Cuando existan compras, facturas de compra o documentos soporte, aquí aparecerá la evolución mensual."
             />
           ) : (
-            <ResponsiveContainer width="100%" height={290}>
+            <ResponsiveContainer width="100%" height={300}>
               <BarChart
                 data={evolucionSegura}
-                margin={{ top: 14, bottom: 24, left: 8, right: 8 }}
+                margin={{ top: 10, bottom: 40, left: 40, right: 20 }}
               >
                 <CartesianGrid strokeDasharray="3 3" />
 
@@ -711,7 +697,7 @@ export default function ReporteFinancieroComprasGastosPage() {
                   tickFormatter={(mes) => formatMesGrafica(String(mes))}
                   angle={-30}
                   textAnchor="end"
-                  height={42}
+                  height={60}
                 />
 
                 <YAxis tickFormatter={(v) => formatCurrency(Number(v))} fontSize={11} />
@@ -724,7 +710,7 @@ export default function ReporteFinancieroComprasGastosPage() {
                   labelFormatter={(label) => formatMesGrafica(String(label))}
                 />
 
-                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Legend />
 
                 <Bar
                   dataKey="total_compras"
@@ -783,20 +769,20 @@ export default function ReporteFinancieroComprasGastosPage() {
             </ResponsiveContainer>
           )}
 
-          <div className="mt-1 text-right text-[11px] tracking-tight text-slate-500">
+          <div className="text-s text-black-600 tracking-tight text-right">
             * Haga click sobre una barra de interés para mayor información
           </div>
         </CardContent>
       </Card>
 
       <Card className="shadow-sm">
-        <CardHeader className="flex flex-row items-center justify-between px-3 py-2">
-          <CardTitle className="text-base font-black">Top 15 Proveedores</CardTitle>
+        <CardHeader className="flex items-center justify-between">
+          <CardTitle>Top 15 Proveedores</CardTitle>
 
           <div className="flex items-center gap-2">
             <button
               onClick={() => setTopView("valor")}
-              className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+              className={`px-3 py-1 rounded-full text-sm ${
                 topView === "valor"
                   ? "bg-blue-600 text-white shadow"
                   : "bg-gray-100 hover:bg-gray-200"
@@ -807,7 +793,7 @@ export default function ReporteFinancieroComprasGastosPage() {
 
             <button
               onClick={() => setTopView("facturas")}
-              className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+              className={`px-3 py-1 rounded-full text-sm ${
                 topView === "facturas"
                   ? "bg-blue-600 text-white shadow"
                   : "bg-gray-100 hover:bg-gray-200"
@@ -818,16 +804,16 @@ export default function ReporteFinancieroComprasGastosPage() {
           </div>
         </CardHeader>
 
-        <CardContent className="px-3 pb-3 pt-0">
+        <CardContent>
           {topView === "valor" ? (
             topValorData.length === 0 ? (
               <EmptyState
                 title="Sin proveedores para mostrar"
                 description="Cuando existan compras registradas, aquí aparecerá el ranking de proveedores por valor."
-                height="h-[300px]"
+                height="h-[420px]"
               />
             ) : (
-              <div className="h-[300px] w-full">
+              <div className="w-full h-[420px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     layout="vertical"
@@ -839,8 +825,8 @@ export default function ReporteFinancieroComprasGastosPage() {
                     <YAxis
                       type="category"
                       dataKey="proveedor"
-                      width={165}
-                      tick={{ fontSize: 10 }}
+                      width={220}
+                      tick={{ fontSize: 12 }}
                     />
                     <Tooltip formatter={(v: any) => formatCurrency(Number(v))} />
                     <Bar
@@ -868,10 +854,10 @@ export default function ReporteFinancieroComprasGastosPage() {
             <EmptyState
               title="Sin proveedores para mostrar"
               description="Cuando existan documentos de compra, aquí aparecerá el ranking de proveedores por número de facturas."
-              height="h-[300px]"
+              height="h-[420px]"
             />
           ) : (
-            <div className="h-[300px] w-full">
+            <div className="w-full h-[420px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   layout="vertical"
@@ -910,23 +896,23 @@ export default function ReporteFinancieroComprasGastosPage() {
             </div>
           )}
 
-          <div className="mt-1 text-right text-[11px] tracking-tight text-slate-500">
+          <div className="text-s text-black-600 tracking-tight text-right">
             * Haga click sobre una barra de interés para mayor información
           </div>
         </CardContent>
       </Card>
-      </div>
 
       {modalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-2"
+          className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center p-4"
+          onClick={() => setModalOpen(false)}
         >
           <div
-            className="mt-2 w-full max-w-6xl overflow-hidden rounded-2xl bg-white shadow-xl animate-[fadeIn_0.2s_ease]"
+            className="w-full max-w-6xl bg-white rounded-2xl shadow-xl overflow-hidden animate-[fadeIn_0.2s_ease]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b px-4 py-3">
-              <h3 className="text-base font-black">{modalTitle}</h3>
+            <div className="px-4 sm:px-6 py-4 border-b flex items-center justify-between">
+              <h3 className="text-lg font-semibold">{modalTitle}</h3>
 
               <button
                 onClick={() => setModalOpen(false)}
@@ -936,7 +922,7 @@ export default function ReporteFinancieroComprasGastosPage() {
               </button>
             </div>
 
-            <div className="max-h-[72vh] overflow-auto p-3">
+            <div className="p-4 max-h-[70vh] overflow-auto">
               {modalMes && (
                 <div className="mb-4 space-y-3">
                   <div>
@@ -989,31 +975,31 @@ export default function ReporteFinancieroComprasGastosPage() {
                 </div>
               )}
 
-              <div className="mb-3 grid grid-cols-4 gap-2">
-                <div className="rounded-xl border bg-gray-50 p-2">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+                <div className="rounded-xl border bg-gray-50 p-3">
                   <div className="text-xs text-gray-500">Cantidad</div>
-                  <div className="text-base font-bold">
+                  <div className="text-lg font-bold">
                     {modalResumen.cantidad.toLocaleString("es-CO")}
                   </div>
                 </div>
 
-                <div className="rounded-xl border bg-gray-50 p-2">
+                <div className="rounded-xl border bg-gray-50 p-3">
                   <div className="text-xs text-gray-500">Total</div>
-                  <div className="text-base font-bold text-blue-600">
+                  <div className="text-lg font-bold text-blue-600">
                     {formatCurrency(modalResumen.total)}
                   </div>
                 </div>
 
-                <div className="rounded-xl border bg-gray-50 p-2">
+                <div className="rounded-xl border bg-gray-50 p-3">
                   <div className="text-xs text-gray-500">Pagado</div>
-                  <div className="text-base font-bold text-green-600">
+                  <div className="text-lg font-bold text-green-600">
                     {formatCurrency(modalResumen.pagado)}
                   </div>
                 </div>
 
-                <div className="rounded-xl border bg-gray-50 p-2">
+                <div className="rounded-xl border bg-gray-50 p-3">
                   <div className="text-xs text-gray-500">Saldo</div>
-                  <div className="text-base font-bold text-red-600">
+                  <div className="text-lg font-bold text-red-600">
                     {formatCurrency(modalResumen.saldo)}
                   </div>
                 </div>
@@ -1037,7 +1023,7 @@ export default function ReporteFinancieroComprasGastosPage() {
               ) : modalRows.length === 0 ? (
                 <p className="text-sm text-gray-500">No hay facturas para mostrar.</p>
               ) : (
-                <table className="min-w-full border-collapse text-xs">
+                <table className="min-w-full text-sm border-collapse">
                   <thead className="sticky top-0 bg-gray-50">
                     <tr className="border-b">
                       {[

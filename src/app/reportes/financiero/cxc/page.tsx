@@ -241,7 +241,7 @@ export default function ReporteCxCPage() {
 
             <p className="mt-1 max-w-3xl text-xs leading-relaxed text-slate-600 md:text-sm">
               Vista ejecutiva de cartera por vencimiento, cliente y factura. Revisa la deuda
-              resumida en aging y expande cada cliente para consultar el detalle de sus facturas.
+              resumida en edades y expande cada cliente para consultar el detalle de sus facturas.
             </p>
           </div>
 
@@ -981,19 +981,19 @@ export default function ReporteCxCPage() {
               <div
                 className="relative flex flex-col rounded-2xl border border-white/40 bg-white shadow-2xl"
                 style={{
-                  width: "min(95vw, 1120px)",
-                  height: "min(88vh, 680px)",
+                  width: "min(96vw, 1180px)",
+                  height: "min(92vh, 720px)",
                   minWidth: "430px",
-                  minHeight: "430px",
-                  maxWidth: "96vw",
-                  maxHeight: "92vh",
+                  minHeight: "520px",
+                  maxWidth: "98vw",
+                  maxHeight: "94vh",
                   resize: "both",
                   overflow: "hidden",
                 }}
               >
-                <div className="sticky top-0 z-20 flex items-center justify-between rounded-t-2xl border-b bg-white px-4 py-3">
+                <div className="sticky top-0 z-20 flex items-center justify-between rounded-t-2xl border-b bg-white px-4 py-2">
                   <div>
-                    <h2 className="text-lg font-semibold">
+                    <h2 className="text-base font-semibold">
                       Detalle ampliado del cliente
                     </h2>
                     <p className="text-xs text-gray-500">
@@ -1003,7 +1003,7 @@ export default function ReporteCxCPage() {
 
                   <button
                     onClick={() => setSelectedCliente(null)}
-                    className="flex h-9 w-9 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600"
                   >
                     ✕
                   </button>
@@ -1173,16 +1173,265 @@ function ClienteCard({
     }
   );
 
-  return (
-    <Card
-      className={`h-full overflow-hidden shadow-md ${
-        ampliado ? "flex min-h-0 flex-col border-0 shadow-none" : ""
+  const chartData = [
+    { bucket: "Por vencer", monto: cliente.aging.por_vencer },
+    { bucket: "1-30", monto: cliente.aging["1_30"] },
+    { bucket: "31-60", monto: cliente.aging["31_60"] },
+    { bucket: "61-90", monto: cliente.aging["61_90"] },
+    { bucket: "91+", monto: cliente.aging["91_mas"] },
+  ];
+
+  const chart = (
+    <ResponsiveContainer width="100%" height={ampliado ? 140 : 180}>
+      <BarChart
+        data={chartData}
+        margin={{ top: ampliado ? 18 : 22, left: 10, right: 8, bottom: 0 }}
+      >
+        <XAxis dataKey="bucket" tick={{ fontSize: 11 }} />
+        <YAxis hide />
+        <Tooltip formatter={(v: number) => fmt(Number(v))} />
+
+        <Bar dataKey="monto" radius={[6, 6, 0, 0]}>
+          {chartData.map((_, i) => (
+            <Cell
+              key={`cell-${i}`}
+              fill={["#16a34a", "#fb7185", "#ef4444", "#dc2626", "#991b1b"][i]}
+            />
+          ))}
+
+          <LabelList
+            dataKey="monto"
+            position="top"
+            content={(props) => {
+              const { x, y, value } = props;
+              if (value == null) return null;
+
+              const v = Number(value);
+              let displayValue = "";
+
+              if (v >= 1_000_000_000) {
+                displayValue = `${(v / 1_000_000_000).toFixed(1)}B`;
+              } else if (v >= 1_000_000) {
+                displayValue = `${(v / 1_000_000).toFixed(0)}M`;
+              } else if (v >= 1_000) {
+                displayValue = `${(v / 1_000).toFixed(0)}K`;
+              } else {
+                displayValue = v.toString();
+              }
+
+              return (
+                <text
+                  x={x}
+                  y={y}
+                  dy={-4}
+                  fill="#334155"
+                  fontSize={11}
+                  textAnchor="middle"
+                >
+                  {displayValue}
+                </text>
+              );
+            }}
+          />
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+
+  const facturasPanel = (
+    <div
+      className={`rounded-xl border border-slate-200 bg-slate-50/70 ${
+        ampliado ? "flex h-full min-h-0 flex-col" : "mt-3"
       }`}
     >
-      <CardHeader className={ampliado ? "shrink-0 p-3" : "p-4"}>
+      <button
+        type="button"
+        onClick={() => setMostrarFacturas((prev) => !prev)}
+        className={`flex w-full items-center justify-between text-left text-sm font-semibold text-slate-800 transition hover:bg-white ${
+          ampliado ? "shrink-0 px-3 py-2" : "px-3 py-3"
+        }`}
+      >
+        <span>
+          {mostrarFacturas ? "Ocultar facturas" : "Ver facturas"}
+          <span className="ml-2 text-xs font-normal text-slate-500">
+            ({cliente.facturas?.length || 0})
+          </span>
+        </span>
+        <span className="rounded-full bg-white px-2 py-1 text-xs text-slate-500 shadow-sm">
+          {mostrarFacturas ? "−" : "+"}
+        </span>
+      </button>
+
+      {mostrarFacturas && (
+        <div
+          className={`border-t border-slate-200 bg-white ${
+            ampliado ? "flex min-h-0 flex-1 flex-col p-2" : "p-3"
+          }`}
+        >
+          <div className="mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
+            <span className="text-sm font-medium text-gray-700">Ordenar por:</span>
+
+            <div className="flex flex-wrap gap-2">
+              <OrderButton
+                active={ordenFacturas === "fecha"}
+                onClick={() => setOrdenFacturas("fecha")}
+              >
+                Fecha
+              </OrderButton>
+
+              <OrderButton
+                active={ordenFacturas === "vencimiento"}
+                onClick={() => setOrdenFacturas("vencimiento")}
+              >
+                Vencimiento
+              </OrderButton>
+
+              <OrderButton
+                active={ordenFacturas === "saldo"}
+                onClick={() => setOrdenFacturas("saldo")}
+              >
+                Saldo
+              </OrderButton>
+            </div>
+          </div>
+
+          <div
+            className={`rounded-lg border border-slate-200 ${
+              ampliado ? "min-h-0 flex-1 overflow-auto" : "max-h-[320px] overflow-auto"
+            }`}
+          >
+            <table className="w-full min-w-[920px] border-collapse text-sm">
+              <thead className="sticky top-0 z-10 bg-gray-100 shadow-sm">
+                <tr>
+                  <th className="p-2 text-left">Factura</th>
+                  <th className="p-2 text-left">Fecha</th>
+                  <th className="p-2 text-left">Vencimiento</th>
+                  <th className="p-2 text-left">Rango</th>
+                  <th className="p-2 text-right">Días transc.</th>
+                  <th className="p-2 text-right">Días vencidos</th>
+                  <th className="p-2 text-right">Saldo</th>
+                  <th className="p-2">Link</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {facturasOrdenadas.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="p-4 text-center text-slate-500">
+                      No hay facturas abiertas para este cliente.
+                    </td>
+                  </tr>
+                )}
+
+                {facturasOrdenadas.map((f: FacturaDetalle, i: number) => {
+                  const diasVencidos = Number(f.dias_vencidos || 0);
+                  const rango = f.aging_bucket || calcularRango(diasVencidos);
+                  const diasTranscurridos = f.dias_transcurridos ?? 0;
+
+                  return (
+                    <tr
+                      key={`${f.idfactura}-${i}`}
+                      className={`border-b hover:bg-slate-50 ${
+                        rango !== "Por vencer" ? "text-red-600" : ""
+                      }`}
+                    >
+                      <td className="p-2 whitespace-nowrap">{f.idfactura}</td>
+                      <td className="p-2 whitespace-nowrap">{f.fecha}</td>
+                      <td className="p-2 whitespace-nowrap">{f.vencimiento}</td>
+                      <td className="p-2 whitespace-nowrap">
+                        <AgingBadge rango={rango} />
+                      </td>
+                      <td className="p-2 text-right whitespace-nowrap">
+                        <span
+                          className={`inline-flex min-w-[58px] justify-center rounded-full px-2 py-1 text-xs font-semibold ${
+                            Number(diasTranscurridos) <= 30
+                              ? "bg-green-50 text-green-700"
+                              : Number(diasTranscurridos) <= 60
+                              ? "bg-orange-50 text-orange-700"
+                              : "bg-red-50 text-red-700"
+                          }`}
+                        >
+                          {fmtDias(diasTranscurridos)}
+                        </span>
+                      </td>
+                      <td className="p-2 text-right whitespace-nowrap">
+                        {diasVencidos <= 0 ? "No vencida" : fmtDias(diasVencidos)}
+                      </td>
+                      <td className="p-2 text-right whitespace-nowrap font-semibold">
+                        {f.saldo_str || fmt(f.saldo)}
+                      </td>
+                      <td className="p-2 text-center">
+                        {f.public_url ? (
+                          <a
+                            href={f.public_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-semibold text-blue-600 hover:underline"
+                          >
+                            Ver
+                          </a>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  if (ampliado) {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="shrink-0 px-1 pb-2">
+          <CardTitle className="text-base">{cliente.cliente_nombre}</CardTitle>
+          <div className="mt-1 text-xs text-gray-600">
+            Total: <b>{cliente.total_str || fmt(cliente.total)}</b>
+          </div>
+          <div className="mt-1 text-xs text-gray-500">
+            {cliente.facturas?.length || 0} factura(s) abierta(s)
+          </div>
+        </div>
+
+        <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[360px_minmax(0,1fr)]">
+          <div className="min-h-0 rounded-xl border border-slate-200 bg-white p-2 xl:overflow-auto">
+            {chart}
+            <div className="mt-2 grid grid-cols-2 gap-2 text-xs xl:grid-cols-1">
+              <div className="rounded-lg bg-green-50 p-2 text-green-700">
+                <div className="font-semibold">Por vencer</div>
+                <div>{fmt(cliente.aging.por_vencer)}</div>
+              </div>
+              <div className="rounded-lg bg-rose-50 p-2 text-rose-700">
+                <div className="font-semibold">Vencido</div>
+                <div>
+                  {fmt(
+                    Number(cliente.aging["1_30"] || 0) +
+                      Number(cliente.aging["31_60"] || 0) +
+                      Number(cliente.aging["61_90"] || 0) +
+                      Number(cliente.aging["91_mas"] || 0)
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="min-h-0">{facturasPanel}</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Card className="h-full overflow-hidden shadow-md">
+      <CardHeader className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <CardTitle className={ampliado ? "text-base" : "text-base md:text-lg"}>
+            <CardTitle className="text-base md:text-lg">
               {cliente.cliente_nombre}
             </CardTitle>
             <div className="mt-1 text-xs text-gray-600">
@@ -1204,218 +1453,9 @@ function ClienteCard({
         </div>
       </CardHeader>
 
-      <CardContent className={ampliado ? "flex min-h-0 flex-1 flex-col p-3 pt-0" : "p-4 pt-0"}>
-        <div className={ampliado ? "shrink-0" : ""}>
-        <ResponsiveContainer width="100%" height={ampliado ? 155 : 180}>
-          <BarChart
-            data={[
-              { bucket: "Por vencer", monto: cliente.aging.por_vencer },
-              { bucket: "1-30", monto: cliente.aging["1_30"] },
-              { bucket: "31-60", monto: cliente.aging["31_60"] },
-              { bucket: "61-90", monto: cliente.aging["61_90"] },
-              { bucket: "91+", monto: cliente.aging["91_mas"] },
-            ]}
-            margin={{ top: 22, left: 10, right: 8, bottom: 0 }}
-          >
-            <XAxis dataKey="bucket" tick={{ fontSize: 11 }} />
-            <YAxis hide />
-            <Tooltip formatter={(v: number) => fmt(Number(v))} />
-
-            <Bar dataKey="monto" radius={[6, 6, 0, 0]}>
-              {[
-                cliente.aging.por_vencer,
-                cliente.aging["1_30"],
-                cliente.aging["31_60"],
-                cliente.aging["61_90"],
-                cliente.aging["91_mas"],
-              ].map((_, i) => (
-                <Cell
-                  key={`cell-${i}`}
-                  fill={["#16a34a", "#fb7185", "#ef4444", "#dc2626", "#991b1b"][i]}
-                />
-              ))}
-
-              <LabelList
-                dataKey="monto"
-                position="top"
-                content={(props) => {
-                  const { x, y, value } = props;
-                  if (value == null) return null;
-
-                  const v = Number(value);
-                  let displayValue = "";
-
-                  if (v >= 1_000_000_000) {
-                    displayValue = `${(v / 1_000_000_000).toFixed(1)}B`;
-                  } else if (v >= 1_000_000) {
-                    displayValue = `${(v / 1_000_000).toFixed(0)}M`;
-                  } else if (v >= 1_000) {
-                    displayValue = `${(v / 1_000).toFixed(0)}K`;
-                  } else {
-                    displayValue = v.toString();
-                  }
-
-                  return (
-                    <text
-                      x={x}
-                      y={y}
-                      dy={-4}
-                      fill="#334155"
-                      fontSize={11}
-                      textAnchor="middle"
-                    >
-                      {displayValue}
-                    </text>
-                  );
-                }}
-              />
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-        </div>
-
-        <div
-          className={`mt-3 rounded-xl border border-slate-200 bg-slate-50/70 ${
-            ampliado ? "flex min-h-0 flex-1 flex-col" : ""
-          }`}
-        >
-          <button
-            type="button"
-            onClick={() => setMostrarFacturas((prev) => !prev)}
-            className="flex w-full items-center justify-between px-3 py-3 text-left text-sm font-semibold text-slate-800 transition hover:bg-white"
-          >
-            <span>
-              {mostrarFacturas ? "Ocultar facturas" : "Ver facturas"}
-              <span className="ml-2 text-xs font-normal text-slate-500">
-                ({cliente.facturas?.length || 0})
-              </span>
-            </span>
-            <span className="rounded-full bg-white px-2 py-1 text-xs text-slate-500 shadow-sm">
-              {mostrarFacturas ? "−" : "+"}
-            </span>
-          </button>
-
-          {mostrarFacturas && (
-            <div
-              className={`border-t border-slate-200 bg-white p-3 ${
-                ampliado ? "flex min-h-0 flex-1 flex-col" : ""
-              }`}
-            >
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-sm font-medium text-gray-700">Ordenar por:</span>
-
-                <div className="flex flex-wrap gap-2">
-                  <OrderButton
-                    active={ordenFacturas === "fecha"}
-                    onClick={() => setOrdenFacturas("fecha")}
-                  >
-                    Fecha
-                  </OrderButton>
-
-                  <OrderButton
-                    active={ordenFacturas === "vencimiento"}
-                    onClick={() => setOrdenFacturas("vencimiento")}
-                  >
-                    Vencimiento
-                  </OrderButton>
-
-                  <OrderButton
-                    active={ordenFacturas === "saldo"}
-                    onClick={() => setOrdenFacturas("saldo")}
-                  >
-                    Saldo
-                  </OrderButton>
-                </div>
-              </div>
-
-              <div
-                className={`${
-                  ampliado ? "min-h-[150px] flex-1" : "max-h-[320px]"
-                } overflow-auto rounded-lg border border-slate-200`}
-              >
-                <table className="w-full min-w-[920px] border-collapse text-sm">
-                  <thead className="sticky top-0 z-10">
-                    <tr className="bg-gray-100">
-                      <th className="p-2 text-left">Factura</th>
-                      <th className="p-2 text-left">Fecha</th>
-                      <th className="p-2 text-left">Vencimiento</th>
-                      <th className="p-2 text-left">Rango</th>
-                      <th className="p-2 text-right">Días transc.</th>
-                      <th className="p-2 text-right">Días vencidos</th>
-                      <th className="p-2 text-right">Saldo</th>
-                      <th className="p-2">Link</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {facturasOrdenadas.length === 0 && (
-                      <tr>
-                        <td colSpan={8} className="p-4 text-center text-slate-500">
-                          No hay facturas abiertas para este cliente.
-                        </td>
-                      </tr>
-                    )}
-
-                    {facturasOrdenadas.map((f: FacturaDetalle, i: number) => {
-                      const diasVencidos = Number(f.dias_vencidos || 0);
-                      const rango = f.aging_bucket || calcularRango(diasVencidos);
-                      const diasTranscurridos = f.dias_transcurridos ?? 0;
-
-                      return (
-                        <tr
-                          key={`${f.idfactura}-${i}`}
-                          className={`border-b hover:bg-slate-50 ${
-                            rango !== "Por vencer" ? "text-red-600" : ""
-                          }`}
-                        >
-                          <td className="p-2 whitespace-nowrap">{f.idfactura}</td>
-                          <td className="p-2 whitespace-nowrap">{f.fecha}</td>
-                          <td className="p-2 whitespace-nowrap">{f.vencimiento}</td>
-                          <td className="p-2 whitespace-nowrap">
-                            <AgingBadge rango={rango} />
-                          </td>
-                          <td className="p-2 text-right whitespace-nowrap">
-                            <span
-                              className={`inline-flex min-w-[58px] justify-center rounded-full px-2 py-1 text-xs font-semibold ${
-                                Number(diasTranscurridos) <= 30
-                                  ? "bg-green-50 text-green-700"
-                                  : Number(diasTranscurridos) <= 60
-                                  ? "bg-orange-50 text-orange-700"
-                                  : "bg-red-50 text-red-700"
-                              }`}
-                            >
-                              {fmtDias(diasTranscurridos)}
-                            </span>
-                          </td>
-                          <td className="p-2 text-right whitespace-nowrap">
-                            {diasVencidos <= 0 ? "No vencida" : fmtDias(diasVencidos)}
-                          </td>
-                          <td className="p-2 text-right whitespace-nowrap font-semibold">
-                            {f.saldo_str || fmt(f.saldo)}
-                          </td>
-                          <td className="p-2 text-center">
-                            {f.public_url ? (
-                              <a
-                                href={f.public_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="font-semibold text-blue-600 hover:underline"
-                              >
-                                Ver
-                              </a>
-                            ) : (
-                              <span className="text-slate-400">-</span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
+      <CardContent className="p-4 pt-0">
+        {chart}
+        {facturasPanel}
       </CardContent>
     </Card>
   );

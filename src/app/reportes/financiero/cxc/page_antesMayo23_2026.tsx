@@ -80,16 +80,6 @@ type Proyeccion = {
   facturas: ProyeccionFactura[];
 };
 
-
-type KpiTone = "slate" | "blue" | "green" | "orange" | "rose" | "red" | "redDark" | "redDeep";
-
-type KpiDetail = {
-  title: string;
-  value: any;
-  helper?: string;
-  tone?: KpiTone;
-};
-
 export default function ReporteCxCPage() {
   useAuthGuard();
 
@@ -101,7 +91,6 @@ export default function ReporteCxCPage() {
 
   const [selectedBar, setSelectedBar] = useState<Proyeccion | null>(null);
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
-  const [selectedKpi, setSelectedKpi] = useState<KpiDetail | null>(null);
 
   const [mostrarTabla, setMostrarTabla] = useState(false);
   const [clientesExpandidos, setClientesExpandidos] = useState<Record<string, boolean>>({});
@@ -148,7 +137,6 @@ export default function ReporteCxCPage() {
       if (e.key === "Escape") {
         setSelectedCliente(null);
         setSelectedBar(null);
-        setSelectedKpi(null);
       }
     };
 
@@ -229,54 +217,50 @@ export default function ReporteCxCPage() {
     setClientesExpandidos(nuevoEstado);
   };
 
-  const openKpi = (kpi: KpiDetail) => {
-    setSelectedKpi(kpi);
-  };
-
   return (
-    <div className="space-y-4 xl:space-y-5">
-      <div className="rounded-2xl border border-slate-200 bg-gradient-to-r from-emerald-50 via-white to-slate-100 p-4 shadow-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+    <div className="space-y-6">
+      <div className="rounded-2xl border border-slate-200 bg-gradient-to-r from-emerald-50 via-white to-slate-100 p-5 shadow-sm">
+        <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div>
-            <div className="mb-2 inline-flex items-center rounded-full border border-blue-100 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500 shadow-sm">
+            <div className="mb-3 inline-flex items-center rounded-full border border-blue-100 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500 shadow-sm">
               Clientes y Cartera
             </div>
 
-            <h1 className="text-xl font-bold tracking-tight text-slate-950 md:text-2xl">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-950 md:text-3xl">
               Cuentas por Cobrar
             </h1>
 
-            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-slate-600 md:text-sm">
+            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-600">
               Vista ejecutiva de cartera por vencimiento, cliente y factura. Revisa la deuda
               resumida en aging y expande cada cliente para consultar el detalle de sus facturas.
             </p>
           </div>
 
-          <div className="grid grid-cols-4 gap-2 lg:flex lg:items-center">
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-center shadow-sm">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:flex md:items-center">
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center shadow-sm">
               <p className="text-[11px] font-medium text-slate-500">Estado</p>
               <p className="mt-1 text-sm font-bold text-slate-900">
                 {loading ? "Cargando" : error ? "Con error" : "Actualizado"}
               </p>
             </div>
 
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-center shadow-sm">
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center shadow-sm">
               <p className="text-[11px] font-medium text-slate-500">Facturas</p>
-              <p className="mt-0.5 text-base font-bold text-slate-900">
+              <p className="mt-1 text-lg font-bold text-slate-900">
                 {resumen.facturas_vivas ?? 0}
               </p>
             </div>
 
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-center shadow-sm">
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center shadow-sm">
               <p className="text-[11px] font-medium text-slate-500">Clientes</p>
-              <p className="mt-0.5 text-base font-bold text-slate-900">
+              <p className="mt-1 text-lg font-bold text-slate-900">
                 {clientes.length}
               </p>
             </div>
 
-            <div className="rounded-xl border border-red-100 bg-white px-3 py-2 text-center shadow-sm">
+            <div className="rounded-xl border border-red-100 bg-white px-4 py-3 text-center shadow-sm">
               <p className="text-[11px] font-medium text-slate-500">% Vencido</p>
-              <p className="mt-0.5 text-base font-bold text-red-600">
+              <p className="mt-1 text-lg font-bold text-red-600">
                 {resumen.pct_vencido ?? 0}%
               </p>
             </div>
@@ -302,20 +286,12 @@ export default function ReporteCxCPage() {
 
       {!loading && !error && (
         <>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-9">
+          <div className="grid gap-3 md:grid-cols-4">
             <KpiCard
               title="Facturas vivas"
               value={resumen.facturas_vivas ?? 0}
               tone="slate"
               helper="Facturas con saldo pendiente."
-              onSelect={() =>
-                openKpi({
-                  title: "Facturas vivas",
-                  value: resumen.facturas_vivas ?? 0,
-                  tone: "slate",
-                  helper: "Facturas con saldo pendiente.",
-                })
-              }
             />
 
             <KpiCard
@@ -323,14 +299,6 @@ export default function ReporteCxCPage() {
               value={resumen.total_global}
               tone="blue"
               helper="Saldo total pendiente de recaudo."
-              onSelect={() =>
-                openKpi({
-                  title: "Total CxC",
-                  value: resumen.total_global,
-                  tone: "blue",
-                  helper: "Saldo total pendiente de recaudo.",
-                })
-              }
             />
 
             <KpiCard
@@ -338,14 +306,6 @@ export default function ReporteCxCPage() {
               value={resumen.total_vencido}
               tone="red"
               helper="Cartera que ya pasó su fecha de vencimiento."
-              onSelect={() =>
-                openKpi({
-                  title: "Total vencido",
-                  value: resumen.total_vencido,
-                  tone: "red",
-                  helper: "Cartera que ya pasó su fecha de vencimiento.",
-                })
-              }
             />
 
             <KpiCard
@@ -353,29 +313,15 @@ export default function ReporteCxCPage() {
               value={`${resumen.pct_vencido ?? 0}%`}
               tone="orange"
               helper="Participación del vencido sobre el total de cartera."
-              onSelect={() =>
-                openKpi({
-                  title: "% vencido",
-                  value: `${resumen.pct_vencido ?? 0}%`,
-                  tone: "orange",
-                  helper: "Participación del vencido sobre el total de cartera.",
-                })
-              }
             />
+          </div>
 
+          <div className="grid gap-3 md:grid-cols-5">
             <KpiCard
               title="Por vencer"
               value={resumen.total_por_vencer}
               tone="green"
               helper="Cartera aún no vencida."
-              onSelect={() =>
-                openKpi({
-                  title: "Por vencer",
-                  value: resumen.total_por_vencer,
-                  tone: "green",
-                  helper: "Cartera aún no vencida.",
-                })
-              }
             />
 
             <KpiCard
@@ -383,14 +329,6 @@ export default function ReporteCxCPage() {
               value={fmt(resumen.total_1_30)}
               tone="rose"
               helper="Cartera vencida hasta 30 días."
-              onSelect={() =>
-                openKpi({
-                  title: "Vencido 1-30",
-                  value: fmt(resumen.total_1_30),
-                  tone: "rose",
-                  helper: "Cartera vencida hasta 30 días.",
-                })
-              }
             />
 
             <KpiCard
@@ -398,14 +336,6 @@ export default function ReporteCxCPage() {
               value={fmt(resumen.total_31_60)}
               tone="red"
               helper="Cartera vencida entre 31 y 60 días."
-              onSelect={() =>
-                openKpi({
-                  title: "Vencido 31-60",
-                  value: fmt(resumen.total_31_60),
-                  tone: "red",
-                  helper: "Cartera vencida entre 31 y 60 días.",
-                })
-              }
             />
 
             <KpiCard
@@ -413,14 +343,6 @@ export default function ReporteCxCPage() {
               value={fmt(resumen.total_61_90)}
               tone="redDark"
               helper="Cartera vencida entre 61 y 90 días."
-              onSelect={() =>
-                openKpi({
-                  title: "Vencido 61-90",
-                  value: fmt(resumen.total_61_90),
-                  tone: "redDark",
-                  helper: "Cartera vencida entre 61 y 90 días.",
-                })
-              }
             />
 
             <KpiCard
@@ -428,74 +350,17 @@ export default function ReporteCxCPage() {
               value={fmt(resumen.total_91_mas)}
               tone="redDeep"
               helper="Cartera vencida por más de 90 días."
-              onSelect={() =>
-                openKpi({
-                  title: "Vencido 91+",
-                  value: fmt(resumen.total_91_mas),
-                  tone: "redDeep",
-                  helper: "Cartera vencida por más de 90 días.",
-                })
-              }
             />
           </div>
 
-          {selectedKpi && (
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4"
-              onClick={() => setSelectedKpi(null)}
-            >
-              <div
-                className="w-full max-w-sm rounded-2xl border border-white/40 bg-white p-4 shadow-2xl"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="mb-3 flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                      Detalle del KPI
-                    </p>
-                    <h3 className="mt-1 text-lg font-bold text-slate-950">
-                      {selectedKpi.title}
-                    </h3>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setSelectedKpi(null)}
-                    className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200"
-                    aria-label="Cerrar detalle del KPI"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
-                  <p className="text-xs font-medium text-slate-500">Valor completo</p>
-                  <p className="mt-1 break-words text-2xl font-black text-slate-950">
-                    {selectedKpi.value ?? "-"}
-                  </p>
-                </div>
-
-                {selectedKpi.helper && (
-                  <p className="mt-3 text-sm leading-relaxed text-slate-600">
-                    {selectedKpi.helper}
-                  </p>
-                )}
-
-                <p className="mt-3 text-xs text-slate-400">
-                  En tablet toca cualquier KPI para abrir este detalle. En PC también puedes pasar el mouse para ver el valor completo.
-                </p>
-              </div>
-            </div>
-          )}
-
           <Card className="overflow-hidden border-slate-200 shadow-sm">
-            <CardHeader className="border-b bg-white px-4 py-3">
+            <CardHeader className="border-b bg-white">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <CardTitle className="text-base md:text-lg">
+                  <CardTitle className="text-lg">
                     Proyección de cobros por fecha
                   </CardTitle>
-                  <p className="mt-0.5 text-xs text-slate-500">
+                  <p className="mt-1 text-sm text-slate-500">
                     Haz clic sobre una barra para ver las facturas que vencen ese día.
                   </p>
                 </div>
@@ -510,10 +375,10 @@ export default function ReporteCxCPage() {
               </div>
             </CardHeader>
 
-            <CardContent className="p-3">
-              <div className="rounded-xl border border-slate-100 bg-slate-50 p-2">
-                <ResponsiveContainer width="100%" height={270}>
-                  <BarChart data={proyeccion} margin={{ top: 18, right: 14, left: 0, bottom: 10 }}>
+            <CardContent className="p-4">
+              <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                <ResponsiveContainer width="100%" height={350}>
+                  <BarChart data={proyeccion} margin={{ top: 24, right: 18, left: 8, bottom: 16 }}>
                     <XAxis dataKey="fecha" tick={{ fontSize: 11 }} />
                     <YAxis
                       tick={{ fontSize: 11 }}
@@ -609,7 +474,7 @@ export default function ReporteCxCPage() {
                               y={y}
                               dy={-4}
                               fill="#334155"
-                              fontSize={10}
+                              fontSize={11}
                               textAnchor="middle"
                             >
                               {displayValue}
@@ -623,7 +488,7 @@ export default function ReporteCxCPage() {
               </div>
 
               {selectedBar && (
-                <div className="mt-3 rounded-xl border border-blue-100 bg-white p-3 shadow-sm">
+                <div className="mt-4 rounded-xl border border-blue-100 bg-white p-4 shadow-sm">
                   <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                     <div>
                       {obtenerRangoBarra(selectedBar) && (
@@ -653,7 +518,7 @@ export default function ReporteCxCPage() {
                     </button>
                   </div>
 
-                  <div className="max-h-[260px] overflow-auto rounded-lg border border-slate-200">
+                  <div className="max-h-96 overflow-auto rounded-lg border border-slate-200">
                     <table className="w-full min-w-[860px] text-sm">
                       <thead className="sticky top-0 z-10 bg-slate-100 text-slate-700">
                         <tr>
@@ -706,7 +571,7 @@ export default function ReporteCxCPage() {
                 </div>
               )}
 
-              <div className="mt-3">
+              <div className="mt-6">
                 <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <div>
                     <h2 className="text-base font-semibold text-slate-900">
@@ -1023,7 +888,7 @@ export default function ReporteCxCPage() {
             </div>
           )}
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {clientes.map((cliente, idx) => (
               <ClienteCard
                 key={`${cliente.cliente_key || cliente.cliente_nombre}-${idx}`}
@@ -1043,56 +908,33 @@ function KpiCard({
   value,
   helper,
   tone = "slate",
-  onSelect,
 }: {
   title: string;
   value: any;
   helper?: string;
-  tone?: KpiTone;
-  onSelect?: () => void;
+  tone?: "slate" | "blue" | "green" | "orange" | "rose" | "red" | "redDark" | "redDeep";
 }) {
   const toneMap: Record<string, string> = {
-    slate: "text-slate-900 bg-slate-50 border-slate-200 hover:border-slate-300",
-    blue: "text-blue-700 bg-blue-50 border-blue-100 hover:border-blue-200",
-    green: "text-green-700 bg-green-50 border-green-100 hover:border-green-200",
-    orange: "text-orange-600 bg-orange-50 border-orange-100 hover:border-orange-200",
-    rose: "text-rose-600 bg-rose-50 border-rose-100 hover:border-rose-200",
-    red: "text-red-600 bg-red-50 border-red-100 hover:border-red-200",
-    redDark: "text-red-700 bg-red-50 border-red-100 hover:border-red-200",
-    redDeep: "text-red-900 bg-red-50 border-red-100 hover:border-red-200",
+    slate: "text-slate-900 bg-slate-50 border-slate-200",
+    blue: "text-blue-700 bg-blue-50 border-blue-100",
+    green: "text-green-700 bg-green-50 border-green-100",
+    orange: "text-orange-600 bg-orange-50 border-orange-100",
+    rose: "text-rose-600 bg-rose-50 border-rose-100",
+    red: "text-red-600 bg-red-50 border-red-100",
+    redDark: "text-red-700 bg-red-50 border-red-100",
+    redDeep: "text-red-900 bg-red-50 border-red-100",
   };
 
-  const fullValue = value ?? "-";
-  const compactValue = compactKpiValue(fullValue);
-
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      title={`${title}: ${fullValue}`}
-      className={`min-h-[72px] rounded-2xl border px-2.5 py-2 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99] ${toneMap[tone]}`}
-    >
-      <div className="flex h-full flex-col justify-between gap-1">
-        <div className="flex items-start justify-between gap-1">
-          <p className="line-clamp-2 text-[10px] font-bold uppercase leading-tight tracking-[0.08em] text-slate-500">
-            {title}
-          </p>
-          <span className="shrink-0 rounded-full bg-white/70 px-1.5 py-0.5 text-[10px] font-bold text-slate-400">
-            ⓘ
-          </span>
-        </div>
-
-        <p className="truncate text-base font-black leading-none md:text-lg">
-          {compactValue}
-        </p>
-
-        {helper && (
-          <p className="line-clamp-1 text-[10px] leading-tight text-slate-500">
-            {helper}
-          </p>
-        )}
-      </div>
-    </button>
+    <Card className={`border ${toneMap[tone]} shadow-sm`}>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-semibold">{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-xl font-bold">{value ?? "-"}</p>
+        {helper && <p className="mt-1 text-xs text-slate-500">{helper}</p>}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1176,12 +1018,12 @@ function ClienteCard({
   );
 
   return (
-    <Card className={`h-full overflow-hidden shadow-md ${ampliado ? "border-0 shadow-none" : ""}`}>
-      <CardHeader className="p-4">
+    <Card className={`h-full shadow-md ${ampliado ? "border-0 shadow-none" : ""}`}>
+      <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <CardTitle className="text-base md:text-lg">{cliente.cliente_nombre}</CardTitle>
-            <div className="mt-1 text-xs text-gray-600">
+            <CardTitle className="text-lg">{cliente.cliente_nombre}</CardTitle>
+            <div className="mt-1 text-sm text-gray-600">
               Total: <b>{cliente.total_str || fmt(cliente.total)}</b>
             </div>
             <div className="mt-1 text-xs text-gray-500">
@@ -1192,7 +1034,7 @@ function ClienteCard({
           {onAmpliar && (
             <button
               onClick={onAmpliar}
-              className="rounded-lg bg-slate-700 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-slate-800"
+              className="rounded bg-slate-700 px-3 py-1 text-sm text-white transition hover:bg-slate-800"
             >
               Ampliar
             </button>
@@ -1200,8 +1042,8 @@ function ClienteCard({
         </div>
       </CardHeader>
 
-      <CardContent className="p-4 pt-0">
-        <ResponsiveContainer width="100%" height={ampliado ? 240 : 180}>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={ampliado ? 260 : 220}>
           <BarChart
             data={[
               { bucket: "Por vencer", monto: cliente.aging.por_vencer },
@@ -1210,7 +1052,7 @@ function ClienteCard({
               { bucket: "61-90", monto: cliente.aging["61_90"] },
               { bucket: "91+", monto: cliente.aging["91_mas"] },
             ]}
-            margin={{ top: 22, left: 10, right: 8, bottom: 0 }}
+            margin={{ top: 30, left: 20, right: 10 }}
           >
             <XAxis dataKey="bucket" tick={{ fontSize: 11 }} />
             <YAxis hide />
@@ -1271,7 +1113,7 @@ function ClienteCard({
         <Accordion
           type="single"
           collapsible
-          className="mt-3"
+          className="mt-4"
           defaultValue={ampliado ? "facturas" : undefined}
         >
           <AccordionItem value="facturas">
@@ -1307,7 +1149,7 @@ function ClienteCard({
                 </div>
               </div>
 
-              <div className={`${ampliado ? "max-h-none" : "max-h-[320px]"} overflow-auto`}>
+              <div className={`${ampliado ? "max-h-none" : "max-h-[420px]"} overflow-auto`}>
                 <table className="w-full min-w-[920px] border-collapse text-sm">
                   <thead className="sticky top-0 z-10">
                     <tr className="bg-gray-100">
@@ -1418,31 +1260,6 @@ function OrderButton({
       {children}
     </button>
   );
-}
-
-function compactKpiValue(value: any) {
-  if (typeof value === "number") {
-    if (Math.abs(value) >= 1_000_000_000) return `$ ${(value / 1_000_000_000).toFixed(1)}B`;
-    if (Math.abs(value) >= 1_000_000) return `$ ${(value / 1_000_000).toFixed(0)}M`;
-    if (Math.abs(value) >= 1_000) return `$ ${(value / 1_000).toFixed(0)}K`;
-    return value.toLocaleString("es-CO", { maximumFractionDigits: 0 });
-  }
-
-  const textValue = String(value ?? "-").trim();
-  if (!textValue || textValue === "-") return "-";
-
-  if (textValue.includes("%")) return textValue;
-
-  const numericText = textValue.replace(/[^0-9,-]/g, "").replace(/\./g, "").replace(",", ".");
-  const parsed = Number(numericText);
-
-  if (Number.isFinite(parsed) && textValue.includes("$")) {
-    if (Math.abs(parsed) >= 1_000_000_000) return `$ ${(parsed / 1_000_000_000).toFixed(1)}B`;
-    if (Math.abs(parsed) >= 1_000_000) return `$ ${(parsed / 1_000_000).toFixed(0)}M`;
-    if (Math.abs(parsed) >= 1_000) return `$ ${(parsed / 1_000).toFixed(0)}K`;
-  }
-
-  return textValue;
 }
 
 function fmt(n: any) {

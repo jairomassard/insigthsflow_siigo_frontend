@@ -62,22 +62,11 @@ type FacturaRow = {
 };
 
 type Kpis = {
-  total_registros?: number;
-
-  cantidad_facturas?: number;
-  cantidad_notas_credito?: number;
-
-  facturas_emitidas?: number;
-  notas_credito?: number;
-  ventas_netas?: number;
-
-  total_facturado?: number;
-  total_facturado_bruto?: number;
-
   subtotal?: number;
   iva?: number;
   impuestos?: number;
   retenciones?: number;
+  total_facturado?: number;
   saldo?: number;
 };
 
@@ -177,9 +166,6 @@ export default function BuscadorFacturasPage() {
   const totalRetenciones = Number(kpis?.retenciones || 0);
   const totalFacturado = Number(kpis?.total_facturado || 0);
   const totalSaldo = Number(kpis?.saldo || 0);
-  const totalNotasCredito = Number(kpis?.notas_credito || 0);
-  const cantidadNotasCredito = Number(kpis?.cantidad_notas_credito || 0);
-  const totalFacturadoBruto = Number(kpis?.total_facturado_bruto || kpis?.facturas_emitidas || 0);
 
   async function loadCatalogos() {
     setLoadingCatalogos(true);
@@ -260,13 +246,10 @@ export default function BuscadorFacturasPage() {
           Desde: desde || "Sin filtro",
           Hasta: hasta || "Sin filtro",
           "Movimientos encontrados": count,
-          "Cantidad notas crédito": cantidadNotasCredito,
-          "Facturas emitidas": totalFacturadoBruto,
-          "Total notas crédito": totalNotasCredito,
-          "Ventas netas": totalFacturado,
           Subtotal: totalSubtotal,
           IVA: totalIva,
           Retenciones: totalRetenciones,
+          "Total facturado": totalFacturado,
           Saldo: totalSaldo,
         },
       ]);
@@ -431,26 +414,13 @@ export default function BuscadorFacturasPage() {
       icon: FileText,
     },
     {
-      title: "Facturas emitidas",
-      value: formatCurrency(totalFacturadoBruto),
+      title: "Subtotal",
+      value: formatCurrency(totalSubtotal),
       color: "emerald" as const,
       icon: CircleDollarSign,
     },
     {
-      title: "Notas crédito",
-      value: formatCurrency(totalNotasCredito),
-      subtitle: `${cantidadNotasCredito} documento${cantidadNotasCredito === 1 ? "" : "s"}`,
-      color: "rose" as const,
-      icon: Receipt,
-    },
-    {
-      title: "Ventas netas",
-      value: formatCurrency(totalFacturado),
-      color: "blue" as const,
-      icon: CircleDollarSign,
-    },
-    {
-      title: "IVA neto",
+      title: "IVA",
       value: formatCurrency(totalIva),
       color: "violet" as const,
       icon: Landmark,
@@ -460,6 +430,12 @@ export default function BuscadorFacturasPage() {
       value: formatCurrency(totalRetenciones),
       color: "amber" as const,
       icon: Receipt,
+    },
+    {
+      title: "Total facturado",
+      value: formatCurrency(totalFacturado),
+      color: "rose" as const,
+      icon: CircleDollarSign,
     },
   ];
 
@@ -658,7 +634,7 @@ export default function BuscadorFacturasPage() {
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-6">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
           {kpiCards.map((item) => {
             const Icon = item.icon;
             return (
@@ -675,12 +651,6 @@ export default function BuscadorFacturasPage() {
                   <div className="mt-2 text-xl font-bold tracking-tight text-slate-900">
                     {item.value}
                   </div>
-
-                  {"subtitle" in item && item.subtitle ? (
-                    <div className="mt-1 text-xs font-medium text-slate-500">
-                      {item.subtitle}
-                    </div>
-                  ) : null}
                 </CardContent>
               </Card>
             );

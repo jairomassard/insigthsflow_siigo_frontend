@@ -265,8 +265,19 @@ export default function ReporteComprasProveedoresPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Total Pendiente</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              Pendiente actual del periodo
+
+              <span className="group relative inline-flex h-5 w-5 cursor-help items-center justify-center rounded-full border border-gray-400 text-xs font-bold text-gray-600">
+                ?
+
+                <span className="pointer-events-none absolute right-0 top-7 z-50 hidden w-72 rounded-md bg-gray-900 px-3 py-2 text-left text-xs font-normal leading-relaxed text-white shadow-lg group-hover:block">
+                  Lo que hoy sigue pendiente de pago, pero solamente de los documentos cuya fecha está entre el rango seleccionado.
+                </span>
+              </span>
+            </CardTitle>
           </CardHeader>
+
           <CardContent className="text-xl font-bold text-red-600">
             {formatMiles(kpis.total_saldo)}
           </CardContent>

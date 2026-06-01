@@ -14,7 +14,7 @@ import {
   YAxis,
   Tooltip,
   LabelList,
-  Cell,
+  Cell
 } from "recharts";
 import { Select, SelectItem } from "@/components/ui/select";
 import { format } from "date-fns";
@@ -39,7 +39,7 @@ interface FacturaDetalle {
   factura: string;
   idcompra: string;
   factura_proveedor: string;
-  estado: "pagado" | "pendiente" | "parcial";
+  estado: "pagado" | "pendiente" | "parcial";  // 👈 viene directo del backend
 }
 
 interface ComprasProveedoresKpis {
@@ -62,33 +62,17 @@ function abreviarNumero(valor: number): string {
 }
 
 function formatMiles(valor: number | string): string {
-  const n = typeof valor === "number" ? valor : parseFloat(valor || "0");
+  const n = typeof valor === "number" ? valor : parseFloat(valor);
   return `$ ${n.toLocaleString("es-CO", { maximumFractionDigits: 0 })}`;
 }
 
 function formatCantidad(valor: number): string {
-  return Number(valor || 0).toLocaleString("es-CO");
-}
-
-function formatFecha(fecha?: string): string {
-  if (!fecha) return "-";
-
-  const d = new Date(fecha);
-  if (Number.isNaN(d.getTime())) return "-";
-
-  return format(d, "dd-MM-yyyy");
-}
-
-function labelEstado(estado: FacturaDetalle["estado"]): string {
-  if (estado === "pagado") return "Pagado";
-  if (estado === "parcial") return "Parcial";
-  return "Pendiente";
+  return valor.toLocaleString("es-CO");
 }
 
 export default function ReporteComprasProveedoresPage() {
   const [proveedores, setProveedores] = useState<ProveedorResumen[]>([]);
   const [detalle, setDetalle] = useState<FacturaDetalle[]>([]);
-
   const [kpis, setKpis] = useState<ComprasProveedoresKpis>({
     total_proveedores: 0,
     total_documentos: 0,
@@ -100,11 +84,7 @@ export default function ReporteComprasProveedoresPage() {
     total_pagado: 0,
     total_saldo: 0,
   });
-
   const [proveedorSeleccionado, setProveedorSeleccionado] = useState<string>("");
-  const [busquedaProveedor, setBusquedaProveedor] = useState<string>("");
-  const [mostrarSugerencias, setMostrarSugerencias] = useState<boolean>(false);
-
   const [estadoPago, setEstadoPago] = useState<string>("");
   const [fechaDesde, setFechaDesde] = useState<string>("");
   const [fechaHasta, setFechaHasta] = useState<string>("");
@@ -114,32 +94,25 @@ export default function ReporteComprasProveedoresPage() {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
-
       let url = "/reportes/compras/proveedores?detalle=1";
       if (fechaDesde) url += `&desde=${fechaDesde}`;
       if (fechaHasta) url += `&hasta=${fechaHasta}`;
-      if (estadoPago) url += `&estado=${estadoPago.toLowerCase()}`;
+      if (estadoPago) url += `&estado=${estadoPago.toLowerCase()}`; // 👈 backend espera "pagado"/"pendiente"
 
       try {
         const res = await authFetch(url);
-
         const resumen = res?.resumen || [];
         const detalleRaw = res?.detalle || [];
         const kpisRaw = res?.kpis || {};
 
+        // Ya no recalculamos estado, solo dejamos totales
         const conTotales = resumen.map((p: any) => ({
           ...p,
-          total_compras: Number(p.total_compras || 0),
-          total_saldo: Number(p.total_saldo || 0),
-          total_pagado: Number(
-            p.total_pagado || Number(p.total_compras || 0) - Number(p.total_saldo || 0)
-          ),
-          num_compras: Number(p.num_compras || 0),
+          total_pagado: Number(p.total_pagado || p.total_compras - p.total_saldo),
         }));
 
         setProveedores(conTotales);
         setDetalle(detalleRaw);
-
         setKpis({
           total_proveedores: Number(kpisRaw.total_proveedores || 0),
           total_documentos: Number(kpisRaw.total_documentos || 0),
@@ -151,49 +124,16 @@ export default function ReporteComprasProveedoresPage() {
           total_pagado: Number(kpisRaw.total_pagado || 0),
           total_saldo: Number(kpisRaw.total_saldo || 0),
         });
-      } catch (error) {
-        console.error("Error cargando reporte de compras por proveedor:", error);
       } finally {
         setLoading(false);
       }
     };
-
     fetchData();
   }, [fechaDesde, fechaHasta, estadoPago]);
 
-  const proveedoresOrdenados = [...proveedores].sort((a, b) =>
-    a.proveedor_nombre.localeCompare(b.proveedor_nombre)
-  );
-
-  const proveedoresSugeridos = proveedoresOrdenados
-    .filter((p) => {
-      const busqueda = busquedaProveedor.trim().toLowerCase();
-      if (!busqueda) return false;
-
-      const texto = `${p.proveedor_nombre} ${p.proveedor_identificacion}`.toLowerCase();
-      return texto.includes(busqueda);
-    })
-    .slice(0, 12);
-
-  const seleccionarProveedor = (proveedor: ProveedorResumen) => {
-    setProveedorSeleccionado(proveedor.proveedor_identificacion);
-    setBusquedaProveedor(
-      `${proveedor.proveedor_nombre} - ${proveedor.proveedor_identificacion}`
-    );
-    setMostrarSugerencias(false);
-  };
-
-  const limpiarProveedor = () => {
-    setProveedorSeleccionado("");
-    setBusquedaProveedor("");
-    setMostrarSugerencias(false);
-  };
-
   const proveedoresFiltrados = proveedores
     .filter((p) =>
-      proveedorSeleccionado
-        ? p.proveedor_identificacion === proveedorSeleccionado
-        : true
+      proveedorSeleccionado ? p.proveedor_identificacion === proveedorSeleccionado : true
     )
     .sort((a, b) => b.total_compras - a.total_compras);
 
@@ -211,9 +151,7 @@ export default function ReporteComprasProveedoresPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold mb-4">
-        📦 Reporte de Compras por Proveedor
-      </h1>
+      <h1 className="text-2xl font-bold mb-4">📦 Reporte de Compras por Proveedor</h1>
 
       {/* KPIs */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -274,103 +212,13 @@ export default function ReporteComprasProveedoresPage() {
       </div>
 
       {/* Filtros */}
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-6 items-start">
-        {/* Buscador rápido */}
-        <div className="flex flex-col space-y-1 relative lg:col-span-2">
-          <label className="text-sm font-medium">Buscar proveedor</label>
-
-          <Input
-            type="text"
-            value={busquedaProveedor}
-            placeholder="Escribe parte del nombre o NIT..."
-            onFocus={() => {
-              if (busquedaProveedor.trim()) setMostrarSugerencias(true);
-            }}
-            onChange={(e) => {
-              setBusquedaProveedor(e.target.value);
-              setMostrarSugerencias(true);
-
-              if (!e.target.value.trim()) {
-                setProveedorSeleccionado("");
-              }
-            }}
-          />
-
-          {mostrarSugerencias &&
-            busquedaProveedor.trim() &&
-            proveedoresSugeridos.length > 0 && (
-              <div className="absolute top-full left-0 right-0 z-30 mt-1 max-h-64 overflow-y-auto rounded-md border bg-white shadow-lg">
-                {proveedoresSugeridos.map((p) => (
-                  <button
-                    key={p.proveedor_identificacion}
-                    type="button"
-                    onClick={() => seleccionarProveedor(p)}
-                    className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100"
-                  >
-                    <div className="font-medium">{p.proveedor_nombre}</div>
-                    <div className="text-xs text-gray-500">
-                      NIT: {p.proveedor_identificacion} · Compras:{" "}
-                      {formatCantidad(p.num_compras)}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-
-          {mostrarSugerencias &&
-            busquedaProveedor.trim() &&
-            proveedoresSugeridos.length === 0 && (
-              <div className="absolute top-full left-0 right-0 z-30 mt-1 rounded-md border bg-white px-3 py-2 text-sm text-gray-500 shadow-lg">
-                No se encontraron proveedores
-              </div>
-            )}
-
-          {proveedorSeleccionado && (
-            <button
-              type="button"
-              onClick={limpiarProveedor}
-              className="mt-1 text-left text-xs font-medium text-red-600 hover:text-red-800"
-            >
-              Limpiar proveedor seleccionado
-            </button>
-          )}
-        </div>
-
-        {/* Selector tradicional conservado */}
+      <div className="grid gap-2 md:grid-cols-4">
         <div className="flex flex-col space-y-1">
-          <label className="text-sm font-medium">Selector proveedor</label>
-          <Select
-            value={proveedorSeleccionado}
-            onChange={(e) => {
-              const id = e.target.value;
-              setProveedorSeleccionado(id);
-
-              if (!id) {
-                setBusquedaProveedor("");
-                setMostrarSugerencias(false);
-                return;
-              }
-
-              const proveedor = proveedores.find(
-                (p) => p.proveedor_identificacion === id
-              );
-
-              if (proveedor) {
-                setBusquedaProveedor(
-                  `${proveedor.proveedor_nombre} - ${proveedor.proveedor_identificacion}`
-                );
-              }
-
-              setMostrarSugerencias(false);
-            }}
-          >
+          <label className="text-sm font-medium">Proveedor</label>
+          <Select value={proveedorSeleccionado} onChange={(e) => setProveedorSeleccionado(e.target.value)}>
             <option value="">Todos los proveedores</option>
-            {proveedoresOrdenados.map((p) => (
-              <SelectItem
-                key={p.proveedor_identificacion}
-                value={p.proveedor_identificacion}
-                label={p.proveedor_nombre}
-              />
+            {proveedores.sort((a, b) => a.proveedor_nombre.localeCompare(b.proveedor_nombre)).map((p, idx) => (
+              <SelectItem key={idx} value={p.proveedor_identificacion} label={p.proveedor_nombre} />
             ))}
           </Select>
         </div>
@@ -386,20 +234,12 @@ export default function ReporteComprasProveedoresPage() {
 
         <div className="flex flex-col space-y-1">
           <label className="text-sm font-medium">Fecha desde</label>
-          <Input
-            type="date"
-            value={fechaDesde}
-            onChange={(e) => setFechaDesde(e.target.value)}
-          />
+          <Input type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)} />
         </div>
 
         <div className="flex flex-col space-y-1">
           <label className="text-sm font-medium">Fecha hasta</label>
-          <Input
-            type="date"
-            value={fechaHasta}
-            onChange={(e) => setFechaHasta(e.target.value)}
-          />
+          <Input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} />
         </div>
       </div>
 
@@ -421,7 +261,6 @@ export default function ReporteComprasProveedoresPage() {
                   const total = proveedoresFiltrados.length;
                   const fontSize = total > 10 ? 10 : 12;
                   const angle = total > 6 ? -30 : 0;
-
                   return (
                     <text
                       x={x}
@@ -437,8 +276,9 @@ export default function ReporteComprasProveedoresPage() {
                 height={60}
               />
 
-              <YAxis tickFormatter={(v) => `$${(v / 1_000_000).toFixed(0)}M`} />
-
+              <YAxis
+                tickFormatter={(v) => `$${(v / 1_000_000).toFixed(0)}M`}
+              />
               <Tooltip
                 formatter={(value: number) =>
                   `$${Number(value).toLocaleString("es-CO")}`
@@ -450,18 +290,23 @@ export default function ReporteComprasProveedoresPage() {
                   dataKey="total_compras"
                   position="top"
                   content={({ x, y, value }) => (
-                    <text x={x} y={y} dy={-4} fontSize={10} textAnchor="middle">
+                    <text
+                      x={x}
+                      y={y}
+                      dy={-4}
+                      fontSize={10}
+                      textAnchor="middle"
+                    >
                       {abreviarNumero(Number(value))}
                     </text>
                   )}
                 />
-
                 {proveedoresFiltrados.slice(0, 15).map((p, i) => (
                   <Cell
                     key={`cell-${i}`}
                     fill="#2563eb"
                     style={{ cursor: "pointer" }}
-                    onClick={() => seleccionarProveedor(p)}
+                    onClick={() => setProveedorSeleccionado(p.proveedor_identificacion)}
                   />
                 ))}
               </Bar>
@@ -470,67 +315,47 @@ export default function ReporteComprasProveedoresPage() {
         </CardContent>
       </Card>
 
+
       {/* Detalle por proveedor */}
       <div
         className={`grid gap-4 ${
-          proveedorSeleccionado
-            ? "md:grid-cols-1"
-            : "md:grid-cols-2 lg:grid-cols-3"
+          proveedorSeleccionado ? "md:grid-cols-1" : "md:grid-cols-2 lg:grid-cols-3"
         }`}
       >
-        {proveedoresFiltrados.map((p) => (
+        {proveedoresFiltrados.map((p, idx) => (
           <Card
-            key={p.proveedor_identificacion}
-            onClick={() => seleccionarProveedor(p)}
+            key={idx}
+            onClick={() => setProveedorSeleccionado(p.proveedor_identificacion)} // 👈 seleccionar proveedor al hacer click
             className={`relative shadow-md cursor-pointer hover:shadow-lg transition ${
               proveedorSeleccionado === p.proveedor_identificacion
                 ? "ring-2 ring-blue-500"
                 : ""
-            } ${
-              proveedorSeleccionado === p.proveedor_identificacion
-                ? "text-base"
-                : "text-sm"
-            }`}
+            } ${proveedorSeleccionado === p.proveedor_identificacion ? "text-base" : "text-sm"}`}
           >
+            {/* Botón X solo cuando está seleccionada */}
             {proveedorSeleccionado === p.proveedor_identificacion && (
               <button
-                type="button"
                 onClick={(e) => {
-                  e.stopPropagation();
-                  limpiarProveedor();
+                  e.stopPropagation(); // 👈 evita que dispare el click de la tarjeta
+                  setProveedorSeleccionado("");
                 }}
                 className="absolute top-2 right-2 text-red-500 hover:text-black font-bold"
               >
                 ✖
               </button>
             )}
-
             <CardHeader>
               <CardTitle>{p.proveedor_nombre}</CardTitle>
-              <p className="text-xs text-gray-500">
-                NIT: {p.proveedor_identificacion}
-              </p>
+              <p className="text-xs text-gray-500">NIT: {p.proveedor_identificacion}</p>
             </CardHeader>
-
             <CardContent>
               <div className="space-y-1">
-                <p>
-                  Total Compras: <b>{formatMiles(p.total_compras)}</b>
-                </p>
-                <p>
-                  Total Pagado:{" "}
-                  <span className="text-green-700">
-                    {formatMiles(p.total_pagado)}
-                  </span>
-                </p>
-                <p>
-                  Saldo Pendiente:{" "}
-                  <span className="text-red-600">{formatMiles(p.total_saldo)}</span>
-                </p>
+                <p>Total Compras: <b>{formatMiles(p.total_compras)}</b></p>
+                <p>Total Pagado: <span className="text-green-700">{formatMiles(p.total_pagado)}</span></p>
+                <p>Saldo Pendiente: <span className="text-red-600">{formatMiles(p.total_saldo)}</span></p>
                 <p># Compras: {formatCantidad(p.num_compras)}</p>
-                <p>Última compra: {formatFecha(p.ultima_fecha)}</p>
+                <p>Última compra: {format(new Date(p.ultima_fecha), "dd-MM-yyyy")}</p>
               </div>
-
               {proveedorSeleccionado === p.proveedor_identificacion &&
                 facturasFiltradas.length > 0 && (
                   <div className="mt-4 border-t pt-2">
@@ -538,16 +363,13 @@ export default function ReporteComprasProveedoresPage() {
                       <summary className="cursor-pointer font-semibold text-blue-600">
                         Ver detalle de facturas
                       </summary>
-
                       <div className="mt-2 overflow-x-auto">
                         <table className="min-w-full text-xs border">
                           <thead className="bg-gray-100">
                             <tr>
                               <th className="px-2 py-1 text-left">Factura</th>
-                              <th className="px-2 py-1 text-left">Documento</th>
-                              <th className="px-2 py-1 text-left">
-                                Factura Proveedor
-                              </th>
+                              <th className="px-2 py-1 text-left">Factura Nombre</th>
+                              <th className="px-2 py-1 text-left">Factura Proveedor</th>
                               <th className="px-2 py-1 text-left">Fecha</th>
                               <th className="px-2 py-1 text-left">Vencimiento</th>
                               <th className="px-2 py-1 text-left">Estado</th>
@@ -555,34 +377,23 @@ export default function ReporteComprasProveedoresPage() {
                               <th className="px-2 py-1 text-right">Saldo</th>
                             </tr>
                           </thead>
-
                           <tbody>
                             {facturasFiltradas.map((f, i) => (
                               <tr
-                                key={`${f.idcompra}-${i}`}
-                                className={
-                                  f.estado === "pendiente"
-                                    ? "text-red-700"
-                                    : f.estado === "parcial"
-                                    ? "text-orange-700"
-                                    : ""
-                                }
+                                key={i}
+                                className={f.estado === "pendiente" ? "text-red-700" : ""}
                               >
-                                <td className="px-2 py-1">
-                                  {f.factura || `#${i + 1}`}
-                                </td>
+                                <td className="px-2 py-1">{f.factura || `#${i + 1}`}</td>
                                 <td className="px-2 py-1">{f.idcompra}</td>
+                                <td className="px-2 py-1">{f.factura_proveedor}</td>
                                 <td className="px-2 py-1">
-                                  {f.factura_proveedor || "-"}
+                                  {format(new Date(f.fecha), "dd-MM-yyyy")}
                                 </td>
                                 <td className="px-2 py-1">
-                                  {formatFecha(f.fecha)}
+                                  {format(new Date(f.vencimiento), "dd-MM-yyyy")}
                                 </td>
                                 <td className="px-2 py-1">
-                                  {formatFecha(f.vencimiento)}
-                                </td>
-                                <td className="px-2 py-1">
-                                  {labelEstado(f.estado)}
+                                  {f.estado === "pagado" ? "Pagado" : "Pendiente"}
                                 </td>
                                 <td className="px-2 py-1 text-right">
                                   {formatMiles(f.total)}
@@ -602,6 +413,7 @@ export default function ReporteComprasProveedoresPage() {
           </Card>
         ))}
       </div>
+
     </div>
   );
 }

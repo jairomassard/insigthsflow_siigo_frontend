@@ -39,19 +39,7 @@ interface FacturaDetalle {
   factura: string;
   idcompra: string;
   factura_proveedor: string;
-  estado: "pagado" | "pendiente" | "parcial";  // 👈 viene directo del backend
-}
-
-interface ComprasProveedoresKpis {
-  total_proveedores: number;
-  total_documentos: number;
-  total_compras: number;
-  total_facturas: number;
-  total_compras_factura: number;
-  total_cuentas_cobro: number;
-  total_compras_cuenta_cobro: number;
-  total_pagado: number;
-  total_saldo: number;
+  estado: "pagado" | "pendiente";  // 👈 viene directo del backend
 }
 
 function abreviarNumero(valor: number): string {
@@ -73,17 +61,6 @@ function formatCantidad(valor: number): string {
 export default function ReporteComprasProveedoresPage() {
   const [proveedores, setProveedores] = useState<ProveedorResumen[]>([]);
   const [detalle, setDetalle] = useState<FacturaDetalle[]>([]);
-  const [kpis, setKpis] = useState<ComprasProveedoresKpis>({
-    total_proveedores: 0,
-    total_documentos: 0,
-    total_compras: 0,
-    total_facturas: 0,
-    total_compras_factura: 0,
-    total_cuentas_cobro: 0,
-    total_compras_cuenta_cobro: 0,
-    total_pagado: 0,
-    total_saldo: 0,
-  });
   const [proveedorSeleccionado, setProveedorSeleccionado] = useState<string>("");
   const [estadoPago, setEstadoPago] = useState<string>("");
   const [fechaDesde, setFechaDesde] = useState<string>("");
@@ -103,7 +80,6 @@ export default function ReporteComprasProveedoresPage() {
         const res = await authFetch(url);
         const resumen = res?.resumen || [];
         const detalleRaw = res?.detalle || [];
-        const kpisRaw = res?.kpis || {};
 
         // Ya no recalculamos estado, solo dejamos totales
         const conTotales = resumen.map((p: any) => ({
@@ -113,17 +89,6 @@ export default function ReporteComprasProveedoresPage() {
 
         setProveedores(conTotales);
         setDetalle(detalleRaw);
-        setKpis({
-          total_proveedores: Number(kpisRaw.total_proveedores || 0),
-          total_documentos: Number(kpisRaw.total_documentos || 0),
-          total_compras: Number(kpisRaw.total_compras || 0),
-          total_facturas: Number(kpisRaw.total_facturas || 0),
-          total_compras_factura: Number(kpisRaw.total_compras_factura || 0),
-          total_cuentas_cobro: Number(kpisRaw.total_cuentas_cobro || 0),
-          total_compras_cuenta_cobro: Number(kpisRaw.total_compras_cuenta_cobro || 0),
-          total_pagado: Number(kpisRaw.total_pagado || 0),
-          total_saldo: Number(kpisRaw.total_saldo || 0),
-        });
       } finally {
         setLoading(false);
       }
@@ -141,74 +106,33 @@ export default function ReporteComprasProveedoresPage() {
     (f) => f.proveedor_identificacion === proveedorSeleccionado
   );
 
-  if (loading) {
-    return (
-      <div className="p-6 text-sm text-gray-500">
-        Cargando reporte de compras por proveedor...
-      </div>
-    );
-  }
+  const totalCompras = proveedoresFiltrados.reduce(
+    (sum, p) => sum + Number(p.total_compras),
+    0
+  );
+  const totalPagado = proveedoresFiltrados.reduce(
+    (sum, p) => sum + Number(p.total_pagado),
+    0
+  );
+  const totalSaldo = proveedoresFiltrados.reduce(
+    (sum, p) => sum + Number(p.total_saldo),
+    0
+  );
+  const totalFacturas = proveedoresFiltrados.reduce(
+    (sum, p) => sum + p.num_compras,
+    0
+  );
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold mb-4">📦 Reporte de Compras por Proveedor</h1>
 
       {/* KPIs */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <Card>
-          <CardHeader>
-            <CardTitle>Total Compras</CardTitle>
-          </CardHeader>
-          <CardContent className="text-xl font-bold text-blue-600">
-            {formatMiles(kpis.total_compras)}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Total Proveedores</CardTitle>
-          </CardHeader>
-          <CardContent className="text-xl font-bold text-purple-600">
-            {formatCantidad(kpis.total_proveedores)}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Compras con Factura</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold text-green-700">
-              {formatMiles(kpis.total_compras_factura)}
-            </div>
-            <div className="text-xs text-gray-500 mt-1">
-              {formatCantidad(kpis.total_facturas)} facturas
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Cuentas de Cobro</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold text-orange-600">
-              {formatMiles(kpis.total_compras_cuenta_cobro)}
-            </div>
-            <div className="text-xs text-gray-500 mt-1">
-              {formatCantidad(kpis.total_cuentas_cobro)} cuentas de cobro
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Total Pendiente</CardTitle>
-          </CardHeader>
-          <CardContent className="text-xl font-bold text-red-600">
-            {formatMiles(kpis.total_saldo)}
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card><CardHeader><CardTitle>Total Compras</CardTitle></CardHeader><CardContent className="text-xl font-bold text-blue-600">{formatMiles(totalCompras)}</CardContent></Card>
+        <Card><CardHeader><CardTitle>Total Pagado</CardTitle></CardHeader><CardContent className="text-xl font-bold text-green-600">{formatMiles(totalPagado)}</CardContent></Card>
+        <Card><CardHeader><CardTitle>Total Pendiente</CardTitle></CardHeader><CardContent className="text-xl font-bold text-red-600">{formatMiles(totalSaldo)}</CardContent></Card>
+        <Card><CardHeader><CardTitle># Compras</CardTitle></CardHeader><CardContent className="text-xl font-bold text-black-600">{formatCantidad(totalFacturas)}</CardContent></Card>
       </div>
 
       {/* Filtros */}

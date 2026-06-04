@@ -57,7 +57,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           ? [
               {
                 href: "/dashboard/client/resumen-ejecutivo",
-                label: "Dashboard Ejecutivo",
+                label: "Resumen Ejecutivo",
                 icon: <LayoutDashboard className="w-4 h-4" />,
               },
             ]

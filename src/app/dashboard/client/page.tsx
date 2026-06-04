@@ -246,7 +246,7 @@ export default function ClientHome() {
             {tiene("ver_resumen_ejecutivo") && (
               <FeatureCard
                 icon="✨"
-                title="Dashboard Ejecutivo"
+                title="Resumen Ejecutivo"
                 href="/dashboard/client/resumen-ejecutivo"
                 description="Resumen Ejecutivo Inteligente con KPIs estrella, eficiencia operativa, caja disponible, cash runway y alertas gerenciales."
               />

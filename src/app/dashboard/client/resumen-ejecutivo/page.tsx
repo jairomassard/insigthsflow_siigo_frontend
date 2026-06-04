@@ -543,6 +543,14 @@ export default function DashboardResumenEjecutivoPage() {
       );
 
       setData(json);
+
+      if (json?.periodo?.desde && json.periodo.desde !== fechaDesde) {
+        setFechaDesde(json.periodo.desde);
+      }
+
+      if (json?.periodo?.hasta && json.periodo.hasta !== fechaHasta) {
+        setFechaHasta(json.periodo.hasta);
+      }
     } catch (err: any) {
       setError(err?.message || "Error cargando dashboard");
     } finally {

@@ -290,24 +290,23 @@ function InfoBubble({
         : "left-1/2 -translate-x-1/2";
 
   return (
-    <div className="group/info relative shrink-0">
-      <button
-        type="button"
+    <span className="group/info relative z-[80] inline-flex shrink-0">
+      <span
         aria-label="Ver explicación"
-        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-500 shadow-sm transition hover:border-slate-400 hover:text-slate-700"
+        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-500 shadow-sm transition group-hover/info:border-slate-400 group-hover/info:text-slate-700"
       >
         <CircleHelp size={13} />
-      </button>
+      </span>
 
-      <div
+      <span
         className={cx(
-          "pointer-events-none absolute top-7 z-[70] hidden w-72 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-[12px] font-medium leading-5 text-slate-700 shadow-2xl group-hover/info:block",
+          "pointer-events-none absolute top-7 z-[100] hidden w-72 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-[12px] font-medium leading-5 text-slate-700 shadow-2xl group-hover/info:block",
           alignClass,
         )}
       >
         {text}
-      </div>
-    </div>
+      </span>
+    </span>
   );
 }
 
@@ -322,12 +321,12 @@ function KpiCard({
     <button
       type="button"
       onClick={() => onOpen(item)}
-      title={`${item.label}: ${item.valueFull}`}
+      aria-label={`Abrir detalle de ${item.label}: ${item.valueFull}`}
       className="relative z-0 text-left outline-none transition hover:z-30 focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2"
     >
       <Card
         className={cx(
-          "relative h-[92px] overflow-hidden rounded-[1.25rem] border border-slate-200 shadow-sm transition-all duration-300",
+          "relative h-[92px] overflow-visible rounded-[1.25rem] border border-slate-200 shadow-sm transition-all duration-300",
           "hover:-translate-y-0.5 hover:shadow-md bg-gradient-to-br",
           item.accent,
         )}

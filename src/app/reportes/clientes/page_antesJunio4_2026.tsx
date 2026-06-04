@@ -3,7 +3,6 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import useAuthGuard from "@/hooks/useAuthGuard";
 import { authFetch } from "@/lib/api";
-import { getDefaultYearToDateRange } from "@/lib/dateDefaults";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -186,10 +185,8 @@ export default function ReporteClientesPage() {
   const [catalogoClientes, setCatalogoClientes] = useState<CatalogoItem[]>([]);
   const [catalogoCentrosCosto, setCatalogoCentrosCosto] = useState<CatalogoItem[]>([]);
 
-  const [defaultDates] = useState(() => getDefaultYearToDateRange());
-
-  const [desde, setDesde] = useState(defaultDates.desde);
-  const [hasta, setHasta] = useState(defaultDates.hasta);
+  const [desde, setDesde] = useState("");
+  const [hasta, setHasta] = useState("");
   const [clienteFiltro, setClienteFiltro] = useState("");
   const [centroCostoFiltro, setCentroCostoFiltro] = useState("");
   const [estadoFiltro, setEstadoFiltro] = useState("");
@@ -342,10 +339,8 @@ export default function ReporteClientesPage() {
   };
 
   const limpiarFiltros = () => {
-    const d = getDefaultYearToDateRange();
-
-    setDesde(d.desde);
-    setHasta(d.hasta);
+    setDesde("");
+    setHasta("");
     setClienteFiltro("");
     setCentroCostoFiltro("");
     setEstadoFiltro("");

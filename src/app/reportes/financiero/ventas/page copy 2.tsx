@@ -17,6 +17,7 @@ import {
   Cell,
 } from "recharts";
 import { authFetch } from "@/lib/api";
+import { getDefaultYearToDateRange } from "@/lib/dateDefaults";
 
 type Vendedor = { id: number; nombre: string };
 type CentroCosto = { id: number; nombre: string; codigo?: string };
@@ -85,10 +86,19 @@ function abreviar(valor: number): string {
 function formatDate(value: any) {
   if (!value) return "-";
 
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
+  const raw = String(value);
 
-  return d.toLocaleDateString("es-CO", {
+  // Evita desfases UTC: "2026-06-01" no debe mostrarse como "31/05/2026".
+  const isoDate = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoDate) {
+    const [, y, m, d] = isoDate;
+    return `${d}/${m}/${y}`;
+  }
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+
+  return parsed.toLocaleDateString("es-CO", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -151,8 +161,10 @@ export default function DashboardFinanciero() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
-  const [desde, setDesde] = useState("");
-  const [hasta, setHasta] = useState("");
+  const [defaultDates] = useState(() => getDefaultYearToDateRange());
+
+  const [desde, setDesde] = useState(defaultDates.desde);
+  const [hasta, setHasta] = useState(defaultDates.hasta);
   const [sellerId, setSellerId] = useState("");
   const [costCenter, setCostCenter] = useState("");
   const [clienteSel, setClienteSel] = useState("");
@@ -238,8 +250,10 @@ export default function DashboardFinanciero() {
   };
 
   const limpiarFiltros = () => {
-    setDesde("");
-    setHasta("");
+    const d = getDefaultYearToDateRange();
+
+    setDesde(d.desde);
+    setHasta(d.hasta);
     setSellerId("");
     setCostCenter("");
     setClienteSel("");
@@ -318,17 +332,12 @@ export default function DashboardFinanciero() {
     setEstadoEnModal(item.estado);
     setModalEstadoOpen(true);
 
-    const qs = new URLSearchParams();
+    const qs = qsBase();
 
     if (desde) qs.set("desde", desde);
     if (hasta) qs.set("hasta", hasta);
-    if (sellerId) qs.set("seller_id", sellerId);
-    if (costCenter) qs.set("cost_center", costCenter);
-    if (clienteSel) qs.set("cliente", clienteSel);
 
     qs.set("estado", item.estado);
-    qs.set("incluye_impuesto", incluyeImpuesto ? "1" : "0");
-    qs.set("incluye_nota_credito", incluyeNotaCredito ? "1" : "0");
 
     const res = await authFetch(`/reportes/facturas_por_estado?${qs.toString()}`);
     setFacturasEstado(res.rows || []);
@@ -336,26 +345,82 @@ export default function DashboardFinanciero() {
 
   const handleBarClick = async (entry: any) => {
     const item = entry?.payload || entry;
-    const periodo = item?.periodo;
-    if (!periodo) return;
+    const periodoRaw = String(item?.periodo || item?.label || "").trim();
 
-    const dateObj = new Date(periodo);
-    if (Number.isNaN(dateObj.getTime())) {
-      console.error("Fecha inválida:", periodo);
+    if (!periodoRaw) return;
+
+    let year: number | null = null;
+    let month: number | null = null; // 1 a 12
+
+    // Caso normal: "2026-06" o "2026-06-01"
+    const matchIso = periodoRaw.match(/^(\d{4})-(\d{2})/);
+
+    if (matchIso) {
+      year = Number(matchIso[1]);
+      month = Number(matchIso[2]);
+    } else {
+      // Caso visual: "Jun 2026", "Junio 2026", etc.
+      const meses: Record<string, number> = {
+        ene: 1,
+        enero: 1,
+        feb: 2,
+        febrero: 2,
+        mar: 3,
+        marzo: 3,
+        abr: 4,
+        abril: 4,
+        may: 5,
+        mayo: 5,
+        jun: 6,
+        junio: 6,
+        jul: 7,
+        julio: 7,
+        ago: 8,
+        agosto: 8,
+        sep: 9,
+        sept: 9,
+        septiembre: 9,
+        oct: 10,
+        octubre: 10,
+        nov: 11,
+        noviembre: 11,
+        dic: 12,
+        diciembre: 12,
+      };
+
+      const parts = periodoRaw.toLowerCase().replace(".", "").split(/\s+/);
+      const mesTexto = parts[0];
+      const anioTexto = parts.find((p) => /^\d{4}$/.test(p));
+
+      if (mesTexto && anioTexto && meses[mesTexto]) {
+        year = Number(anioTexto);
+        month = meses[mesTexto];
+      }
+    }
+
+    if (!year || !month || month < 1 || month > 12) {
+      console.error("Periodo inválido para gráfica mensual:", periodoRaw);
       return;
     }
 
-    const year = dateObj.getUTCFullYear();
-    const month = dateObj.getUTCMonth();
+    const mm = String(month).padStart(2, "0");
+    const ultimoDia = new Date(year, month, 0).getDate();
 
-    const desdeMes = `${year}-${String(month + 1).padStart(2, "0")}-01`;
-    const hastaMesDate = new Date(Date.UTC(year, month + 1, 0));
-    const hastaMes = `${year}-${String(month + 1).padStart(2, "0")}-${String(
-      hastaMesDate.getUTCDate()
-    ).padStart(2, "0")}`;
+    let desdeMes = `${year}-${mm}-01`;
+    let hastaMes = `${year}-${mm}-${String(ultimoDia).padStart(2, "0")}`;
+
+    // Respetar el rango general de la página si el usuario está viendo un mes parcial.
+    // Ejemplo: filtro general hasta 2026-06-04 y clic en junio => junio 1 a junio 4.
+    if (desde?.startsWith(`${year}-${mm}`) && desde > desdeMes) {
+      desdeMes = desde;
+    }
+
+    if (hasta?.startsWith(`${year}-${mm}`) && hasta < hastaMes) {
+      hastaMes = hasta;
+    }
 
     await cargarMovimientosDetalle({
-      titulo: `Movimientos del mes: ${item?.label || periodo}`,
+      titulo: `Movimientos del mes: ${item?.label || periodoRaw}`,
       subtitulo: "Facturas emitidas, notas crédito y venta neta del mes.",
       desdeParam: desdeMes,
       hastaParam: hastaMes,
@@ -377,8 +442,12 @@ export default function DashboardFinanciero() {
       try {
         const qs = new URLSearchParams();
 
-        if (desde) qs.append("desde", desde);
-        if (hasta) qs.append("hasta", hasta);
+        const fallbackDates = getDefaultYearToDateRange();
+        const desdeFinal = desde || fallbackDates.desde;
+        const hastaFinal = hasta || fallbackDates.hasta;
+
+        qs.append("desde", desdeFinal);
+        qs.append("hasta", hastaFinal);
 
         const cli = await authFetch(`/catalogos/clientes-facturas?${qs.toString()}`);
         if (Array.isArray(cli)) setClientes(cli);

@@ -25,8 +25,12 @@ interface Producto {
 }
 interface KPIs {
   ventas_totales: number;
+  ventas_facturadas?: number;
+  unidades_facturadas?: number;
   facturas: number;
   ticket_promedio: number;
+  fuente?: string;
+  logica?: string;
 }
 interface CentroCosto {
   id: string;
@@ -76,7 +80,7 @@ export default function ReporteProductosPage() {
   const [fechaDesde, setFechaDesde] = useState<string>(defaultDates.desde);
   const [fechaHasta, setFechaHasta] = useState<string>(defaultDates.hasta);
   const [centroCostos, setCentroCostos] = useState<string>("");
-  
+
   const [metric, setMetric] = useState<"cantidad" | "total">("cantidad");
   const [productoSeleccionado, setProductoSeleccionado] = useState<string>("");
 
@@ -158,7 +162,12 @@ export default function ReporteProductosPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">📦 Reporte Ventas por Producto</h1>
+      <div>
+        <h1 className="text-2xl font-bold">📦 Reporte de Productos Facturados</h1>
+        <p className="mt-1 text-sm text-gray-500">
+          Ranking de productos según ítems de facturas emitidas. No descuenta notas crédito porque estas no tienen detalle confiable por producto.
+        </p>
+      </div>
 
       {/* Filtros */}
       <div className="grid gap-2 md:grid-cols-3">
@@ -200,7 +209,7 @@ export default function ReporteProductosPage() {
           variant={metric === "total" ? "default" : "outline"}
           onClick={() => setMetric("total")}
         >
-          Valor ($)
+          Valor facturado ($)
         </Button>
       </div>
 
@@ -208,10 +217,13 @@ export default function ReporteProductosPage() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardContent className="p-4 text-center">
-            <div className="text-lg text-gray-500 font-bold">Ventas Totales</div>
+            <div className="text-lg text-gray-500 font-bold">Ventas facturadas por producto</div>
             <div className="text-xl font-bold text-green-600">
-              {formatCurrency(kpis?.ventas_totales || 0)}
+              {formatCurrency(kpis?.ventas_facturadas ?? kpis?.ventas_totales ?? 0)}
             </div>
+            <p className="mt-1 text-xs text-gray-500">
+              Suma de ítems de facturas emitidas. No descuenta notas crédito.
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -235,7 +247,7 @@ export default function ReporteProductosPage() {
         <Card>
           <CardHeader>
             <CardTitle>
-              Top 10 Más Vendidos ({metric === "cantidad" ? "Unidades" : "Valor en $"})
+              Top 10 Más Facturados ({metric === "cantidad" ? "Unidades" : "Valor facturado"})
             </CardTitle>
           </CardHeader>
           <CardContent className="h-[350px]">
@@ -267,7 +279,7 @@ export default function ReporteProductosPage() {
         <Card>
           <CardHeader>
             <CardTitle>
-              Top 10 Menos Vendidos ({metric === "cantidad" ? "Unidades" : "Valor en $"})
+              Top 10 Menos Facturados ({metric === "cantidad" ? "Unidades" : "Valor facturado"})
             </CardTitle>
           </CardHeader>
           <CardContent className="h-[350px]">
@@ -344,10 +356,10 @@ export default function ReporteProductosPage() {
                 <b>Código:</b> {detalle.code}
               </div>
               <div>
-                <b>Unidades vendidas:</b> {detalle.cantidad}
+                <b>Unidades facturadas:</b> {detalle.cantidad}
               </div>
               <div>
-                <b>Total ventas:</b> {formatCurrency(detalle.total)}
+                <b>Total facturado:</b> {formatCurrency(detalle.total)}
               </div>
               <div>
                 <b>Facturas asociadas:</b> {detalle.facturas}

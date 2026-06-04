@@ -23,31 +23,20 @@ type CatalogoItem = {
 
 type FacturaCliente = {
   idfactura: string;
-  documento?: string | null;
-  documento_afectado?: string | null;
-
-  tipo_movimiento?: "FACTURA" | "NOTA_CREDITO";
-  tipo_documento_label?: string;
-
   fecha: string | null;
   vencimiento: string | null;
 
   ventas_netas: number;
-  subtotal?: number;
   impuestos: number;
   total_facturado_siigo: number;
 
   ventas_netas_str: string;
-  subtotal_str?: string;
   impuestos_str: string;
   total_facturado_siigo_str: string;
 
   total: number;
   pagado: number;
   pendiente: number;
-  valor_pagado?: number;
-  valor_pendiente?: number;
-
   total_str: string;
   pagado_str: string;
   pendiente_str: string;
@@ -57,33 +46,26 @@ type FacturaCliente = {
   cliente_key: string;
   cost_center?: number | string | null;
   centro_costo_nombre?: string;
-
-  estado_cartera: "pagado" | "sano" | "alerta" | "vencido" | "no_aplica";
+  estado_cartera: "pagado" | "sano" | "alerta" | "vencido";
   dias_vencimiento: number | null;
 };
 
 type CentroCostoCliente = {
   centro_costo_nombre: string;
   cost_center?: number | string | null;
-
   cantidad_facturas: number;
-  cantidad_notas_credito?: number;
 
   ventas_netas: number;
-  ventas_sin_impuesto?: number;
   impuestos: number;
   total_facturado_siigo: number;
-  notas_credito?: number;
 
   total_facturado: number;
   total_pagado: number;
   saldo_pendiente: number;
 
   ventas_netas_str: string;
-  ventas_sin_impuesto_str?: string;
   impuestos_str: string;
   total_facturado_siigo_str: string;
-  notas_credito_str?: string;
 
   total_facturado_str: string;
   saldo_pendiente_str: string;
@@ -93,14 +75,11 @@ type ClienteInsight = {
   cliente: string;
   cliente_key: string;
   cantidad_facturas: number;
-  cantidad_notas_credito?: number;
   cantidad_centros_costo: number;
 
   ventas_netas: number;
-  ventas_sin_impuesto?: number;
   impuestos: number;
   total_facturado_siigo: number;
-  notas_credito?: number;
 
   total_facturado: number;
   total_pagado: number;
@@ -109,10 +88,8 @@ type ClienteInsight = {
   saldo_por_vencer: number;
 
   ventas_netas_str: string;
-  ventas_sin_impuesto_str?: string;
   impuestos_str: string;
   total_facturado_siigo_str: string;
-  notas_credito_str?: string;
 
   total_facturado_str: string;
   total_pagado_str: string;
@@ -143,13 +120,10 @@ type ClienteInsight = {
 type ResumenClientes = {
   clientes_facturados: number;
   cantidad_facturas: number;
-  cantidad_notas_credito?: number;
 
   ventas_netas: number;
-  ventas_sin_impuesto?: number;
   impuestos: number;
   total_facturado_siigo: number;
-  notas_credito?: number;
 
   total_facturado: number;
   total_pagado: number;
@@ -161,10 +135,8 @@ type ResumenClientes = {
   pct_vencido: number;
 
   ventas_netas_str: string;
-  ventas_sin_impuesto_str?: string;
   impuestos_str: string;
   total_facturado_siigo_str: string;
-  notas_credito_str?: string;
 
   total_facturado_str: string;
   total_pagado_str: string;
@@ -366,19 +338,18 @@ export default function ReporteClientesPage() {
             </h1>
 
             <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-600">
-              Vista ejecutiva para analizar ventas netas, notas crédito, total facturado Siigo,
-              cartera pendiente, pagos, centros de costo y movimientos recientes.
+              Vista ejecutiva para analizar ventas netas, total facturado Siigo,
+              cartera pendiente, pagos, centros de costo y facturas recientes.
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5 md:flex md:items-center">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:flex md:items-center">
             <MiniMetric
               label="Estado"
               value={loading ? "Cargando" : error ? "Con error" : "Actualizado"}
             />
             <MiniMetric label="Clientes" value={resumen?.clientes_facturados ?? 0} />
             <MiniMetric label="Facturas" value={resumen?.cantidad_facturas ?? 0} />
-            <MiniMetric label="Notas crédito" value={resumen?.cantidad_notas_credito ?? 0} />
             <MiniMetric label="% vencido" value={`${resumen?.pct_vencido ?? 0}%`} danger />
           </div>
         </div>
@@ -502,7 +473,7 @@ export default function ReporteClientesPage() {
             </CardContent>
           </Card>
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <KpiCard
               title="Ventas netas"
               value={resumen?.ventas_netas_str}
@@ -515,12 +486,6 @@ export default function ReporteClientesPage() {
               value={resumen?.total_facturado_siigo_str}
               helper="Valor total de documentos facturados en Siigo."
               tone="slate"
-            />
-            <KpiCard
-              title="Notas crédito"
-              value={resumen?.notas_credito_str || "$ 0"}
-              helper={`${resumen?.cantidad_notas_credito ?? 0} nota(s) crédito del periodo.`}
-              tone="red"
             />
 
             <KpiCard
@@ -684,7 +649,7 @@ export default function ReporteClientesPage() {
                   </CardTitle>
 
                   <p className="mt-1 text-sm text-slate-500">
-                    Expande un cliente para ver centros de costo, estados y movimientos recientes.
+                    Expande un cliente para ver centros de costo, estados y facturas recientes.
                   </p>
                 </div>
 
@@ -726,7 +691,7 @@ export default function ReporteClientesPage() {
                   <thead className="sticky top-0 z-10 bg-slate-100 text-slate-700">
                     <tr>
                       <th className="p-3 text-left">Cliente</th>
-                      <th className="p-3 text-right">Docs</th>
+                      <th className="p-3 text-right">Facturas</th>
                       <th className="p-3 text-right">Ventas netas</th>
                       <th className="p-3 text-right">Total Siigo</th>
                       <th className="p-3 text-right">Pagado</th>
@@ -768,9 +733,7 @@ export default function ReporteClientesPage() {
                                   </div>
 
                                   <div className="text-xs text-slate-500">
-                                    Último movimiento: {c.ultima_factura || "-"} ·{" "}
-                                    {c.cantidad_facturas} factura(s) ·{" "}
-                                    {c.cantidad_notas_credito ?? 0} nota(s) crédito ·{" "}
+                                    Última factura: {c.ultima_factura || "-"} ·{" "}
                                     {c.cantidad_centros_costo} centro(s) de costo
                                   </div>
                                 </div>
@@ -778,10 +741,7 @@ export default function ReporteClientesPage() {
                             </td>
 
                             <td className="p-3 text-right font-medium">
-                              <div>{c.cantidad_facturas} FV</div>
-                              <div className="text-[11px] font-semibold text-rose-600">
-                                {c.cantidad_notas_credito ?? 0} NC
-                              </div>
+                              {c.cantidad_facturas}
                             </td>
 
                             <td className="p-3 text-right font-semibold text-blue-700">
@@ -917,7 +877,6 @@ function ClienteDetalleInline({ cliente }: { cliente: ClienteInsight }) {
                 <tr>
                   <th className="p-2 text-left">Centro de costo</th>
                   <th className="p-2 text-right">Facturas</th>
-                  <th className="p-2 text-right">NC</th>
                   <th className="p-2 text-right">Ventas netas</th>
                   <th className="p-2 text-right">Pendiente</th>
                 </tr>
@@ -926,7 +885,7 @@ function ClienteDetalleInline({ cliente }: { cliente: ClienteInsight }) {
               <tbody>
                 {cliente.centros_costo.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="p-3 text-center text-slate-500">
+                    <td colSpan={4} className="p-3 text-center text-slate-500">
                       Sin centros de costo.
                     </td>
                   </tr>
@@ -935,19 +894,10 @@ function ClienteDetalleInline({ cliente }: { cliente: ClienteInsight }) {
                 {cliente.centros_costo.map((cc, idx) => (
                   <tr key={`${cc.cost_center}-${idx}`} className="border-t">
                     <td className="p-2">{cc.centro_costo_nombre}</td>
-
-                    <td className="p-2 text-right">
-                      {cc.cantidad_facturas}
-                    </td>
-
-                    <td className="p-2 text-right font-semibold text-rose-600">
-                      {cc.cantidad_notas_credito ?? 0}
-                    </td>
-
+                    <td className="p-2 text-right">{cc.cantidad_facturas}</td>
                     <td className="p-2 text-right font-semibold text-blue-700">
                       {cc.ventas_netas_str || cc.total_facturado_str}
                     </td>
-
                     <td className="p-2 text-right font-semibold text-orange-600">
                       {cc.saldo_pendiente_str}
                     </td>
@@ -979,8 +929,7 @@ function ClienteFicha({ cliente }: { cliente: ClienteInsight }) {
             </h2>
 
             <p className="mt-1 text-sm text-slate-500">
-              {cliente.cantidad_facturas} factura(s) · {cliente.cantidad_notas_credito ?? 0} nota(s) crédito ·{" "}
-              {cliente.cantidad_centros_costo} centro(s) de costo · Último movimiento:{" "}
+              {cliente.cantidad_facturas} factura(s) · {cliente.cantidad_centros_costo} centro(s) de costo · Última factura:{" "}
               {cliente.ultima_factura || "-"}
             </p>
           </div>
@@ -994,7 +943,7 @@ function ClienteFicha({ cliente }: { cliente: ClienteInsight }) {
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <KpiCard
           title="Ventas netas"
           value={cliente.ventas_netas_str}
@@ -1007,14 +956,6 @@ function ClienteFicha({ cliente }: { cliente: ClienteInsight }) {
           helper="Valor total facturado en Siigo."
           tone="slate"
         />
-
-        <KpiCard
-          title="Notas crédito"
-          value={cliente.notas_credito_str || "$ 0"}
-          helper={`${cliente.cantidad_notas_credito ?? 0} nota(s) crédito del cliente.`}
-          tone="red"
-        />
-  
         <KpiCard
           title="Total pagado"
           value={cliente.total_pagado_str}
@@ -1041,41 +982,22 @@ function ClienteFicha({ cliente }: { cliente: ClienteInsight }) {
 }
 
 function FacturasRecientesTable({ facturas }: { facturas: FacturaCliente[] }) {
-  const estadoLabel = (estado: FacturaCliente["estado_cartera"]) => {
-    if (estado === "pagado") return "Pagado";
-    if (estado === "sano") return "Sano";
-    if (estado === "alerta") return "Por vencer";
-    if (estado === "vencido") return "Vencido";
-    if (estado === "no_aplica") return "No aplica";
-    return "-";
-  };
-
-  const estadoClass = (estado: FacturaCliente["estado_cartera"]) => {
-    if (estado === "pagado") return "bg-green-100 text-green-700";
-    if (estado === "sano") return "bg-blue-100 text-blue-700";
-    if (estado === "alerta") return "bg-orange-100 text-orange-700";
-    if (estado === "vencido") return "bg-red-100 text-red-700";
-    if (estado === "no_aplica") return "bg-slate-100 text-slate-500";
-    return "bg-slate-100 text-slate-500";
-  };
-
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3">
       <h3 className="mb-2 text-sm font-bold text-slate-900">
-        Movimientos del periodo
+        Facturas del periodo
       </h3>
 
       <div className="max-h-72 overflow-auto">
-        <table className="w-full min-w-[980px] text-xs">
+        <table className="w-full min-w-[820px] text-xs">
           <thead className="bg-slate-100 text-slate-700">
             <tr>
-              <th className="p-2 text-left">Documento</th>
-              <th className="p-2 text-left">Tipo</th>
+              <th className="p-2 text-left">Factura</th>
               <th className="p-2 text-left">Fecha</th>
               <th className="p-2 text-left">Vencimiento</th>
               <th className="p-2 text-left">Estado</th>
-              <th className="p-2 text-right">Valor neto</th>
-              <th className="p-2 text-right">Total documento</th>
+              <th className="p-2 text-right">Ventas netas</th>
+              <th className="p-2 text-right">Total Siigo</th>
               <th className="p-2 text-right">Pendiente</th>
               <th className="p-2 text-center">Link</th>
             </tr>
@@ -1084,103 +1006,45 @@ function FacturasRecientesTable({ facturas }: { facturas: FacturaCliente[] }) {
           <tbody>
             {facturas.length === 0 && (
               <tr>
-                <td colSpan={9} className="p-3 text-center text-slate-500">
-                  Sin movimientos recientes.
+                <td colSpan={8} className="p-3 text-center text-slate-500">
+                  Sin facturas recientes.
                 </td>
               </tr>
             )}
 
-            {facturas.map((f, idx) => {
-              const esNotaCredito = f.tipo_movimiento === "NOTA_CREDITO";
-
-              return (
-                <tr
-                  key={`${f.idfactura}-${f.tipo_movimiento || "FACTURA"}-${idx}`}
-                  className={`border-t hover:bg-slate-50 ${
-                    esNotaCredito ? "bg-rose-50/40" : ""
-                  }`}
-                >
-                  <td className="p-2 whitespace-nowrap">
-                    <div className="font-semibold text-slate-900">
-                      {f.idfactura}
-                    </div>
-
-                    {esNotaCredito && (
-                      <div className="mt-1 text-[11px] text-rose-600">
-                        Afecta: {f.documento_afectado || "Sin referencia"}
-                      </div>
-                    )}
-                  </td>
-
-                  <td className="p-2 whitespace-nowrap">
-                    <span
-                      className={`inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ${
-                        esNotaCredito
-                          ? "bg-rose-100 text-rose-700"
-                          : "bg-blue-100 text-blue-700"
-                      }`}
+            {facturas.map((f, idx) => (
+              <tr key={`${f.idfactura}-${idx}`} className="border-t hover:bg-slate-50">
+                <td className="p-2 font-medium whitespace-nowrap">{f.idfactura}</td>
+                <td className="p-2 whitespace-nowrap">{f.fecha || "-"}</td>
+                <td className="p-2 whitespace-nowrap">{f.vencimiento || "-"}</td>
+                <td className="p-2 whitespace-nowrap">
+                  <EstadoBadge estado={f.estado_cartera} />
+                </td>
+                <td className="p-2 text-right whitespace-nowrap font-semibold text-blue-700">
+                  {f.ventas_netas_str || "-"}
+                </td>
+                <td className="p-2 text-right whitespace-nowrap font-semibold text-slate-700">
+                  {f.total_facturado_siigo_str || f.total_str}
+                </td>
+                <td className="p-2 text-right whitespace-nowrap font-semibold text-orange-600">
+                  {f.pendiente_str}
+                </td>
+                <td className="p-2 text-center">
+                  {f.public_url ? (
+                    <a
+                      href={f.public_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-medium text-blue-600 hover:underline"
                     >
-                      {f.tipo_documento_label || (esNotaCredito ? "Nota crédito" : "Factura")}
-                    </span>
-                  </td>
-
-                  <td className="p-2 whitespace-nowrap">{f.fecha || "-"}</td>
-
-                  <td className="p-2 whitespace-nowrap">
-                    {esNotaCredito ? (
-                      <span className="text-slate-400">No aplica</span>
-                    ) : (
-                      f.vencimiento || "-"
-                    )}
-                  </td>
-
-                  <td className="p-2 whitespace-nowrap">
-                    <span
-                      className={`inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ${estadoClass(
-                        f.estado_cartera
-                      )}`}
-                    >
-                      {estadoLabel(f.estado_cartera)}
-                    </span>
-                  </td>
-
-                  <td
-                    className={`p-2 text-right font-semibold ${
-                      esNotaCredito ? "text-rose-700" : "text-blue-700"
-                    }`}
-                  >
-                    {f.ventas_netas_str}
-                  </td>
-
-                  <td className="p-2 text-right font-semibold text-slate-700">
-                    {f.total_facturado_siigo_str || f.total_str}
-                  </td>
-
-                  <td className="p-2 text-right font-semibold text-orange-600">
-                    {esNotaCredito ? (
-                      <span className="text-slate-400">No aplica</span>
-                    ) : (
-                      f.pendiente_str
-                    )}
-                  </td>
-
-                  <td className="p-2 text-center">
-                    {f.public_url ? (
-                      <a
-                        href={f.public_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="rounded-md border border-slate-300 px-2 py-1 font-semibold text-blue-700 hover:bg-blue-50"
-                      >
-                        Ver
-                      </a>
-                    ) : (
-                      <span className="text-slate-400">-</span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
+                      Ver
+                    </a>
+                  ) : (
+                    <span className="text-slate-400">-</span>
+                  )}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -1288,7 +1152,6 @@ function EstadoBadge({ estado }: { estado: string }) {
     sano: "Sano",
     alerta: "Por vencer",
     vencido: "Vencido",
-    no_aplica: "No aplica",
   };
 
   const cls =
@@ -1298,9 +1161,7 @@ function EstadoBadge({ estado }: { estado: string }) {
       ? "bg-blue-50 text-blue-700 border-blue-100"
       : estado === "alerta"
       ? "bg-orange-50 text-orange-700 border-orange-100"
-      : estado === "vencido"
-      ? "bg-red-50 text-red-700 border-red-100"
-      : "bg-slate-50 text-slate-600 border-slate-100";
+      : "bg-red-50 text-red-700 border-red-100";
 
   return (
     <span className={`inline-flex rounded-full border px-2 py-1 text-[11px] font-semibold ${cls}`}>

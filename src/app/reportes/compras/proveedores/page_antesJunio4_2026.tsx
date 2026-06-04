@@ -4,7 +4,6 @@
 
 import { useEffect, useState } from "react";
 import { authFetch } from "@/lib/api";
-import { getDefaultYearToDateRange } from "@/lib/dateDefaults";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -107,11 +106,8 @@ export default function ReporteComprasProveedoresPage() {
   const [mostrarSugerencias, setMostrarSugerencias] = useState<boolean>(false);
 
   const [estadoPago, setEstadoPago] = useState<string>("");
-
-  const [defaultDates] = useState(() => getDefaultYearToDateRange());
-
-  const [fechaDesde, setFechaDesde] = useState<string>(defaultDates.desde);
-  const [fechaHasta, setFechaHasta] = useState<string>(defaultDates.hasta);
+  const [fechaDesde, setFechaDesde] = useState<string>("");
+  const [fechaHasta, setFechaHasta] = useState<string>("");
 
   const [loading, setLoading] = useState(true);
 

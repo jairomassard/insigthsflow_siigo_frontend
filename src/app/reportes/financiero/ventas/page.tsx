@@ -83,26 +83,42 @@ function abreviar(valor: number): string {
   return `${Math.round(v)}`;
 }
 
-function formatDate(value: any) {
-  if (!value) return "-";
+function getDateYYYYMMDD(value: any): string {
+  if (!value) return "";
 
   const raw = String(value);
 
-  // Evita desfases UTC: "2026-06-01" no debe mostrarse como "31/05/2026".
+  // Caso 1: ya viene como YYYY-MM-DD o YYYY-MM-DDTHH:mm:ss
   const isoDate = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (isoDate) {
     const [, y, m, d] = isoDate;
+    return `${y}-${m}-${d}`;
+  }
+
+  // Caso 2: viene como "Tue, 02 Jun 2026 00:00:00 GMT"
+  // Usamos UTC para no mover la fecha a Colombia y no convertir 01 Jun en 31 May.
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return "";
+
+  const year = parsed.getUTCFullYear();
+  const month = String(parsed.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getUTCDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+
+function formatDate(value: any) {
+  if (!value) return "-";
+
+  const ymd = getDateYYYYMMDD(value);
+
+  if (ymd) {
+    const [y, m, d] = ymd.split("-");
     return `${d}/${m}/${y}`;
   }
 
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) return raw;
-
-  return parsed.toLocaleDateString("es-CO", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
+  return String(value);
 }
 
 function calcularPagadoPendiente(f: MovimientoVenta) {
@@ -310,7 +326,7 @@ export default function DashboardFinanciero() {
       const rowsFiltradas =
         desdeParam || hastaParam
           ? rowsRaw.filter((row: MovimientoVenta) => {
-              const fechaRaw = String(row.fecha || "").slice(0, 10);
+              const fechaRaw = getDateYYYYMMDD(row.fecha);
 
               if (!fechaRaw) return false;
               if (desdeParam && fechaRaw < desdeParam) return false;

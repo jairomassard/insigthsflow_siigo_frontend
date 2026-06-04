@@ -3,7 +3,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { authFetch } from "@/lib/api";
-import { getDefaultYearToDateRange } from "@/lib/dateDefaults";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -188,10 +187,8 @@ export default function ReporteFinancieroConsolidadoPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
-  const [defaultDates] = useState(() => getDefaultYearToDateRange());
-
-  const [fechaDesde, setFechaDesde] = useState<string>(defaultDates.desde);
-  const [fechaHasta, setFechaHasta] = useState<string>(defaultDates.hasta);
+  const [fechaDesde, setFechaDesde] = useState<string>("");
+  const [fechaHasta, setFechaHasta] = useState<string>("");
   const [centroCostos, setCentroCostos] = useState<string>("");
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -213,10 +210,8 @@ export default function ReporteFinancieroConsolidadoPage() {
   }, [fechaDesde, fechaHasta, centroCostos]);
 
   const limpiarFiltros = () => {
-    const d = getDefaultYearToDateRange();
-
-    setFechaDesde(d.desde);
-    setFechaHasta(d.hasta);
+    setFechaDesde("");
+    setFechaHasta("");
     setCentroCostos("");
   };
 

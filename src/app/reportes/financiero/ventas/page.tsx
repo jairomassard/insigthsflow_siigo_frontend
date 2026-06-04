@@ -17,6 +17,7 @@ import {
   Cell,
 } from "recharts";
 import { authFetch } from "@/lib/api";
+import { getDefaultYearToDateRange } from "@/lib/dateDefaults";
 
 type Vendedor = { id: number; nombre: string };
 type CentroCosto = { id: number; nombre: string; codigo?: string };
@@ -151,8 +152,10 @@ export default function DashboardFinanciero() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
-  const [desde, setDesde] = useState("");
-  const [hasta, setHasta] = useState("");
+  const [defaultDates] = useState(() => getDefaultYearToDateRange());
+
+  const [desde, setDesde] = useState(defaultDates.desde);
+  const [hasta, setHasta] = useState(defaultDates.hasta);
   const [sellerId, setSellerId] = useState("");
   const [costCenter, setCostCenter] = useState("");
   const [clienteSel, setClienteSel] = useState("");
@@ -238,8 +241,10 @@ export default function DashboardFinanciero() {
   };
 
   const limpiarFiltros = () => {
-    setDesde("");
-    setHasta("");
+    const d = getDefaultYearToDateRange();
+
+    setDesde(d.desde);
+    setHasta(d.hasta);
     setSellerId("");
     setCostCenter("");
     setClienteSel("");
@@ -247,6 +252,13 @@ export default function DashboardFinanciero() {
 
   const qsBase = () => {
     const qs = new URLSearchParams();
+
+    const fallbackDates = getDefaultYearToDateRange();
+    const desdeFinal = desde || fallbackDates.desde;
+    const hastaFinal = hasta || fallbackDates.hasta;
+
+    qs.set("desde", desdeFinal);
+    qs.set("hasta", hastaFinal);
 
     if (sellerId) qs.set("seller_id", sellerId);
     if (costCenter) qs.set("cost_center", costCenter);
@@ -282,10 +294,7 @@ export default function DashboardFinanciero() {
       const qs = qsBase();
 
       if (desdeParam) qs.set("desde", desdeParam);
-      else if (desde) qs.set("desde", desde);
-
       if (hastaParam) qs.set("hasta", hastaParam);
-      else if (hasta) qs.set("hasta", hasta);
 
       if (clienteParam) qs.set("cliente", clienteParam);
 
@@ -320,8 +329,13 @@ export default function DashboardFinanciero() {
 
     const qs = new URLSearchParams();
 
-    if (desde) qs.set("desde", desde);
-    if (hasta) qs.set("hasta", hasta);
+    const fallbackDates = getDefaultYearToDateRange();
+    const desdeFinal = desde || fallbackDates.desde;
+    const hastaFinal = hasta || fallbackDates.hasta;
+
+    qs.set("desde", desdeFinal);
+    qs.set("hasta", hastaFinal);
+
     if (sellerId) qs.set("seller_id", sellerId);
     if (costCenter) qs.set("cost_center", costCenter);
     if (clienteSel) qs.set("cliente", clienteSel);
@@ -377,8 +391,12 @@ export default function DashboardFinanciero() {
       try {
         const qs = new URLSearchParams();
 
-        if (desde) qs.append("desde", desde);
-        if (hasta) qs.append("hasta", hasta);
+        const fallbackDates = getDefaultYearToDateRange();
+        const desdeFinal = desde || fallbackDates.desde;
+        const hastaFinal = hasta || fallbackDates.hasta;
+
+        qs.append("desde", desdeFinal);
+        qs.append("hasta", hastaFinal);
 
         const cli = await authFetch(`/catalogos/clientes-facturas?${qs.toString()}`);
         if (Array.isArray(cli)) setClientes(cli);

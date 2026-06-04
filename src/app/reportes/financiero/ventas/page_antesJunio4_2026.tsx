@@ -22,19 +22,39 @@ type Vendedor = { id: number; nombre: string };
 type CentroCosto = { id: number; nombre: string; codigo?: string };
 type Cliente = { id: string; nombre: string };
 
-type Factura = {
-  idfactura: string;
+type MovimientoVenta = {
+  movimiento_id?: number;
+  documento?: string;
+  idfactura?: string;
+  tipo_movimiento?: "FACTURA" | "NOTA_CREDITO" | string;
   fecha: string;
-  cliente_nombre: string;
+  vencimiento?: string;
+  cliente_nombre?: string;
   vendedor_nombre?: string;
   centro_costo_nombre?: string;
+  documento_afectado?: string;
   subtotal: number;
-  impuestos?: number;
   impuestos_total?: number;
+  impuestos?: number;
   total: number;
+  valor?: number;
   pagado?: number;
-  saldo: number;
+  pendiente?: number;
+  saldo?: number;
   public_url?: string;
+};
+
+type ResumenMovimientos = {
+  facturas_emitidas?: number;
+  notas_credito?: number;
+  ventas_netas?: number;
+  ventas_con_impuesto?: number;
+  ventas_sin_impuesto?: number;
+  pagado?: number;
+  pendiente?: number;
+  total_movimientos?: number;
+  total_facturas?: number;
+  total_notas_credito?: number;
 };
 
 const fmtCOP = (n: number) =>
@@ -75,12 +95,16 @@ function formatDate(value: any) {
   });
 }
 
-function calcularPagadoPendiente(f: Factura) {
+function calcularPagadoPendiente(f: MovimientoVenta) {
+  if (f.tipo_movimiento === "NOTA_CREDITO") {
+    return { pagado: 0, pendiente: 0 };
+  }
+
   const total = Number(f.total || 0);
-  const saldo = Number(f.saldo || 0);
+  const saldo = Number(f.saldo || f.pendiente || 0);
 
   let pagado = f.pagado !== undefined ? Number(f.pagado) : total - saldo;
-  let pendiente = saldo;
+  let pendiente = f.pendiente !== undefined ? Number(f.pendiente) : saldo;
 
   if (saldo === total) pagado = 0;
   if (saldo === 0) {
@@ -89,6 +113,15 @@ function calcularPagadoPendiente(f: Factura) {
   }
 
   return { pagado, pendiente };
+}
+
+function fmtPct(n: any) {
+  const value = Number(n || 0);
+
+  return value.toLocaleString("es-CO", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
 }
 
 export default function DashboardFinanciero() {
@@ -103,7 +136,16 @@ export default function DashboardFinanciero() {
     total_utilizable: 0,
     pagado: 0,
     pendiente: 0,
+    ventas_sin_impuesto: 0,
+    ventas_con_impuesto: 0,
+    facturas_emitidas_sin_impuesto: 0,
+    facturas_emitidas_con_impuesto: 0,
+    notas_credito_sin_impuesto: 0,
+    notas_credito_con_impuesto: 0,
+    notas_credito: 0,
+    notas_credito_abs: 0,
   });
+
   const [estados, setEstados] = useState<any[]>([]);
   const [topClientes, setTopClientes] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -119,29 +161,47 @@ export default function DashboardFinanciero() {
   const [centros, setCentros] = useState<CentroCosto[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
 
-  const totalSubtotal = toNum(kpis.subtotal);
-  const totalImpuestos = toNum(kpis.impuestos);
+  const [incluyeImpuesto, setIncluyeImpuesto] = useState(true);
+  const [incluyeNotaCredito, setIncluyeNotaCredito] = useState(true);
+
+  const totalVentasNetas = toNum(kpis.subtotal);
+  const totalImpuestosNetos = toNum(kpis.impuestos);
   const totalAutorretencion = toNum(kpis.autorretencion);
-  const totalFacturado = toNum(kpis.total_facturado);
   const totalRetenciones = toNum(kpis.retenciones);
-  const totalUtilizable = toNum(kpis.total_utilizable);
   const totalPagado = toNum(kpis.pagado);
   const totalPendiente = toNum(kpis.pendiente);
 
-  const pctPagado = totalFacturado ? (totalPagado / totalFacturado) * 100 : 0;
-  const pctPendiente = totalFacturado ? (totalPendiente / totalFacturado) * 100 : 0;
+  const facturasEmitidasSinImpuesto = toNum(kpis.facturas_emitidas_sin_impuesto);
+  const facturasEmitidasConImpuesto = toNum(kpis.facturas_emitidas_con_impuesto);
+  const notasCreditoSinImpuesto = Math.abs(toNum(kpis.notas_credito_sin_impuesto));
+  const notasCreditoConImpuesto = Math.abs(toNum(kpis.notas_credito_con_impuesto));
 
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalMes, setModalMes] = useState("");
-  const [detalleFacturas, setDetalleFacturas] = useState<any[]>([]);
+  const facturasEmitidas = toNum(kpis.total_facturado);
 
-  const [modalClienteOpen, setModalClienteOpen] = useState(false);
-  const [clienteEnModal, setClienteEnModal] = useState("");
-  const [facturasCliente, setFacturasCliente] = useState<any[]>([]);
+  const notasCredito = toNum(kpis.notas_credito_abs) ||
+    (incluyeImpuesto ? notasCreditoConImpuesto : notasCreditoSinImpuesto);
+
+  // Pagado y pendiente son valores de cartera sobre facturas, normalmente con impuesto.
+  // Por eso el porcentaje se calcula sobre facturas emitidas con impuesto, no sobre ventas netas.
+  const baseCobro = facturasEmitidasConImpuesto || facturasEmitidas;
+
+  const pctPagado = baseCobro
+    ? Math.min((totalPagado / baseCobro) * 100, 100)
+    : 0;
+
+  const pctPendiente = baseCobro
+    ? Math.min((totalPendiente / baseCobro) * 100, 100)
+    : 0;
+
+  const [modalMovimientosOpen, setModalMovimientosOpen] = useState(false);
+  const [modalMovimientosTitulo, setModalMovimientosTitulo] = useState("");
+  const [modalMovimientosSubtitulo, setModalMovimientosSubtitulo] = useState("");
+  const [movimientosDetalle, setMovimientosDetalle] = useState<MovimientoVenta[]>([]);
+  const [resumenDetalle, setResumenDetalle] = useState<ResumenMovimientos | null>(null);
 
   const [modalEstadoOpen, setModalEstadoOpen] = useState(false);
   const [estadoEnModal, setEstadoEnModal] = useState("");
-  const [facturasEstado, setFacturasEstado] = useState<any[]>([]);
+  const [facturasEstado, setFacturasEstado] = useState<MovimientoVenta[]>([]);
 
   const load = async () => {
     setLoading(true);
@@ -156,8 +216,10 @@ export default function DashboardFinanciero() {
       if (costCenter) qs.append("cost_center", costCenter);
       if (clienteSel) qs.append("cliente", clienteSel);
 
-      const url = `/reportes/facturas_enriquecidas?${qs.toString()}`;
-      const res = await authFetch(url);
+      qs.append("incluye_impuesto", incluyeImpuesto ? "1" : "0");
+      qs.append("incluye_nota_credito", incluyeNotaCredito ? "1" : "0");
+
+      const res = await authFetch(`/reportes/facturas_enriquecidas?${qs.toString()}`);
 
       if (res?.error) {
         setErr(res.error);
@@ -183,77 +245,121 @@ export default function DashboardFinanciero() {
     setClienteSel("");
   };
 
-  const handleTopClienteClick = async (entry: any) => {
-    if (!entry?.cliente) return;
-
-    setClienteEnModal(entry.cliente);
-    setModalClienteOpen(true);
-
+  const qsBase = () => {
     const qs = new URLSearchParams();
-    if (desde) qs.set("desde", desde);
-    if (hasta) qs.set("hasta", hasta);
+
     if (sellerId) qs.set("seller_id", sellerId);
     if (costCenter) qs.set("cost_center", costCenter);
-    qs.set("cliente", entry.cliente);
+    if (clienteSel) qs.set("cliente", clienteSel);
 
-    const res = await authFetch(`/reportes/facturas_por_cliente?${qs.toString()}`);
-    setFacturasCliente(res.rows || []);
+    qs.set("incluye_impuesto", incluyeImpuesto ? "1" : "0");
+    qs.set("incluye_nota_credito", incluyeNotaCredito ? "1" : "0");
+    qs.set("limit", "10000");
+
+    return qs;
+  };
+
+  const cargarMovimientosDetalle = async ({
+    titulo,
+    subtitulo,
+    desdeParam,
+    hastaParam,
+    clienteParam,
+  }: {
+    titulo: string;
+    subtitulo: string;
+    desdeParam?: string;
+    hastaParam?: string;
+    clienteParam?: string;
+  }) => {
+    try {
+      setModalMovimientosTitulo(titulo);
+      setModalMovimientosSubtitulo(subtitulo);
+      setModalMovimientosOpen(true);
+      setMovimientosDetalle([]);
+      setResumenDetalle(null);
+
+      const qs = qsBase();
+
+      if (desdeParam) qs.set("desde", desdeParam);
+      else if (desde) qs.set("desde", desde);
+
+      if (hastaParam) qs.set("hasta", hastaParam);
+      else if (hasta) qs.set("hasta", hasta);
+
+      if (clienteParam) qs.set("cliente", clienteParam);
+
+      const res = await authFetch(`/reportes/ventas_movimientos_detalle?${qs.toString()}`);
+
+      setMovimientosDetalle(res.rows || []);
+      setResumenDetalle(res.resumen || null);
+    } catch (error) {
+      console.error("Error cargando movimientos", error);
+      setMovimientosDetalle([]);
+      setResumenDetalle(null);
+    }
+  };
+
+  const handleTopClienteClick = async (entry: any) => {
+    const item = entry?.payload || entry;
+    if (!item?.cliente) return;
+
+    await cargarMovimientosDetalle({
+      titulo: `Movimientos del cliente: ${item.cliente}`,
+      subtitulo: "Facturas y notas crédito del periodo seleccionado.",
+      clienteParam: item.cliente,
+    });
   };
 
   const handleEstadoClick = async (entry: any) => {
-    if (!entry?.estado) return;
+    const item = entry?.payload || entry;
+    if (!item?.estado) return;
 
-    setEstadoEnModal(entry.estado);
+    setEstadoEnModal(item.estado);
     setModalEstadoOpen(true);
 
     const qs = new URLSearchParams();
+
     if (desde) qs.set("desde", desde);
     if (hasta) qs.set("hasta", hasta);
     if (sellerId) qs.set("seller_id", sellerId);
     if (costCenter) qs.set("cost_center", costCenter);
-    qs.set("estado", entry.estado);
+    if (clienteSel) qs.set("cliente", clienteSel);
+
+    qs.set("estado", item.estado);
+    qs.set("incluye_impuesto", incluyeImpuesto ? "1" : "0");
+    qs.set("incluye_nota_credito", incluyeNotaCredito ? "1" : "0");
 
     const res = await authFetch(`/reportes/facturas_por_estado?${qs.toString()}`);
     setFacturasEstado(res.rows || []);
   };
 
   const handleBarClick = async (entry: any) => {
-    try {
-      const periodo = entry?.periodo;
-      if (!periodo) return;
+    const item = entry?.payload || entry;
+    const periodo = item?.periodo;
+    if (!periodo) return;
 
-      const dateObj = new Date(periodo);
-      if (Number.isNaN(dateObj.getTime())) {
-        console.error("Fecha inválida:", periodo);
-        return;
-      }
-
-      const year = dateObj.getUTCFullYear();
-      const month = dateObj.getUTCMonth();
-
-      const desdeMes = `${year}-${String(month + 1).padStart(2, "0")}-01`;
-      const hastaMesDate = new Date(Date.UTC(year, month + 1, 0));
-      const hastaMes = `${year}-${String(month + 1).padStart(2, "0")}-${String(
-        hastaMesDate.getUTCDate()
-      ).padStart(2, "0")}`;
-
-      setModalMes(periodo);
-      setModalOpen(true);
-
-      const qs = new URLSearchParams();
-      qs.set("desde", desdeMes);
-      qs.set("hasta", hastaMes);
-
-      if (sellerId) qs.set("seller_id", sellerId);
-      if (costCenter) qs.set("cost_center", costCenter);
-      if (clienteSel) qs.set("cliente", clienteSel);
-
-      const res = await authFetch(`/reportes/facturas_detalle_mes?${qs.toString()}`);
-      setDetalleFacturas(res.rows || []);
-    } catch (error) {
-      console.error("Error cargando detalle por mes", error);
-      setDetalleFacturas([]);
+    const dateObj = new Date(periodo);
+    if (Number.isNaN(dateObj.getTime())) {
+      console.error("Fecha inválida:", periodo);
+      return;
     }
+
+    const year = dateObj.getUTCFullYear();
+    const month = dateObj.getUTCMonth();
+
+    const desdeMes = `${year}-${String(month + 1).padStart(2, "0")}-01`;
+    const hastaMesDate = new Date(Date.UTC(year, month + 1, 0));
+    const hastaMes = `${year}-${String(month + 1).padStart(2, "0")}-${String(
+      hastaMesDate.getUTCDate()
+    ).padStart(2, "0")}`;
+
+    await cargarMovimientosDetalle({
+      titulo: `Movimientos del mes: ${item?.label || periodo}`,
+      subtitulo: "Facturas emitidas, notas crédito y venta neta del mes.",
+      desdeParam: desdeMes,
+      hastaParam: hastaMes,
+    });
   };
 
   useEffect(() => {
@@ -270,6 +376,7 @@ export default function DashboardFinanciero() {
 
       try {
         const qs = new URLSearchParams();
+
         if (desde) qs.append("desde", desde);
         if (hasta) qs.append("hasta", hasta);
 
@@ -284,13 +391,12 @@ export default function DashboardFinanciero() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [desde, hasta, sellerId, costCenter, clienteSel]);
+  }, [desde, hasta, sellerId, costCenter, clienteSel, incluyeImpuesto, incluyeNotaCredito]);
 
   useEffect(() => {
     const onEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        setModalOpen(false);
-        setModalClienteOpen(false);
+        setModalMovimientosOpen(false);
         setModalEstadoOpen(false);
       }
     };
@@ -302,10 +408,11 @@ export default function DashboardFinanciero() {
   const monthly = useMemo(
     () =>
       series.map((s: any) => ({
-        periodo: s.label,
+        periodo: s.periodo || s.label,
+        label: s.label || s.periodo,
         subtotal: Number(s.subtotal || 0),
+        notas_credito: Number(s.notas_credito || 0),
         impuestos: Number(s.impuestos || 0),
-        descuentos: Number(s.descuentos || 0),
         total_facturado: Number(s.total_facturado || 0),
         retenciones: Number(s.retenciones || 0),
         total_utilizable: Number(s.total_utilizable || 0),
@@ -331,30 +438,24 @@ export default function DashboardFinanciero() {
 
   return (
     <div className="space-y-6">
-      <VentasModal
-        open={modalOpen}
-        title={`Facturas del mes: ${modalMes}`}
-        subtitle={`Total de facturas: ${detalleFacturas.length}`}
-        onClose={() => setModalOpen(false)}
-        rows={detalleFacturas}
-        showCliente
+      <MovimientosModal
+        open={modalMovimientosOpen}
+        title={modalMovimientosTitulo}
+        subtitle={modalMovimientosSubtitulo}
+        onClose={() => setModalMovimientosOpen(false)}
+        rows={movimientosDetalle}
+        resumen={resumenDetalle}
+        incluyeImpuesto={incluyeImpuesto}
       />
 
-      <VentasModal
-        open={modalClienteOpen}
-        title={`Facturas del cliente: ${clienteEnModal}`}
-        subtitle={`Total de facturas: ${facturasCliente.length}`}
-        onClose={() => setModalClienteOpen(false)}
-        rows={facturasCliente}
-      />
-
-      <VentasModal
+      <MovimientosModal
         open={modalEstadoOpen}
         title={`Facturas en estado: ${estadoEnModal}`}
         subtitle={`Total de facturas: ${facturasEstado.length}`}
         onClose={() => setModalEstadoOpen(false)}
         rows={facturasEstado}
-        showCliente
+        incluyeImpuesto={incluyeImpuesto}
+        forceFacturas
       />
 
       <div className="rounded-2xl border border-slate-200 bg-gradient-to-r from-emerald-50 via-white to-slate-100 p-5 shadow-sm">
@@ -369,8 +470,8 @@ export default function DashboardFinanciero() {
             </h1>
 
             <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-600">
-              Vista ejecutiva de ventas netas, total facturado Siigo, pagos,
-              cartera pendiente, clientes, vendedores y centros de costo.
+              Vista ejecutiva de ventas netas alineadas con Siigo, facturas emitidas,
+              notas crédito, pagos, cartera pendiente, clientes y centros de costo.
             </p>
           </div>
 
@@ -402,7 +503,7 @@ export default function DashboardFinanciero() {
         </div>
 
         <div className="p-4">
-          <div className="grid gap-3 md:grid-cols-6">
+          <div className="grid gap-3 md:grid-cols-7">
             <Field label="Desde">
               <input
                 type="date"
@@ -466,6 +567,28 @@ export default function DashboardFinanciero() {
               </select>
             </Field>
 
+            <Field label="Opciones Siigo a Incluir">
+              <div className="flex h-10 items-center gap-4 rounded-lg border border-slate-300 bg-white px-3 text-xs">
+                <label className="inline-flex items-center gap-2 whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    checked={incluyeImpuesto}
+                    onChange={(e) => setIncluyeImpuesto(e.target.checked)}
+                  />
+                  Impuestos
+                </label>
+
+                <label className="inline-flex items-center gap-2 whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    checked={incluyeNotaCredito}
+                    onChange={(e) => setIncluyeNotaCredito(e.target.checked)}
+                  />
+                  Notas crédito
+                </label>
+              </div>
+            </Field>
+
             <div className="flex items-end">
               <button
                 onClick={limpiarFiltros}
@@ -495,51 +618,70 @@ export default function DashboardFinanciero() {
           <div className="overflow-x-auto pb-1">
             <div className="grid min-w-[1280px] grid-cols-8 gap-3">
               <KpiCard
-                title="Ventas netas"
-                value={fmtCOP(totalSubtotal)}
-                helper="Valor neto comercial."
+                title={incluyeImpuesto ? "Ventas netas con impuesto" : "Ventas netas sin impuesto"}
+                value={fmtCOP(totalVentasNetas)}
+                helper={
+                  incluyeImpuesto
+                    ? "Equivale al comparativo de Siigo con 'Incluye impuesto' activo: facturas menos notas crédito."
+                    : "Equivale al comparativo de Siigo sin 'Incluye impuesto': facturas menos notas crédito."
+                }
                 tone="green"
               />
+
               <KpiCard
-                title="Impuestos"
-                value={fmtCOP(totalImpuestos)}
-                helper="Impuestos asociados."
+                title="Facturas emitidas"
+                value={fmtCOP(facturasEmitidas)}
+                helper={
+                  incluyeImpuesto
+                    ? "Total de facturas emitidas con impuesto, antes de descontar notas crédito."
+                    : "Subtotal de facturas emitidas sin impuesto, antes de descontar notas crédito."
+                }
+                tone="emerald"
+              />
+
+              <KpiCard
+                title="Notas crédito"
+                value={fmtCOP(notasCredito)}
+                helper={
+                  incluyeImpuesto
+                    ? "Notas crédito del periodo con impuesto."
+                    : "Notas crédito del periodo sin impuesto."
+                }
+                tone="red"
+              />
+
+              <KpiCard
+                title="Impuestos netos"
+                value={fmtCOP(totalImpuestosNetos)}
+                helper="Diferencia entre ventas con impuesto y ventas sin impuesto."
                 tone="yellow"
               />
+
               <KpiCard
                 title="Retenciones"
                 value={fmtCOP(totalRetenciones)}
-                helper="Sin autorretención."
+                helper="Retenciones sin autorretención."
                 tone="orange"
               />
-              <KpiCard
-                title="Total Siigo"
-                value={fmtCOP(totalFacturado)}
-                helper="Total facturado."
-                tone="emerald"
-              />
+
               <KpiCard
                 title="Autorretención"
                 value={fmtCOP(totalAutorretencion)}
-                helper="Autorretenciones."
+                helper="Autorretenciones del periodo."
                 tone="purple"
               />
-              <KpiCard
-                title="Total utilizable"
-                value={fmtCOP(totalUtilizable)}
-                helper="Total menos retenciones."
-                tone="teal"
-              />
+
               <KpiCard
                 title="Pagado"
                 value={fmtCOP(totalPagado)}
-                helper={`${fmtPct(pctPagado)}% del total.`}
+                helper={`${fmtPct(pctPagado)}% sobre facturas emitidas con impuesto.`}
                 tone="blue"
               />
+
               <KpiCard
                 title="Pendiente"
                 value={fmtCOP(totalPendiente)}
-                helper={`${fmtPct(pctPendiente)}% del total.`}
+                helper={`${fmtPct(pctPendiente)}% sobre facturas emitidas con impuesto.`}
                 tone="red"
               />
             </div>
@@ -553,13 +695,15 @@ export default function DashboardFinanciero() {
                     Evolución mensual
                   </h3>
                   <p className="mt-1 text-sm text-slate-500">
-                    Haz clic sobre una barra para ver las facturas del mes.
+                    Haz clic sobre una barra para ver facturas y notas crédito del mes.
+                    La venta neta se calcula como facturas emitidas menos notas crédito.
                   </p>
                 </div>
 
                 <div className="flex flex-wrap gap-2 text-xs">
                   <LegendPill colorClass="bg-green-600" label="Ventas netas" />
-                  <LegendPill colorClass="bg-emerald-500" label="Total facturado" />
+                  <LegendPill colorClass="bg-emerald-500" label="Facturas emitidas" />
+                  <LegendPill colorClass="bg-rose-500" label="Notas crédito" />
                   <LegendPill colorClass="bg-blue-500" label="Pagado" />
                   <LegendPill colorClass="bg-red-600" label="Pendiente" />
                 </div>
@@ -572,12 +716,15 @@ export default function DashboardFinanciero() {
                   Sin datos para los filtros seleccionados.
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height={360}>
+                <ResponsiveContainer width="100%" height={380}>
                   <BarChart data={monthly} margin={{ top: 24, right: 18, left: 8, bottom: 16 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="periodo" tick={{ fontSize: 11 }} />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                     <YAxis tickFormatter={fmtShort} tick={{ fontSize: 11 }} />
-                    <Tooltip formatter={(v) => fmtCOP(Number(v))} />
+                    <Tooltip
+                      content={<MonthlyTooltip incluyeImpuesto={incluyeImpuesto} />}
+                      cursor={{ fill: "rgba(148, 163, 184, 0.18)" }}
+                    />
                     <Legend />
 
                     <Bar
@@ -599,13 +746,29 @@ export default function DashboardFinanciero() {
                     <Bar
                       dataKey="total_facturado"
                       fill="#10b981"
-                      name="Total facturado"
+                      name="Facturas emitidas"
                       radius={[6, 6, 0, 0]}
                       cursor="pointer"
                       onClick={(data) => handleBarClick(data)}
                     >
                       <LabelList
                         dataKey="total_facturado"
+                        position="top"
+                        formatter={(v: any) => abreviar(Number(v))}
+                        style={{ fontSize: 10 }}
+                      />
+                    </Bar>
+
+                    <Bar
+                      dataKey="notas_credito"
+                      fill="#f43f5e"
+                      name="Notas crédito"
+                      radius={[6, 6, 0, 0]}
+                      cursor="pointer"
+                      onClick={(data) => handleBarClick(data)}
+                    >
+                      <LabelList
+                        dataKey="notas_credito"
                         position="top"
                         formatter={(v: any) => abreviar(Number(v))}
                         style={{ fontSize: 10 }}
@@ -656,7 +819,7 @@ export default function DashboardFinanciero() {
                   Top 5 clientes
                 </h3>
                 <p className="mt-1 text-sm text-slate-500">
-                  Clientes con mayor venta en el periodo. Haz clic para ver facturas.
+                  Clientes con mayor venta neta en el periodo. Haz clic para ver facturas y notas crédito.
                 </p>
               </div>
 
@@ -680,11 +843,12 @@ export default function DashboardFinanciero() {
                         width={190}
                         tick={{ fontSize: 11 }}
                       />
-                      <Tooltip formatter={(v) => fmtCOP(Number(v))} />
+                      <Tooltip content={<TopClienteTooltip />} />
+
                       <Bar
                         dataKey="total"
                         fill="#2563eb"
-                        name="Ventas"
+                        name="Ventas netas"
                         radius={[0, 6, 6, 0]}
                         cursor="pointer"
                         onClick={(data) => handleTopClienteClick(data)}
@@ -708,7 +872,7 @@ export default function DashboardFinanciero() {
                   Distribución por estado de pago
                 </h3>
                 <p className="mt-1 text-sm text-slate-500">
-                  Comparativo entre valores pagados y pendientes. Haz clic para ver detalle.
+                  Comparativo entre valores pagados y pendientes. Haz clic para ver detalle de facturas.
                 </p>
               </div>
 
@@ -733,9 +897,11 @@ export default function DashboardFinanciero() {
                           let color = "#3b82f6";
                           if (entry.estado === "Pendiente") color = "#dc2626";
                           if (entry.estado === "Pagado") color = "#16a34a";
+
                           return <Cell key={index} fill={color} />;
                         })}
                       </Pie>
+
                       <Tooltip formatter={(v) => fmtCOP(Number(v))} />
                     </PieChart>
                   </ResponsiveContainer>
@@ -749,65 +915,157 @@ export default function DashboardFinanciero() {
   );
 }
 
-function VentasModal({
+function MonthlyTooltip({ active, payload, incluyeImpuesto }: any) {
+  if (!active || !payload?.length) return null;
+
+  const row = payload[0]?.payload || {};
+
+  return (
+    <div className="min-w-[255px] rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-xl">
+      <p className="mb-2 text-sm font-bold text-slate-900">{row.label}</p>
+
+      <TooltipLine label="Facturas emitidas" value={row.total_facturado} tone="emerald" />
+      <TooltipLine label="Notas crédito" value={row.notas_credito} tone="rose" />
+      <div className="my-2 border-t border-slate-200" />
+      <TooltipLine
+        label={incluyeImpuesto ? "Ventas netas con impuesto" : "Ventas netas sin impuesto"}
+        value={row.subtotal}
+        tone="green"
+      />
+      <TooltipLine label="Impuestos netos" value={row.impuestos} tone="yellow" />
+      <div className="my-2 border-t border-slate-200" />
+      <TooltipLine label="Pagado" value={row.pagado} tone="blue" />
+      <TooltipLine label="Pendiente" value={row.pendiente} tone="red" />
+
+      <p className="mt-2 text-[11px] leading-snug text-slate-500">
+        Fórmula: facturas emitidas - notas crédito = ventas netas.
+      </p>
+    </div>
+  );
+}
+
+function TopClienteTooltip({ active, payload }: any) {
+  if (!active || !payload?.length) return null;
+
+  const row = payload[0]?.payload || {};
+
+  return (
+    <div className="min-w-[260px] rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-xl">
+      <p className="mb-2 text-sm font-bold text-slate-900">{row.cliente}</p>
+      <TooltipLine label="Facturas emitidas" value={row.facturas_emitidas} tone="emerald" />
+      <TooltipLine label="Notas crédito" value={row.notas_credito} tone="rose" />
+      <div className="my-2 border-t border-slate-200" />
+      <TooltipLine label="Ventas netas" value={row.total} tone="green" />
+    </div>
+  );
+}
+
+function TooltipLine({ label, value, tone }: { label: string; value: any; tone: string }) {
+  const toneMap: Record<string, string> = {
+    emerald: "text-emerald-700",
+    rose: "text-rose-700",
+    green: "text-green-700",
+    yellow: "text-yellow-700",
+    blue: "text-blue-700",
+    red: "text-red-700",
+    slate: "text-slate-700",
+  };
+
+  return (
+    <div className="mb-1 flex items-center justify-between gap-4">
+      <span className={toneMap[tone] || toneMap.slate}>{label}</span>
+      <span className="font-semibold text-slate-900">{fmtCOP(Number(value || 0))}</span>
+    </div>
+  );
+}
+
+function MovimientosModal({
   open,
   title,
   subtitle,
   rows,
+  resumen,
   onClose,
-  showCliente = false,
+  incluyeImpuesto,
+  forceFacturas = false,
 }: {
   open: boolean;
   title: string;
   subtitle: string;
-  rows: any[];
+  rows: MovimientoVenta[];
+  resumen?: ResumenMovimientos | null;
   onClose: () => void;
-  showCliente?: boolean;
+  incluyeImpuesto: boolean;
+  forceFacturas?: boolean;
 }) {
   if (!open) return null;
+
+  const totalMovimientos = resumen?.total_movimientos ?? rows.length;
+  const totalFacturas = resumen?.total_facturas ?? rows.filter((r) => r.tipo_movimiento !== "NOTA_CREDITO").length;
+  const totalNotas = resumen?.total_notas_credito ?? rows.filter((r) => r.tipo_movimiento === "NOTA_CREDITO").length;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div
         className="relative flex flex-col rounded-2xl border border-white/40 bg-white shadow-2xl"
         style={{
-          width: "min(96vw, 1180px)",
-          height: "min(90vh, 780px)",
+          width: "min(97vw, 1280px)",
+          height: "min(91vh, 820px)",
           minWidth: "430px",
           minHeight: "420px",
-          maxWidth: "97vw",
-          maxHeight: "92vh",
+          maxWidth: "98vw",
+          maxHeight: "94vh",
           resize: "both",
           overflow: "auto",
         }}
       >
-        <div className="sticky top-0 z-20 flex items-center justify-between rounded-t-2xl border-b bg-white px-4 py-3">
-          <div>
-            <h2 className="text-lg font-bold text-slate-950">{title}</h2>
-            <p className="text-xs text-slate-500">{subtitle}</p>
+        <div className="sticky top-0 z-20 rounded-t-2xl border-b bg-white px-4 py-3">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-bold text-slate-950">{title}</h2>
+              <p className="text-xs text-slate-500">{subtitle}</p>
+            </div>
+
+            <button
+              onClick={onClose}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-500 text-white transition hover:bg-red-600"
+            >
+              ✕
+            </button>
           </div>
 
-          <button
-            onClick={onClose}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-red-500 text-white transition hover:bg-red-600"
-          >
-            ✕
-          </button>
+          {resumen && !forceFacturas && (
+            <div className="mt-3 grid gap-2 md:grid-cols-6">
+              <ModalMetric label="Facturas emitidas" value={fmtCOP(Number(resumen.facturas_emitidas || 0))} />
+              <ModalMetric label="Notas crédito" value={fmtCOP(Number(resumen.notas_credito || 0))} danger />
+              <ModalMetric
+                label={incluyeImpuesto ? "Ventas netas con impuesto" : "Ventas netas sin impuesto"}
+                value={fmtCOP(Number(resumen.ventas_netas || 0))}
+                strong
+              />
+              <ModalMetric label="Pagado" value={fmtCOP(Number(resumen.pagado || 0))} />
+              <ModalMetric label="Pendiente" value={fmtCOP(Number(resumen.pendiente || 0))} danger />
+              <ModalMetric label="Movimientos" value={`${totalMovimientos} (${totalFacturas} fac. / ${totalNotas} NC)`} />
+            </div>
+          )}
         </div>
 
         <div className="flex-1 overflow-auto p-4">
           <div className="overflow-auto rounded-xl border border-slate-200">
-            <table className="w-full min-w-[1120px] text-sm">
+            <table className="w-full min-w-[1280px] text-sm">
               <thead className="sticky top-0 z-10 bg-slate-100 text-slate-700">
                 <tr>
-                  <th className="p-2 text-left">Factura</th>
+                  <th className="p-2 text-left">Tipo</th>
+                  <th className="p-2 text-left">Documento</th>
                   <th className="p-2 text-left">Fecha</th>
-                  {showCliente && <th className="p-2 text-left">Cliente</th>}
+                  <th className="p-2 text-left">Cliente</th>
                   <th className="p-2 text-left">Centro costo</th>
                   <th className="p-2 text-left">Vendedor</th>
+                  <th className="p-2 text-left">Doc. afectado</th>
                   <th className="p-2 text-right">Subtotal</th>
                   <th className="p-2 text-right">Impuestos</th>
                   <th className="p-2 text-right">Total</th>
+                  <th className="p-2 text-right">Valor reporte</th>
                   <th className="p-2 text-right">Pagado</th>
                   <th className="p-2 text-right">Pendiente</th>
                   <th className="p-2 text-center">Link</th>
@@ -817,31 +1075,47 @@ function VentasModal({
               <tbody>
                 {rows.length === 0 && (
                   <tr>
-                    <td
-                      colSpan={showCliente ? 11 : 10}
-                      className="p-8 text-center text-slate-500"
-                    >
-                      No hay facturas para mostrar.
+                    <td colSpan={14} className="p-8 text-center text-slate-500">
+                      No hay movimientos para mostrar.
                     </td>
                   </tr>
                 )}
 
-                {rows.map((f: any, idx: number) => {
+                {rows.map((f: MovimientoVenta, idx: number) => {
+                  const isNC = f.tipo_movimiento === "NOTA_CREDITO";
                   const { pagado, pendiente } = calcularPagadoPendiente(f);
                   const impuestos = Number(f.impuestos ?? f.impuestos_total ?? 0);
+                  const documento = f.documento || f.idfactura || "—";
+                  const valorReporte = f.valor !== undefined
+                    ? Number(f.valor || 0)
+                    : incluyeImpuesto
+                      ? Number(f.total || 0)
+                      : Number(f.subtotal || 0);
 
                   return (
                     <tr
-                      key={`${f.idfactura}-${idx}`}
+                      key={`${documento}-${idx}`}
                       className={`border-t hover:bg-slate-50 ${
-                        Number(f.saldo) > 0 ? "text-red-600" : "text-slate-700"
+                        isNC ? "bg-rose-50/40 text-rose-700" : Number(f.saldo || f.pendiente || 0) > 0 ? "text-red-600" : "text-slate-700"
                       }`}
                     >
-                      <td className="p-2 font-medium whitespace-nowrap">{f.idfactura}</td>
+                      <td className="p-2 whitespace-nowrap">
+                        <span
+                          className={`rounded-full px-2 py-1 text-[11px] font-semibold ${
+                            isNC
+                              ? "bg-rose-100 text-rose-700"
+                              : "bg-emerald-100 text-emerald-700"
+                          }`}
+                        >
+                          {isNC ? "Nota crédito" : "Factura"}
+                        </span>
+                      </td>
+                      <td className="p-2 font-medium whitespace-nowrap">{documento}</td>
                       <td className="p-2 whitespace-nowrap">{formatDate(f.fecha)}</td>
-                      {showCliente && <td className="p-2">{f.cliente_nombre || "—"}</td>}
+                      <td className="p-2">{f.cliente_nombre || "—"}</td>
                       <td className="p-2">{f.centro_costo_nombre || "—"}</td>
                       <td className="p-2">{f.vendedor_nombre || "—"}</td>
+                      <td className="p-2 whitespace-nowrap">{f.documento_afectado || "—"}</td>
                       <td className="p-2 text-right whitespace-nowrap">
                         {fmtCOP(Number(f.subtotal || 0))}
                       </td>
@@ -850,6 +1124,9 @@ function VentasModal({
                       </td>
                       <td className="p-2 text-right font-semibold whitespace-nowrap">
                         {fmtCOP(Number(f.total || 0))}
+                      </td>
+                      <td className="p-2 text-right font-bold whitespace-nowrap">
+                        {fmtCOP(valorReporte)}
                       </td>
                       <td className="p-2 text-right whitespace-nowrap">
                         {fmtCOP(pagado)}
@@ -883,13 +1160,7 @@ function VentasModal({
   );
 }
 
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="space-y-1">
       <span className="text-xs font-semibold text-slate-600">{label}</span>
@@ -917,6 +1188,15 @@ function MiniMetric({
       <p className={`mt-1 text-sm font-bold ${danger ? "text-red-600" : "text-slate-900"}`}>
         {value ?? "-"}
       </p>
+    </div>
+  );
+}
+
+function ModalMetric({ label, value, danger = false, strong = false }: { label: string; value: any; danger?: boolean; strong?: boolean }) {
+  return (
+    <div className={`rounded-xl border px-3 py-2 ${danger ? "border-rose-100 bg-rose-50" : strong ? "border-emerald-100 bg-emerald-50" : "border-slate-200 bg-slate-50"}`}>
+      <p className="text-[11px] font-semibold text-slate-500">{label}</p>
+      <p className={`mt-1 text-sm font-bold ${danger ? "text-rose-700" : strong ? "text-emerald-700" : "text-slate-900"}`}>{value}</p>
     </div>
   );
 }
@@ -966,12 +1246,4 @@ function LegendPill({ colorClass, label }: { colorClass: string; label: string }
       {label}
     </span>
   );
-}
-
-function fmtPct(n: any) {
-  const value = Number(n || 0);
-  return value.toLocaleString("es-CO", {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  });
 }

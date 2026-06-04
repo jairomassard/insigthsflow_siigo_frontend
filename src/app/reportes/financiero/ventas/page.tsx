@@ -567,7 +567,7 @@ export default function DashboardFinanciero() {
               </select>
             </Field>
 
-            <Field label="Opciones Siigo">
+            <Field label="Opciones Siigo a Incluir">
               <div className="flex h-10 items-center gap-4 rounded-lg border border-slate-300 bg-white px-3 text-xs">
                 <label className="inline-flex items-center gap-2 whitespace-nowrap">
                   <input
@@ -575,7 +575,7 @@ export default function DashboardFinanciero() {
                     checked={incluyeImpuesto}
                     onChange={(e) => setIncluyeImpuesto(e.target.checked)}
                   />
-                  Incluye impuesto
+                  Impuestos
                 </label>
 
                 <label className="inline-flex items-center gap-2 whitespace-nowrap">
@@ -584,7 +584,7 @@ export default function DashboardFinanciero() {
                     checked={incluyeNotaCredito}
                     onChange={(e) => setIncluyeNotaCredito(e.target.checked)}
                   />
-                  Incluye nota crédito
+                  Notas crédito
                 </label>
               </div>
             </Field>

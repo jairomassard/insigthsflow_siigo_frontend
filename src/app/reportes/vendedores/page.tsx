@@ -48,6 +48,9 @@ function abreviar(valor: number): string {
   if (valor >= 1_000_000_000) return `${(valor / 1_000_000).toFixed(1)}M`;
   if (valor >= 1_000_000) return `${(valor / 1_000_000).toFixed(0)}M`;
   if (valor >= 1_000) return `${(valor / 1_000).toFixed(0)}K`;
+  if (valor >= -1_000_000_000) return `${(valor / 1_000_000).toFixed(1)}M`;
+  if (valor >= -1_000_000) return `${(valor / 1_000_000).toFixed(0)}M`;
+  if (valor >= -1_000) return `${(valor / 1_000).toFixed(0)}K`;
   return `${Math.round(valor)}`;
 }
 

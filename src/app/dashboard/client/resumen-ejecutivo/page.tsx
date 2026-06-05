@@ -1360,7 +1360,7 @@ function TopSimpleCard({
           {rows.map((item, idx) => (
             <div
               key={`${item.nombre}-${idx}`}
-              className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm"
+              className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm"
               title={`${item.nombre}: ${formatCurrency(item.total)}`}
             >
               <div className="flex min-w-0 items-center gap-2.5">
@@ -1374,8 +1374,14 @@ function TopSimpleCard({
                   </div>
                 </div>
               </div>
-              <div className="shrink-0 text-[12px] font-black text-slate-900">
-                {formatCurrencyShort(item.total)}
+              <div className="shrink-0 text-right text-[12px] font-black text-slate-900 tabular-nums">
+                <span className="[@media(hover:none)]:hidden">
+                  {formatCurrencyShort(item.total)}
+                </span>
+
+                <span className="hidden [@media(hover:none)]:inline">
+                  {formatCurrency(item.total)}
+                </span>
               </div>
             </div>
           ))}

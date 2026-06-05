@@ -157,7 +157,7 @@ export default function ReporteVendedoresPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">📊 Reporte Ventas por Vendedores</h1>
+        <h1 className="text-2xl font-bold">📊 Reporte de ventas netas por vendedores</h1>
         <p className="mt-1 text-sm text-gray-500">
           Ventas agrupadas por vendedor según filtros de fecha, centro de costos y cliente.
         </p>
@@ -231,7 +231,7 @@ export default function ReporteVendedoresPage() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardContent className="p-4 text-center">
-            <div className="text-lg font-bold text-gray-500">Ventas Totales</div>
+            <div className="text-lg font-bold text-gray-500">Ventas netas</div>
             <div className="text-xl font-bold text-green-600">
               {formatCurrency(kpis?.ventas_totales || 0)}
             </div>
@@ -320,7 +320,7 @@ export default function ReporteVendedoresPage() {
                 <th className="border p-2 text-center">#</th>
                 <th className="border p-2 text-center">Vendedor</th>
                 <th className="border p-2 text-center">Facturas</th>
-                <th className="border p-2 text-center">Ventas Totales</th>
+                <th className="border p-2 text-center">Ventas netas</th>
               </tr>
             </thead>
 

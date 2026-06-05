@@ -67,6 +67,48 @@ function formatCurrency(valor: number): string {
   return `$ ${Math.round(Number(valor || 0)).toLocaleString("es-CO")}`;
 }
 
+function formatMesCorto(value: any): string {
+  try {
+    const d = new Date(value);
+    return d.toLocaleString("es-CO", {
+      month: "short",
+      year: "2-digit",
+      timeZone: "UTC",
+    });
+  } catch {
+    return "Fecha inválida";
+  }
+}
+
+function HistoricoTooltip({ active, payload }: any) {
+  if (!active || !payload?.length) return null;
+
+  const item = payload[0]?.payload;
+  if (!item) return null;
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs shadow-lg">
+      <div className="mb-1 font-bold text-gray-800">
+        {formatMesCorto(item.mes)}
+      </div>
+
+      <div className="flex justify-between gap-4">
+        <span className="text-gray-500">Unidades:</span>
+        <span className="font-semibold text-gray-900">
+          {Number(item.cantidad || 0).toLocaleString("es-CO")}
+        </span>
+      </div>
+
+      <div className="flex justify-between gap-4">
+        <span className="text-gray-500">Total facturado:</span>
+        <span className="font-semibold text-gray-900">
+          {formatCurrency(item.total || 0)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function ReporteProductosPage() {
   const [top10, setTop10] = useState<Producto[]>([]);
   const [bottom10, setBottom10] = useState<Producto[]>([]);
@@ -83,6 +125,7 @@ export default function ReporteProductosPage() {
 
   const [metric, setMetric] = useState<"cantidad" | "total">("cantidad");
   const [productoSeleccionado, setProductoSeleccionado] = useState<string>("");
+  const [mesHistoricoSeleccionado, setMesHistoricoSeleccionado] = useState<any | null>(null);
 
   const queryParams = useMemo(() => {
     const q: string[] = [];
@@ -140,6 +183,7 @@ export default function ReporteProductosPage() {
         )}&desde=${fechaDesde}&hasta=${fechaHasta}&centro_costo=${centroCostos}`
       );
       setDetalle(data || null);
+      setMesHistoricoSeleccionado(null);
     } catch (e) {
       console.error("Error cargando detalle producto", e);
     }
@@ -369,44 +413,97 @@ export default function ReporteProductosPage() {
               <Card className="mt-4">
                 <CardHeader>
                   <CardTitle>Evolución Mensual</CardTitle>
+                  <p className="text-xs text-gray-500">
+                    En tablet toca una barra para ver el valor completo.
+                  </p>
                 </CardHeader>
-                <CardContent className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={historicoConFechasSeguras}
-                      margin={{ top: 10, right: 20, bottom: 10, left: 10 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis
-                        dataKey="mes"
-                        tickFormatter={(mes) => {
-                          try {
-                            const d = new Date(mes);
-                            return d.toLocaleString("es-CO", {
-                              month: "short",
-                              year: "2-digit",
-                              timeZone: "UTC",
-                            });
-                          } catch {
-                            return "Fecha inválida";
-                          }
+
+                <CardContent>
+                  <div className="h-[320px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={historicoConFechasSeguras}
+                        margin={{ top: 28, right: 24, bottom: 10, left: 10 }}
+                        onClick={(state: any) => {
+                          const item = state?.activePayload?.[0]?.payload;
+                          if (item) setMesHistoricoSeleccionado(item);
                         }}
-                      />
-                      <YAxis yAxisId="left" orientation="left" tickFormatter={(v) => abreviar(v)} />
-                      <YAxis
-                        yAxisId="right"
-                        orientation="right"
-                        tickFormatter={(v) => abreviarMoneda(v)}
-                      />
-                      <Tooltip
-                        formatter={(v: number, name) =>
-                          name === "cantidad" ? abreviar(v) : abreviarMoneda(v)
-                        }
-                      />
-                      <Bar yAxisId="left" dataKey="cantidad" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                      <Bar yAxisId="right" dataKey="total" fill="#10b981" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+
+                        <XAxis
+                          dataKey="mes"
+                          tickFormatter={(mes) => formatMesCorto(mes)}
+                        />
+
+                        <YAxis
+                          yAxisId="left"
+                          orientation="left"
+                          tickFormatter={(v) => abreviar(v)}
+                        />
+
+                        <YAxis
+                          yAxisId="right"
+                          orientation="right"
+                          tickFormatter={(v) => abreviarMoneda(v)}
+                        />
+
+                        <Tooltip content={<HistoricoTooltip />} />
+
+                        <Bar
+                          yAxisId="left"
+                          dataKey="cantidad"
+                          name="Unidades facturadas"
+                          fill="#3b82f6"
+                          radius={[4, 4, 0, 0]}
+                        >
+                          <LabelList
+                            dataKey="cantidad"
+                            position="top"
+                            formatter={(v: any) => abreviar(Number(v || 0))}
+                            style={{ fontSize: 11, fontWeight: 700 }}
+                          />
+                        </Bar>
+
+                        <Bar
+                          yAxisId="right"
+                          dataKey="total"
+                          name="Total facturado"
+                          fill="#10b981"
+                          radius={[4, 4, 0, 0]}
+                        >
+                          <LabelList
+                            dataKey="total"
+                            position="top"
+                            formatter={(v: any) => abreviarMoneda(Number(v || 0))}
+                            style={{ fontSize: 11, fontWeight: 700 }}
+                          />
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {mesHistoricoSeleccionado && (
+                    <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm md:hidden">
+                      <div className="font-bold text-gray-800">
+                        {formatMesCorto(mesHistoricoSeleccionado.mes)}
+                      </div>
+
+                      <div className="mt-1 flex justify-between gap-4">
+                        <span className="text-gray-500">Unidades facturadas:</span>
+                        <span className="font-semibold">
+                          {Number(mesHistoricoSeleccionado.cantidad || 0).toLocaleString("es-CO")}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between gap-4">
+                        <span className="text-gray-500">Total facturado:</span>
+                        <span className="font-semibold">
+                          {formatCurrency(mesHistoricoSeleccionado.total || 0)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>

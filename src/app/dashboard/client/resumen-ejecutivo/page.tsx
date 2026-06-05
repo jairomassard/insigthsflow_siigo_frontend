@@ -1375,13 +1375,7 @@ function TopSimpleCard({
                 </div>
               </div>
               <div className="shrink-0 text-right text-[12px] font-black text-slate-900 tabular-nums">
-                <span className="[@media(hover:none)]:hidden">
-                  {formatCurrencyShort(item.total)}
-                </span>
-
-                <span className="hidden [@media(hover:none)]:inline">
-                  {formatCurrency(item.total)}
-                </span>
+                {formatCurrency(item.total)}
               </div>
             </div>
           ))}

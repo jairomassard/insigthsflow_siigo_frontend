@@ -112,20 +112,10 @@ type DashboardResponse = {
     hasta: string;
     anterior_desde: string;
     anterior_hasta: string;
-    rango_auto?: boolean;
-    ajuste_por_corte?: boolean;
-    modo_periodo?: "ytd_cerrado" | "ultimo_mes_cerrado" | "manual";
-    tipo_corte?: "cerrado" | "al_dia";
-    ultima_fecha_auxiliar?: string | null;
-    fecha_corte_confiable?: string | null;
   };
   metadata?: {
     hay_datos_auxiliar_actual: boolean;
     ultima_fecha_auxiliar?: string | null;
-    fecha_corte_confiable?: string | null;
-    mes_actual_parcial?: boolean;
-    modo_periodo?: "ytd_cerrado" | "ultimo_mes_cerrado" | "manual";
-    tipo_corte?: "cerrado" | "al_dia";
     mensaje_contexto?: string | null;
   };
   kpis: Kpis;
@@ -145,16 +135,10 @@ type CentroCosto = {
   nombre: string;
 };
 
-type ModoPeriodo = "ytd_cerrado" | "manual";
-
 type DashboardMetadata = {
   ultima_fecha_auxiliar?: string | null;
-  fecha_corte_confiable?: string | null;
   desde_sugerido?: string | null;
   hasta_sugerido?: string | null;
-  mes_actual_parcial?: boolean;
-  modo_periodo?: string | null;
-  mensaje_contexto?: string | null;
 };
 
 type IndicadorVista =
@@ -517,7 +501,6 @@ export default function DashboardResumenEjecutivoPage() {
 
   const [fechaDesde, setFechaDesde] = useState(defaults.desde);
   const [fechaHasta, setFechaHasta] = useState(defaults.hasta);
-  const [modoPeriodo, setModoPeriodo] = useState<ModoPeriodo>("ytd_cerrado");
   const [centroCostos, setCentroCostos] = useState<string>("");
   const [centros, setCentros] = useState<CentroCosto[]>([]);
   const [initReady, setInitReady] = useState(false);
@@ -550,7 +533,6 @@ export default function DashboardResumenEjecutivoPage() {
       const qs = new URLSearchParams({
         desde: fechaDesde,
         hasta: fechaHasta,
-        modo_periodo: modoPeriodo,
       });
 
       if (centroCostos) qs.set("centro_costos", centroCostos);
@@ -597,7 +579,7 @@ export default function DashboardResumenEjecutivoPage() {
     if (!initReady || !fechaDesde || !fechaHasta) return;
     cargarDashboard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initReady, fechaDesde, fechaHasta, centroCostos, modoPeriodo]);
+  }, [initReady, fechaDesde, fechaHasta, centroCostos]);
 
   const hayAuxiliar = data?.metadata?.hay_datos_auxiliar_actual ?? true;
 
@@ -861,7 +843,7 @@ export default function DashboardResumenEjecutivoPage() {
         {/* FILTROS COMPACTOS */}
         <Card className="rounded-[1.35rem] border-slate-200 shadow-sm">
           <CardContent className="p-3">
-            <div className="grid gap-2 lg:grid-cols-[1fr_1fr_1fr_1.2fr_auto_auto] lg:items-end">
+            <div className="grid gap-2 lg:grid-cols-[1fr_1fr_1.2fr_auto_auto] lg:items-end">
               <FilterField label="Fecha desde">
                 <Input
                   type="date"
@@ -878,17 +860,6 @@ export default function DashboardResumenEjecutivoPage() {
                   onChange={(e) => setFechaHasta(e.target.value)}
                   className="h-9 rounded-xl border-slate-200 bg-white text-sm"
                 />
-              </FilterField>
-
-              <FilterField label="Modo de análisis">
-                <select
-                  value={modoPeriodo}
-                  onChange={(e) => setModoPeriodo(e.target.value as ModoPeriodo)}
-                  className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
-                >
-                  <option value="ytd_cerrado">Corte cerrado</option>
-                  <option value="manual">Al día</option>
-                </select>
               </FilterField>
 
               <FilterField label="Centro de costos">
@@ -912,7 +883,6 @@ export default function DashboardResumenEjecutivoPage() {
                   setFechaDesde(d.desde);
                   setFechaHasta(d.hasta);
                   setCentroCostos("");
-                  setModoPeriodo("ytd_cerrado");
                 }}
                 className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
               >
@@ -930,8 +900,6 @@ export default function DashboardResumenEjecutivoPage() {
           </CardContent>
         </Card>
 
-
-
         {error && (
           <Card className="rounded-[1.35rem] border border-rose-200 bg-rose-50 shadow-sm">
             <CardContent className="p-3 text-sm font-medium text-rose-700">
@@ -939,19 +907,6 @@ export default function DashboardResumenEjecutivoPage() {
             </CardContent>
           </Card>
         )}
-
-        {data?.metadata?.mensaje_contexto && data?.metadata?.hay_datos_auxiliar_actual ? (
-          <div
-            className={cx(
-              "rounded-2xl border px-3 py-2 text-xs font-semibold leading-5",
-              data?.metadata?.tipo_corte === "al_dia"
-                ? "border-blue-100 bg-blue-50 text-blue-800"
-                : "border-emerald-100 bg-emerald-50 text-emerald-800",
-            )}
-          >
-            {data.metadata.mensaje_contexto}
-          </div>
-        ) : null}
 
         {data?.metadata && !data.metadata.hay_datos_auxiliar_actual && (
           <Card className="rounded-[1.35rem] border border-amber-200 bg-amber-50 shadow-sm">

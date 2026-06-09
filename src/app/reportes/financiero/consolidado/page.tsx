@@ -439,19 +439,21 @@ export default function ReporteFinancieroConsolidadoPage() {
           chip: "bg-orange-100 text-orange-700",
         },
         {
-          label: "Utilidad",
+          label: "Resultado operativo estimado",
           value: `$ ${abreviar(utilidad)}`,
           fullValue: formatCurrency(utilidad),
-          helper: "Ingresos netos menos egresos.",
+          helper:
+            "Ingresos netos menos egresos operativos registrados. No reemplaza la utilidad contable del Estado de Resultados.",
           accent: "from-violet-500/15 to-purple-400/5",
           text: "text-violet-700",
           chip: "bg-violet-100 text-violet-700",
         },
         {
-          label: "Margen",
+          label: "Margen operativo estimado",
           value: fmtPct(margen),
           fullValue: fmtPct(margen),
-          helper: "Utilidad sobre ingresos netos.",
+          helper:
+            "Resultado operativo estimado sobre ingresos netos. Para margen contable, consulta el Estado de Resultados.",
           accent: "from-sky-500/15 to-indigo-400/5",
           text: "text-sky-700",
           chip: "bg-sky-100 text-sky-700",
@@ -491,8 +493,9 @@ export default function ReporteFinancieroConsolidadoPage() {
                 Consolidado Ingresos vs Egresos
               </h1>
               <p className="mt-1 max-w-4xl text-sm text-slate-600">
-                Ingresos netos alineados con Siigo: facturas emitidas menos
-                notas crédito, comparados contra egresos, nómina y utilidad.
+                Vista operativa basada en documentos de Siigo: ingresos netos, egresos,
+                nómina y resultado operativo estimado. La utilidad contable se consulta
+                en el Estado de Resultados.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -618,6 +621,13 @@ export default function ReporteFinancieroConsolidadoPage() {
           </div>
         )}
 
+        <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-semibold leading-5 text-blue-800">
+          Este consolidado muestra un resultado operativo estimado a partir de documentos
+          de venta, compras, gastos y nómina registrados. No corresponde a la utilidad
+          contable oficial; para esa lectura usa el Estado de Resultados construido desde
+          auxiliares contables.
+        </div>
+
         {selectedKpi && (
           <div
             className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm"
@@ -667,8 +677,8 @@ export default function ReporteFinancieroConsolidadoPage() {
                 Evolución mensual
               </CardTitle>
               <div className="text-xs text-slate-500">
-                Clic en las barras para abrir detalle. Ingresos = facturas menos
-                notas crédito.
+                Clic en las barras para abrir detalle. Resultado operativo estimado =
+                ingresos netos menos egresos operativos.
               </div>
             </div>
           </CardHeader>
@@ -737,7 +747,7 @@ export default function ReporteFinancieroConsolidadoPage() {
                   <Line
                     type="monotone"
                     dataKey="utilidad"
-                    name="Utilidad mensual"
+                    name="Resultado operativo mensual"
                     stroke="#2563eb"
                     strokeWidth={2}
                     dot={{ r: 3 }}
@@ -753,7 +763,7 @@ export default function ReporteFinancieroConsolidadoPage() {
                   <Line
                     type="monotone"
                     dataKey="utilidad_acumulada"
-                    name="Utilidad acumulada"
+                    name="Resultado operativo acumulado"
                     stroke="#9333ea"
                     strokeWidth={2.5}
                     dot={{ r: 3 }}
@@ -927,7 +937,7 @@ function MonthlyTooltip({ active, payload }: any) {
           className="text-orange-700"
         />
         <TooltipLine
-          label="Utilidad mensual"
+          label="Resultado operativo mensual"
           value={formatCurrency(row.utilidad)}
           className={
             toNum(row.utilidad) >= 0 ? "text-blue-700" : "text-red-700"
@@ -935,7 +945,7 @@ function MonthlyTooltip({ active, payload }: any) {
           strong
         />
         <TooltipLine
-          label="Utilidad acumulada"
+          label="Resultado operativo acumulado"
           value={formatCurrency(row.utilidad_acumulada)}
           className={
             toNum(row.utilidad_acumulada) >= 0

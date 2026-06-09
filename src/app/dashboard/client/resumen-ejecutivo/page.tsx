@@ -561,12 +561,20 @@ export default function DashboardResumenEjecutivoPage() {
 
       setData(json);
 
-      if (json?.periodo?.desde && json.periodo.desde !== fechaDesde) {
-        setFechaDesde(json.periodo.desde);
-      }
+      // En modo "Corte cerrado" sí sincronizamos los inputs con el corte confiable
+      // que devuelve el backend.
+      //
+      // En modo "Al día" NO sincronizamos automáticamente la fecha hasta,
+      // porque si el usuario pidió 08/06 y el backend ajustó a 31/05 por falta de auxiliar,
+      // cambiar el input dispara una segunda consulta y se pierde la cápsula informativa.
+      if (modoPeriodo !== "manual") {
+        if (json?.periodo?.desde && json.periodo.desde !== fechaDesde) {
+          setFechaDesde(json.periodo.desde);
+        }
 
-      if (json?.periodo?.hasta && json.periodo.hasta !== fechaHasta) {
-        setFechaHasta(json.periodo.hasta);
+        if (json?.periodo?.hasta && json.periodo.hasta !== fechaHasta) {
+          setFechaHasta(json.periodo.hasta);
+        }
       }
     } catch (err: any) {
       setError(err?.message || "Error cargando dashboard");
@@ -600,6 +608,41 @@ export default function DashboardResumenEjecutivoPage() {
   }, [initReady, fechaDesde, fechaHasta, centroCostos, modoPeriodo]);
 
   const hayAuxiliar = data?.metadata?.hay_datos_auxiliar_actual ?? true;
+
+  const mensajeContextoDashboard = useMemo(() => {
+    if (!data?.metadata || !hayAuxiliar) return null;
+
+    if (data.metadata.mensaje_contexto) {
+      return data.metadata.mensaje_contexto;
+    }
+
+    if (modoPeriodo === "manual") {
+      const ultima = data.periodo?.ultima_fecha_auxiliar || data.metadata.ultima_fecha_auxiliar;
+      const hastaUsado = data.periodo?.hasta;
+
+      if (ultima) {
+        return `Vista al día: el análisis usa la información disponible en auxiliares hasta ${ultima}.`;
+      }
+
+      if (hastaUsado) {
+        return `Vista al día: el análisis usa información parcial hasta ${hastaUsado}.`;
+      }
+
+      return "Vista al día: el análisis puede incluir información parcial del mes en curso.";
+    }
+
+    if (data.periodo?.ajuste_por_corte) {
+      const corte = data.periodo?.fecha_corte_confiable || data.metadata.fecha_corte_confiable;
+
+      if (corte) {
+        return `Vista de corte cerrado: el rango solicitado se ajustó automáticamente hasta el último corte mensual confiable: ${corte}.`;
+      }
+
+      return "Vista de corte cerrado: el análisis se ajustó al último corte mensual confiable.";
+    }
+
+    return null;
+  }, [data, hayAuxiliar, modoPeriodo]);
 
   const kpiCards = useMemo<KpiCardItem[]>(() => {
     if (!data?.kpis) return [];
@@ -940,16 +983,16 @@ export default function DashboardResumenEjecutivoPage() {
           </Card>
         )}
 
-        {data?.metadata?.mensaje_contexto && data?.metadata?.hay_datos_auxiliar_actual ? (
+        {mensajeContextoDashboard ? (
           <div
             className={cx(
               "rounded-2xl border px-3 py-2 text-xs font-semibold leading-5",
-              data?.metadata?.tipo_corte === "al_dia"
+              modoPeriodo === "manual" || data?.metadata?.tipo_corte === "al_dia"
                 ? "border-blue-100 bg-blue-50 text-blue-800"
                 : "border-emerald-100 bg-emerald-50 text-emerald-800",
             )}
           >
-            {data.metadata.mensaje_contexto}
+            {mensajeContextoDashboard}
           </div>
         ) : null}
 

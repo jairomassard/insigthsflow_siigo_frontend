@@ -117,13 +117,13 @@ export default function LoginPage() {
 
           {/* Logo */}
           <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "52px" }}>
-            <div style={{ display: "flex", alignItems: "flex-end", gap: "3px", height: "26px" }}>
-              <span style={{ display: "block", width: "5px", height: "11px", borderRadius: "3px", background: "#60A5FA" }} />
-              <span style={{ display: "block", width: "5px", height: "17px", borderRadius: "3px", background: "#3B82F6" }} />
-              <span style={{ display: "block", width: "5px", height: "26px", borderRadius: "3px", background: "#2563EB" }} />
-              <span style={{ display: "block", width: "5px", height: "16px", borderRadius: "3px", background: "#7C3AED" }} />
+            <div style={{ display: "flex", alignItems: "flex-end", gap: "3px", height: "34px" }}>
+              <span style={{ display: "block", width: "5px", height: "14px", borderRadius: "3px", background: "#60A5FA" }} />
+              <span style={{ display: "block", width: "5px", height: "22px", borderRadius: "3px", background: "#3B82F6" }} />
+              <span style={{ display: "block", width: "5px", height: "34px", borderRadius: "3px", background: "#2563EB" }} />
+              <span style={{ display: "block", width: "5px", height: "20px", borderRadius: "3px", background: "#7C3AED" }} />
             </div>
-            <span style={{ fontSize: "1.25rem", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em" }}>
+            <span style={{ fontSize: "1.6rem", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em" }}>
               Insights<span style={{ color: "#3B82F6" }}>Flow</span>
             </span>
           </div>

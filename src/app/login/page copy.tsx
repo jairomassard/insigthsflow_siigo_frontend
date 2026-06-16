@@ -75,17 +75,10 @@ export default function LoginPage() {
         >
           {/* Logo + título */}
           <div className="mb-6 text-center">
-            <div className="mx-auto mb-2 flex h-12 items-center justify-center gap-2">
-              {/* Barras del logo */}
-              <div className="flex items-end gap-[3px] h-[22px]">
-                <span className="block w-[5px] h-[10px] rounded-sm bg-blue-300"></span>
-                <span className="block w-[5px] h-[16px] rounded-sm bg-blue-400"></span>
-                <span className="block w-[5px] h-[22px] rounded-sm bg-blue-600"></span>
-                <span className="block w-[5px] h-[14px] rounded-sm bg-violet-600"></span>
-              </div>
-              {/* Texto */}
-              <span className="text-2xl font-extrabold tracking-tight">
-                <span className="text-gray-800">Insights</span><span className="text-blue-500">Flow</span>
+            <div className="mx-auto mb-2 flex h-12 items-center justify-center">
+              <span className="text-4xl font-extrabold tracking-wide">
+                
+                <span className="text-blue-400">InsightsFlow</span>
               </span>
             </div>
             <h1 id="login-title" className="text-lg font-semibold text-gray-800">

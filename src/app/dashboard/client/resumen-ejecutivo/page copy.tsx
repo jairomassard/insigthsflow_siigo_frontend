@@ -249,19 +249,10 @@ function abreviar(valor: number): string {
   const n = Number(valor || 0);
   const abs = Math.abs(n);
 
-  if (abs >= 1_000_000_000) {
-    const millones = n / 1_000_000;
-    return `${millones.toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}M`;
-  }
-  if (abs >= 1_000_000) {
-    const millones = n / 1_000_000;
-    return `${millones.toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}M`;
-  }
-  if (abs >= 1_000) {
-    const miles = n / 1_000;
-    return `${miles.toLocaleString("es-CO", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}K`;
-  }
-  return `${Math.round(n).toLocaleString("es-CO")}`;
+  if (abs >= 1_000_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
+  return `${Math.round(n)}`;
 }
 
 function cx(...classes: Array<string | false | null | undefined>) {

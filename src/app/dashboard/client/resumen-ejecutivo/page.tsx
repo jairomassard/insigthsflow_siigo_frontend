@@ -269,26 +269,28 @@ function cx(...classes: Array<string | false | null | undefined>) {
 }
 
 function getDefaultDates() {
-  // La zona horaria viene del NAVEGADOR del usuario, no del servidor.
-  // Así un colombiano ve hora Colombia, un mexicano ve hora México, etc.
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-  // Fecha de hoy en la zona del usuario
-  const todayLocal = new Date(
-    new Date().toLocaleString("en-CA", { timeZone: tz })
-  );
+  // formatToParts es seguro en todos los navegadores modernos
+  const parts = new Intl.DateTimeFormat("es-CO", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
 
-  const year = todayLocal.getFullYear();
-  const month = todayLocal.getMonth();
-  const day = todayLocal.getDate();
+  const get = (type: string) =>
+    parts.find((p) => p.type === type)?.value ?? "01";
 
-  // Inicio del año en curso
-  const start = new Date(year, 0, 1);
-  // Hoy en la zona del usuario
-  const end = new Date(year, month, day);
+  const year = get("year");
+  const month = get("month");
+  const day = get("day");
 
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
-  return { desde: fmt(start), hasta: fmt(end) };
+  // Inicio del año en curso y hoy, ambos en zona del usuario
+  const desde = `${year}-01-01`;
+  const hasta = `${year}-${month}-${day}`;
+
+  return { desde, hasta };
 }
 
 function diffLabel(diff: number, suffix = "") {

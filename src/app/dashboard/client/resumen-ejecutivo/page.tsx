@@ -269,9 +269,23 @@ function cx(...classes: Array<string | false | null | undefined>) {
 }
 
 function getDefaultDates() {
-  const today = new Date();
-  const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-  const start = new Date(today.getFullYear(), today.getMonth(), 1);
+  // La zona horaria viene del NAVEGADOR del usuario, no del servidor.
+  // Así un colombiano ve hora Colombia, un mexicano ve hora México, etc.
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  // Fecha de hoy en la zona del usuario
+  const todayLocal = new Date(
+    new Date().toLocaleString("en-CA", { timeZone: tz })
+  );
+
+  const year = todayLocal.getFullYear();
+  const month = todayLocal.getMonth();
+  const day = todayLocal.getDate();
+
+  // Inicio del año en curso
+  const start = new Date(year, 0, 1);
+  // Hoy en la zona del usuario
+  const end = new Date(year, month, day);
 
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
   return { desde: fmt(start), hasta: fmt(end) };
@@ -1374,6 +1388,45 @@ function FilterField({ label, children }: { label: string; children: ReactNode }
 function TopGastosCard({ data }: { data: TopGasto[] }) {
   const rows = (data || []).slice(0, 8);
 
+  // Label inteligente: dentro si hay espacio, fuera si no
+  const SmartLabel = (props: any) => {
+    const { x, y, width, height, value } = props;
+    const texto = abreviar(Number(value));
+    // Estimamos ~7px por carácter + 8px de padding
+    const anchoTexto = texto.length * 7 + 8;
+    const cabe = width > anchoTexto + 12;
+
+    if (cabe) {
+      return (
+        <text
+          x={x + width - 8}
+          y={y + height / 2 + 1}
+          textAnchor="end"
+          dominantBaseline="middle"
+          fontSize={10}
+          fontWeight={800}
+          fill="#fff"
+        >
+          {texto}
+        </text>
+      );
+    }
+
+    return (
+      <text
+        x={x + width + 6}
+        y={y + height / 2 + 1}
+        textAnchor="start"
+        dominantBaseline="middle"
+        fontSize={10}
+        fontWeight={800}
+        fill="#9a3412"
+      >
+        {texto}
+      </text>
+    );
+  };
+
   return (
     <Card className="rounded-[1.35rem] border-slate-200 shadow-sm">
       <CardContent className="p-3">
@@ -1391,7 +1444,7 @@ function TopGastosCard({ data }: { data: TopGasto[] }) {
               <BarChart
                 data={rows}
                 layout="vertical"
-                margin={{ top: 4, right: 22, left: 0, bottom: 4 }}
+                margin={{ top: 4, right: 48, left: 0, bottom: 4 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis
@@ -1411,12 +1464,7 @@ function TopGastosCard({ data }: { data: TopGasto[] }) {
                   labelFormatter={(label) => String(label)}
                 />
                 <Bar dataKey="valor" name="Valor" fill="#f97316" radius={[0, 8, 8, 0]}>
-                  <LabelList
-                    dataKey="valor"
-                    position="right"
-                    formatter={(v: any) => abreviar(Number(v))}
-                    style={{ fontSize: 10, fill: "#9a3412", fontWeight: 800 }}
-                  />
+                  <LabelList dataKey="valor" content={<SmartLabel />} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>

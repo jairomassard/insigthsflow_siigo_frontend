@@ -1485,12 +1485,60 @@ function OrderButton({
   );
 }
 
+//function compactKpiValue(value: any) {
+//  if (typeof value === "number") {
+//    if (Math.abs(value) >= 1_000_000_000) return `$ ${(value / 1_000_000_000).toFixed(1)}B`;
+//    if (Math.abs(value) >= 1_000_000) return `$ ${(value / 1_000_000).toFixed(0)}M`;
+//    if (Math.abs(value) >= 1_000) return `$ ${(value / 1_000).toFixed(0)}K`;
+//    return value.toLocaleString("es-CO", { maximumFractionDigits: 0 });
+//  }
+
+//  const textValue = String(value ?? "-").trim();
+//  if (!textValue || textValue === "-") return "-";
+
+//  if (textValue.includes("%")) return textValue;
+
+//  const numericText = textValue.replace(/[^0-9,-]/g, "").replace(/\./g, "").replace(",", ".");
+//  const parsed = Number(numericText);
+
+//  if (Number.isFinite(parsed) && textValue.includes("$")) {
+//    if (Math.abs(parsed) >= 1_000_000_000) return `$ ${(parsed / 1_000_000_000).toFixed(1)}B`;
+//    if (Math.abs(parsed) >= 1_000_000) return `$ ${(parsed / 1_000_000).toFixed(0)}M`;
+//    if (Math.abs(parsed) >= 1_000) return `$ ${(parsed / 1_000).toFixed(0)}K`;
+//  }
+
+//  return textValue;
+//}
+
 function compactKpiValue(value: any) {
+  const formatearNumero = (n: number) => {
+    const abs = Math.abs(n);
+
+    if (abs >= 1_000_000) {
+      const millones = n / 1_000_000;
+
+      return `$ ${millones.toLocaleString("es-CO", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      })}M`;
+    }
+
+    if (abs >= 1_000) {
+      const miles = n / 1_000;
+
+      return `$ ${miles.toLocaleString("es-CO", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      })}K`;
+    }
+
+    return `$ ${n.toLocaleString("es-CO", {
+      maximumFractionDigits: 0,
+    })}`;
+  };
+
   if (typeof value === "number") {
-    if (Math.abs(value) >= 1_000_000_000) return `$ ${(value / 1_000_000_000).toFixed(1)}B`;
-    if (Math.abs(value) >= 1_000_000) return `$ ${(value / 1_000_000).toFixed(0)}M`;
-    if (Math.abs(value) >= 1_000) return `$ ${(value / 1_000).toFixed(0)}K`;
-    return value.toLocaleString("es-CO", { maximumFractionDigits: 0 });
+    return formatearNumero(value);
   }
 
   const textValue = String(value ?? "-").trim();
@@ -1498,13 +1546,15 @@ function compactKpiValue(value: any) {
 
   if (textValue.includes("%")) return textValue;
 
-  const numericText = textValue.replace(/[^0-9,-]/g, "").replace(/\./g, "").replace(",", ".");
+  const numericText = textValue
+    .replace(/[^0-9,.-]/g, "")
+    .replace(/\./g, "")
+    .replace(",", ".");
+
   const parsed = Number(numericText);
 
   if (Number.isFinite(parsed) && textValue.includes("$")) {
-    if (Math.abs(parsed) >= 1_000_000_000) return `$ ${(parsed / 1_000_000_000).toFixed(1)}B`;
-    if (Math.abs(parsed) >= 1_000_000) return `$ ${(parsed / 1_000_000).toFixed(0)}M`;
-    if (Math.abs(parsed) >= 1_000) return `$ ${(parsed / 1_000).toFixed(0)}K`;
+    return formatearNumero(parsed);
   }
 
   return textValue;

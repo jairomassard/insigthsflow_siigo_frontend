@@ -1327,11 +1327,47 @@ function fmtPct(n: any) {
   })}%`;
 }
 
-function formatoAbreviado(n: number) {
-  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(0)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
-  return `${Math.round(n)}`;
+//function formatoAbreviado(n: number) {
+//  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
+//  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(0)}M`;
+//  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
+//  return `${Math.round(n)}`;
+//}
+
+function formatoAbreviado(valor: number): string {
+  const n = Number(valor || 0);
+  const abs = Math.abs(n);
+
+  if (abs >= 1_000_000_000) {
+    const millones = n / 1_000_000;
+
+    return `${millones.toLocaleString("es-CO", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    })}M`;
+  }
+
+  if (abs >= 1_000_000) {
+    const millones = n / 1_000_000;
+
+    return `${millones.toLocaleString("es-CO", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    })}M`;
+  }
+
+  if (abs >= 1_000) {
+    const miles = n / 1_000;
+
+    return `${miles.toLocaleString("es-CO", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    })}K`;
+  }
+
+  return n.toLocaleString("es-CO", {
+    maximumFractionDigits: 0,
+  });
 }
 
 function cortarTexto(texto: string, max = 24) {

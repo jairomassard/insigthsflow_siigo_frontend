@@ -55,12 +55,32 @@ interface ComprasProveedoresKpis {
   total_saldo: number;
 }
 
+//function abreviarNumero(valor: number): string {
+//  if (valor >= 1_000_000_000) return `${(valor / 1_000_000_000).toFixed(1)}B`;
+//  if (valor >= 1_000_000) return `${(valor / 1_000_000).toFixed(0)}M`;
+//  if (valor >= 1_000) return `${(valor / 1_000).toFixed(0)}K`;
+//  return valor.toString();
+//}
+
 function abreviarNumero(valor: number): string {
-  if (valor >= 1_000_000_000) return `${(valor / 1_000_000_000).toFixed(1)}B`;
-  if (valor >= 1_000_000) return `${(valor / 1_000_000).toFixed(0)}M`;
-  if (valor >= 1_000) return `${(valor / 1_000).toFixed(0)}K`;
-  return valor.toString();
+  const n = Number(valor || 0);
+  const abs = Math.abs(n);
+
+  if (abs >= 1_000_000_000) {
+    const millones = n / 1_000_000;
+    return `${millones.toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}M`;
+  }
+  if (abs >= 1_000_000) {
+    const millones = n / 1_000_000;
+    return `${millones.toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}M`;
+  }
+  if (abs >= 1_000) {
+    const miles = n / 1_000;
+    return `${miles.toLocaleString("es-CO", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}K`;
+  }
+  return `${Math.round(n).toLocaleString("es-CO")}`;
 }
+
 
 function formatMiles(valor: number | string): string {
   const n = typeof valor === "number" ? valor : parseFloat(valor || "0");

@@ -951,16 +951,7 @@ export default function DashboardResumenEjecutivoPage() {
               <FilterField label="Modo de análisis">
                 <select
                   value={modoPeriodo}
-                  onChange={(e) => {
-                    const nuevo = e.target.value as ModoPeriodo;
-                    setModoPeriodo(nuevo);
-                    // Al cambiar a "Al día", forzar la fecha hasta a HOY
-                    // según la zona horaria real del navegador del usuario
-                    if (nuevo === "manual") {
-                      const { hasta } = getDefaultDates();
-                      setFechaHasta(hasta);
-                    }
-                  }}
+                  onChange={(e) => setModoPeriodo(e.target.value as ModoPeriodo)}
                   className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
                 >
                   <option value="ytd_cerrado">Corte cerrado</option>

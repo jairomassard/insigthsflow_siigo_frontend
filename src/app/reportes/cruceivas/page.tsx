@@ -319,7 +319,7 @@ export default function CruceIVAReportPage() {
   );
 }
 
-// KPI CARD — una sola línea compacta: icono | label | valor | badge
+// KPI CARD — una sola línea: icono | label | valor
 const StatCard = ({ title, value, icon, color, highlight = false }: any) => {
   const themes: any = {
     indigo: "text-indigo-600 bg-white border-slate-100",
@@ -329,21 +329,18 @@ const StatCard = ({ title, value, icon, color, highlight = false }: any) => {
   };
   return (
     <Card className={`border shadow-lg rounded-2xl transition-all hover:scale-[1.02] ${themes[color]}`}>
-      <CardContent className="px-4 py-2.5 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 min-w-0">
+      <CardContent className="px-4 py-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           <div className={`p-1.5 rounded-xl shrink-0 ${highlight ? 'bg-white/20' : 'bg-slate-50'}`}>
             {icon}
           </div>
-          <p className={`text-[10px] font-black uppercase tracking-wider ${highlight ? 'text-indigo-100' : 'text-slate-400'}`}>
+          <p className={`text-[10px] font-black uppercase tracking-wider truncate ${highlight ? 'text-indigo-100' : 'text-slate-400'}`}>
             {title}
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <div className={`text-[9px] font-black px-1.5 py-0.5 rounded-md ${highlight ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'}`}>
-            AUDIT-26
-          </div>
-          <p className="text-base font-black tracking-tighter whitespace-nowrap">{formatCurrency(value || 0)}</p>
-        </div>
+        <p className="text-base font-black tracking-tighter whitespace-nowrap shrink-0">
+          {formatCurrency(value || 0)}
+        </p>
       </CardContent>
     </Card>
   );

@@ -53,6 +53,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
+// Etiqueta encima de las barras
 const CustomLabel = (props: any) => {
   const { x, y, width, value } = props;
   if (!value || value === 0) return null;
@@ -63,6 +64,7 @@ const CustomLabel = (props: any) => {
   );
 };
 
+// Etiqueta a los lados de la torta
 const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, value }: any) => {
   if (!value || value === 0) return null;
   const RADIAN = Math.PI / 180;
@@ -129,25 +131,26 @@ export default function CruceIVAReportPage() {
   useEffect(() => { fetchData(); }, [fechaDesde, fechaHasta, modo, inc19, inc5]);
 
   return (
-    <div className="space-y-3 p-4 bg-slate-50 min-h-screen">
+    <div className="space-y-5 p-5 bg-slate-50 min-h-screen">
       
-      {/* HEADER */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-white px-5 py-3 rounded-[1.5rem] border shadow-sm">
+      {/* HEADER DINÁMICO REORGANIZADO */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-[2rem] border shadow-sm">
         <div>
-          <h1 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
             Cruce de IVA <span className="text-[10px] bg-indigo-600 text-white px-3 py-1 rounded-full uppercase tracking-widest">v2.1</span>
           </h1>
-          <p className="text-slate-500 text-xs font-medium mt-0.5">Auditoría detallada de cuentas 2408 y retenciones 135517.</p>
+          <p className="text-slate-500 text-xs font-medium mt-1">Auditoría detallada de cuentas 2408 y retenciones 135517.</p>
         </div>
         
-        <div className="flex flex-col items-end gap-1.5">
+        {/* BOTÓN Y RUTA SIIGO ALINEADOS A LA DERECHA */}
+        <div className="flex flex-col items-end gap-2">
           <div className="flex items-center gap-2">
             <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx" onChange={handleFileUpload} />
             <button 
               onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-2 px-5 py-2 bg-slate-900 text-white rounded-xl text-xs font-black hover:bg-black transition-all shadow-lg active:scale-95"
+              className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-2xl text-xs font-black hover:bg-black transition-all shadow-lg active:scale-95"
             >
-              {uploading ? <RefreshCcw className="animate-spin" size={14} /> : <FileText size={14} />}
+              {uploading ? <RefreshCcw className="animate-spin" size={16} /> : <FileText size={16} />}
               {uploading ? "Sincronizando..." : "Sincronizar Auxiliar"}
             </button>
           </div>
@@ -158,17 +161,17 @@ export default function CruceIVAReportPage() {
       </div>
 
       {/* FILTROS */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-white px-5 py-3 rounded-[1.5rem] border shadow-sm">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-white p-5 rounded-[2rem] border shadow-sm">
         <div className="space-y-1">
           <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Rango de Fecha</label>
           <div className="flex gap-2">
-            <input type="date" value={fechaDesde} onChange={e=>setFechaDesde(e.target.value)} className="w-full border rounded-xl p-1.5 text-xs font-bold bg-slate-50" />
-            <input type="date" value={fechaHasta} onChange={e=>setFechaHasta(e.target.value)} className="w-full border rounded-xl p-1.5 text-xs font-bold bg-slate-50" />
+            <input type="date" value={fechaDesde} onChange={e=>setFechaDesde(e.target.value)} className="w-full border rounded-xl p-2 text-xs font-bold bg-slate-50" />
+            <input type="date" value={fechaHasta} onChange={e=>setFechaHasta(e.target.value)} className="w-full border rounded-xl p-2 text-xs font-bold bg-slate-50" />
           </div>
         </div>
         <div className="space-y-1">
           <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Periodicidad DIAN</label>
-          <select value={modo} onChange={e=>setModo(e.target.value as any)} className="w-full border rounded-xl p-1.5 text-xs font-bold bg-slate-50">
+          <select value={modo} onChange={e=>setModo(e.target.value as any)} className="w-full border rounded-xl p-2 text-xs font-bold bg-slate-50">
             <option value="bimensual">Bimensual (Ene-Feb...)</option>
             <option value="cuatrimestral">Cuatrimestral (Ene-Abr...)</option>
           </select>
@@ -176,42 +179,45 @@ export default function CruceIVAReportPage() {
         <div className="space-y-1">
           <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Configurar Tasas</label>
           <div className="flex gap-2">
-            <button onClick={()=>setInc19(!inc19)} className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl border text-[11px] font-black py-1.5 transition-all ${inc19 ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-slate-50 text-slate-400'}`}>
-              {inc19 && <CheckCircle2 size={11} />} IVA 19%
+            <button onClick={()=>setInc19(!inc19)} className={`flex-1 flex items-center justify-center gap-2 rounded-xl border text-[11px] font-black py-2 transition-all ${inc19 ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-slate-50 text-slate-400'}`}>
+              {inc19 && <CheckCircle2 size={12} />} IVA 19%
             </button>
-            <button onClick={()=>setInc5(!inc5)} className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl border text-[11px] font-black py-1.5 transition-all ${inc5 ? 'bg-emerald-600 border-emerald-600 text-white shadow-md' : 'bg-slate-50 text-slate-400'}`}>
-              {inc5 && <CheckCircle2 size={11} />} IVA 5%
+            <button onClick={()=>setInc5(!inc5)} className={`flex-1 flex items-center justify-center gap-2 rounded-xl border text-[11px] font-black py-2 transition-all ${inc5 ? 'bg-emerald-600 border-emerald-600 text-white shadow-md' : 'bg-slate-50 text-slate-400'}`}>
+              {inc5 && <CheckCircle2 size={12} />} IVA 5%
             </button>
           </div>
         </div>
         <div className="flex items-end">
-          <button onClick={fetchData} className="w-full bg-indigo-50 text-indigo-700 font-black py-1.5 rounded-xl text-xs flex items-center justify-center gap-2 border border-indigo-100 hover:bg-indigo-100">
-            <RefreshCcw size={14} className={loading ? 'animate-spin' : ''} /> {loading ? "Cargando..." : "Actualizar Reporte"}
+          <button onClick={fetchData} className="w-full bg-indigo-50 text-indigo-700 font-black py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 border border-indigo-100 hover:bg-indigo-100">
+            <RefreshCcw size={16} className={loading ? 'animate-spin' : ''} /> {loading ? "Cargando..." : "Actualizar Reporte"}
           </button>
         </div>
       </div>
 
-      {/* KPIs — fila compacta de una sola línea */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard title="IVA Ventas"    value={kpis.iva_ventas}    icon={<TrendingUp size={15}/>}   color="indigo" />
-        <StatCard title="IVA Compras"   value={kpis.iva_compras}   icon={<TrendingDown size={15}/>} color="red" />
-        <StatCard title="ReteIVA Favor" value={kpis.reteiva_favor} icon={<DollarSign size={15}/>}  color="orange" />
-        <StatCard title="Neto a Pagar"  value={kpis.saldo_iva}     icon={<ArrowUpRight size={15}/>} color="emerald" highlight />
+      {/* KPIs */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard title="IVA Ventas" value={kpis.iva_ventas} icon={<TrendingUp size={20}/>} color="indigo" />
+        <StatCard title="IVA Compras" value={kpis.iva_compras} icon={<TrendingDown size={20}/>} color="red" />
+        <StatCard title="ReteIVA Favor" value={kpis.reteiva_favor} icon={<DollarSign size={20}/>} color="orange" />
+        <StatCard title="Neto a Pagar" value={kpis.saldo_iva} icon={<ArrowUpRight size={20}/>} color="emerald" highlight />
       </div>
 
       {/* GRÁFICOS */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         
-        <Card className="lg:col-span-2 rounded-[1.5rem] shadow-xl border-none bg-white p-2">
-          <CardHeader className="pb-0 pt-3 px-4"><CardTitle className="text-xs font-black text-slate-500 uppercase tracking-tight">📈 Comparativa por Tasas de IVA</CardTitle></CardHeader>
-          <CardContent className="pt-1">
+        {/* GRÁFICO PRINCIPAL - BARRAS MÁS ANCHAS */}
+        <Card className="lg:col-span-2 rounded-[2rem] shadow-xl border-none bg-white p-2">
+          <CardHeader className="pb-0"><CardTitle className="text-sm font-black text-slate-500 uppercase tracking-tight">📈 Comparativa por Tasas de IVA</CardTitle></CardHeader>
+          <CardContent>
             <ResponsiveContainer width="100%" height={320}>
-              <BarChart data={series} margin={{ top: 28, right: 10, left: 0, bottom: 0 }} barCategoryGap="15%">
+              <BarChart data={series} margin={{ top: 30, right: 10, left: 0, bottom: 0 }} barCategoryGap="15%">
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{fontSize: 11, fontWeight: 'bold'}} />
                 <YAxis hide />
                 <Tooltip content={<CustomTooltip />} cursor={{fill: '#f8fafc'}} />
-                <Legend iconType="circle" wrapperStyle={{fontSize: '11px', paddingTop: '12px'}} />
+                <Legend iconType="circle" wrapperStyle={{fontSize: '11px', paddingTop: '20px'}} />
+                
+                {/* barSize aumentado de 20 a 35 para que se vean imponentes */}
                 <Bar dataKey="iva_v19" name="Venta 19%" fill="#4338ca" radius={[6,6,0,0]} barSize={35} minPointSize={5}>
                    <LabelList dataKey="iva_v19" content={(props: any) => <CustomLabel {...props} />} />
                 </Bar>
@@ -229,9 +235,10 @@ export default function CruceIVAReportPage() {
           </CardContent>
         </Card>
 
-        <Card className="rounded-[1.5rem] shadow-xl border-none bg-white overflow-hidden">
-          <CardHeader className="text-center pb-0 pt-3"><CardTitle className="text-xs font-black text-slate-500 uppercase tracking-widest">🎯 Mix Periodo</CardTitle></CardHeader>
-          <CardContent className="flex flex-col items-center pt-1 pb-3">
+        {/* COMPOSICIÓN (PIE) Y RESUMEN COMPLETO */}
+        <Card className="rounded-[2rem] shadow-xl border-none bg-white overflow-hidden">
+          <CardHeader className="text-center pb-0"><CardTitle className="text-sm font-black text-slate-500 uppercase tracking-widest">🎯 Mix Periodo</CardTitle></CardHeader>
+          <CardContent className="flex flex-col items-center">
             
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
@@ -254,22 +261,23 @@ export default function CruceIVAReportPage() {
               </PieChart>
             </ResponsiveContainer>
 
-            <div className="w-full space-y-1 px-3">
-               <div className="flex justify-between items-center px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-100 font-bold text-xs">
-                 <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#4338ca]"></div> IVA Ventas</span>
+            {/* LEYENDA Y VALORES COMPLETOS (Ventas, Compras, ReteIVA y Saldo) */}
+            <div className="w-full space-y-1.5 px-3 pb-2 mt-2">
+               <div className="flex justify-between items-center p-2.5 rounded-xl bg-slate-50 border border-slate-100 font-bold text-xs">
+                 <span className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-[#4338ca]"></div> IVA Ventas</span>
                  <span className="text-slate-800 font-black">{formatCurrency(kpis.iva_ventas)}</span>
                </div>
-               <div className="flex justify-between items-center px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-100 font-bold text-xs">
-                 <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#dc2626]"></div> IVA Compras</span>
+               <div className="flex justify-between items-center p-2.5 rounded-xl bg-slate-50 border border-slate-100 font-bold text-xs">
+                 <span className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-[#dc2626]"></div> IVA Compras</span>
                  <span className="text-slate-800 font-black">{formatCurrency(kpis.iva_compras)}</span>
                </div>
-               <div className="flex justify-between items-center px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-100 font-bold text-xs">
-                 <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#f97316]"></div> ReteIVA</span>
+               <div className="flex justify-between items-center p-2.5 rounded-xl bg-slate-50 border border-slate-100 font-bold text-xs">
+                 <span className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-[#f97316]"></div> ReteIVA</span>
                  <span className="text-slate-800 font-black">{formatCurrency(kpis.reteiva_favor)}</span>
                </div>
-               <div className="flex justify-between items-center px-2.5 py-1.5 mt-1 rounded-xl bg-emerald-50 border border-emerald-100 font-bold text-xs">
+               <div className="flex justify-between items-center p-2.5 mt-2 rounded-xl bg-emerald-50 border border-emerald-100 font-bold text-xs">
                  <span className="text-emerald-700 uppercase tracking-tight">Saldo a Pagar</span>
-                 <span className="text-emerald-700 font-black">{formatCurrency(kpis.saldo_iva)}</span>
+                 <span className="text-emerald-700 font-black text-sm">{formatCurrency(kpis.saldo_iva)}</span>
                </div>
             </div>
           </CardContent>
@@ -277,36 +285,36 @@ export default function CruceIVAReportPage() {
       </div>
 
       {/* TABLA DE LIQUIDACIÓN */}
-      <Card className="rounded-[1.5rem] shadow-2xl border-none overflow-hidden bg-white">
-        <div className="bg-slate-900 text-white px-5 py-3 flex justify-between items-center">
-          <span className="flex items-center gap-2 font-black text-xs uppercase tracking-widest"><Search size={15} className="text-indigo-400" /> Liquidación Sugerida DIAN</span>
+      <Card className="rounded-[2rem] shadow-2xl border-none overflow-hidden bg-white">
+        <div className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center">
+          <span className="flex items-center gap-2 font-black text-sm uppercase tracking-widest"><Search size={18} className="text-indigo-400" /> Liquidación Sugerida DIAN</span>
           <span className="text-[10px] font-bold bg-white/10 px-3 py-1 rounded-full border border-white/20 uppercase tracking-tighter">Cruce Auditoría</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b text-slate-400 font-black text-[10px] uppercase">
               <tr>
-                <th className="px-5 py-3 text-left">Periodo Agrupado</th>
-                <th className="px-5 py-3 text-right">IVA Ventas</th>
-                <th className="px-5 py-3 text-right">IVA Compras</th>
-                <th className="px-5 py-3 text-right">ReteIVA (135517)</th>
-                <th className="px-5 py-3 text-right">Saldo Neto</th>
-                <th className="px-5 py-3 text-center">Mes Presentación</th>
+                <th className="p-5 text-left">Periodo Agrupado</th>
+                <th className="p-5 text-right">IVA Ventas</th>
+                <th className="p-5 text-right">IVA Compras</th>
+                <th className="p-5 text-right">ReteIVA (135517)</th>
+                <th className="p-5 text-right">Saldo Neto</th>
+                <th className="p-5 text-center">Mes Presentación</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-bold">
               {agrupadas.map((f, i) => (
                 <tr key={i} className="hover:bg-indigo-50/30 transition-colors">
-                  <td className="px-5 py-3 text-slate-700">{f.label}</td>
-                  <td className="px-5 py-3 text-right text-indigo-600 font-black">{formatCurrency(f.iva_ventas)}</td>
-                  <td className="px-5 py-3 text-right text-red-500">{formatCurrency(f.iva_compras)}</td>
-                  <td className="px-5 py-3 text-right text-orange-600">{formatCurrency(f.reteiva_favor)}</td>
-                  <td className="px-5 py-3 text-right">
-                    <span className={`px-4 py-1 rounded-xl font-black text-xs ${f.saldo_iva > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                  <td className="p-5 text-slate-700">{f.label}</td>
+                  <td className="p-5 text-right text-indigo-600 font-black">{formatCurrency(f.iva_ventas)}</td>
+                  <td className="p-5 text-right text-red-500">{formatCurrency(f.iva_compras)}</td>
+                  <td className="p-5 text-right text-orange-600">{formatCurrency(f.reteiva_favor)}</td>
+                  <td className="p-5 text-right">
+                    <span className={`px-4 py-1.5 rounded-xl font-black ${f.saldo_iva > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
                       {formatCurrency(f.saldo_iva)}
                     </span>
                   </td>
-                  <td className="px-5 py-3 text-center">
+                  <td className="p-5 text-center">
                     <span className="text-[10px] bg-slate-100 text-slate-500 px-3 py-1 rounded-full uppercase font-black">{f.mes_presentacion}</span>
                   </td>
                 </tr>
@@ -319,31 +327,22 @@ export default function CruceIVAReportPage() {
   );
 }
 
-// KPI CARD — una sola línea compacta: icono | label | valor | badge
 const StatCard = ({ title, value, icon, color, highlight = false }: any) => {
   const themes: any = {
     indigo: "text-indigo-600 bg-white border-slate-100",
-    red:    "text-red-600 bg-white border-slate-100",
+    red: "text-red-600 bg-white border-slate-100",
     orange: "text-orange-600 bg-white border-slate-100",
-    emerald:"text-white bg-indigo-600 shadow-indigo-200",
+    emerald: "text-white bg-indigo-600 shadow-indigo-200",
   };
   return (
-    <Card className={`border shadow-lg rounded-2xl transition-all hover:scale-[1.02] ${themes[color]}`}>
-      <CardContent className="px-4 py-2.5 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className={`p-1.5 rounded-xl shrink-0 ${highlight ? 'bg-white/20' : 'bg-slate-50'}`}>
-            {icon}
-          </div>
-          <p className={`text-[10px] font-black uppercase tracking-wider ${highlight ? 'text-indigo-100' : 'text-slate-400'}`}>
-            {title}
-          </p>
+    <Card className={`border shadow-lg rounded-[2rem] transition-all hover:scale-[1.02] ${themes[color]}`}>
+      <CardContent className="p-6">
+        <div className="flex justify-between items-center mb-4">
+          <div className={`p-3 rounded-2xl ${highlight ? 'bg-white/20' : 'bg-slate-50'}`}>{icon}</div>
+          <div className={`text-[9px] font-black px-2 py-1 rounded-lg ${highlight ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'}`}>AUDIT-26</div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <div className={`text-[9px] font-black px-1.5 py-0.5 rounded-md ${highlight ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'}`}>
-            AUDIT-26
-          </div>
-          <p className="text-base font-black tracking-tighter whitespace-nowrap">{formatCurrency(value || 0)}</p>
-        </div>
+        <p className={`text-[10px] font-black uppercase tracking-widest ${highlight ? 'text-indigo-100' : 'text-slate-400'}`}>{title}</p>
+        <p className="text-2xl font-black mt-1 tracking-tighter">{formatCurrency(value || 0)}</p>
       </CardContent>
     </Card>
   );

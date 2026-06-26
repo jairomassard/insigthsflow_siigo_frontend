@@ -74,13 +74,22 @@ const fmtShort = (n: number) =>
 const toNum = (v: any) => Number(v || 0);
 
 function abreviar(valor: number): string {
-  const v = Number(valor || 0);
-  const abs = Math.abs(v);
+  const n = Number(valor || 0);
+  const abs = Math.abs(n);
 
-  if (abs >= 1_000_000_000) return `${(v / 1_000_000_000).toFixed(1)}B`;
-  if (abs >= 1_000_000) return `${(v / 1_000_000).toFixed(0)}M`;
-  if (abs >= 1_000) return `${(v / 1_000).toFixed(0)}K`;
-  return `${Math.round(v)}`;
+  if (abs >= 1_000_000_000) {
+    const millones = n / 1_000_000;
+    return `${millones.toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}M`;
+  }
+  if (abs >= 1_000_000) {
+    const millones = n / 1_000_000;
+    return `${millones.toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}M`;
+  }
+  if (abs >= 1_000) {
+    const miles = n / 1_000;
+    return `${miles.toLocaleString("es-CO", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}K`;
+  }
+  return `${Math.round(n).toLocaleString("es-CO")}`;
 }
 
 function getDateYYYYMMDD(value: any): string {

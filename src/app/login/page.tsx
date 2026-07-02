@@ -140,7 +140,7 @@ export default function LoginPage() {
             }}
           >
             Tu empresa,<br />
-            <span style={{ color: "#3B82F6" }}>visible en tiempo real.</span>
+            <span style={{ color: "#3B82F6" }}>visible en tiempo "casi" real.</span>
           </h1>
 
           <p

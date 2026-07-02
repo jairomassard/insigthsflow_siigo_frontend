@@ -62,16 +62,7 @@ export default function LoginPage() {
   ];
 
   return (
-    <div
-      style={{
-        display: "flex",
-        height: "100vh",
-        maxHeight: "100vh",
-        overflow: "hidden",
-        fontFamily: "'Inter', sans-serif",
-        boxSizing: "border-box",
-      }}
-    >
+    <div style={{ display: "flex", minHeight: "100vh", fontFamily: "'Inter', sans-serif" }}>
 
       {/* ── PANEL IZQUIERDO ── */}
       <div
@@ -82,9 +73,8 @@ export default function LoginPage() {
           display: "flex",
           flexDirection: "column",
           justifyContent: "center",
-          padding: "clamp(24px, 4vh, 60px) 56px",
+          padding: "60px 64px",
           overflow: "hidden",
-          boxSizing: "border-box",
         }}
       >
         {/* Dot pattern */}
@@ -126,14 +116,14 @@ export default function LoginPage() {
         <div style={{ position: "relative", zIndex: 1, maxWidth: "480px" }}>
 
           {/* Logo */}
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "clamp(20px, 3.5vh, 40px)" }}>
-            <div style={{ display: "flex", alignItems: "flex-end", gap: "3px", height: "30px" }}>
-              <span style={{ display: "block", width: "5px", height: "12px", borderRadius: "3px", background: "#60A5FA" }} />
-              <span style={{ display: "block", width: "5px", height: "19px", borderRadius: "3px", background: "#3B82F6" }} />
-              <span style={{ display: "block", width: "5px", height: "30px", borderRadius: "3px", background: "#2563EB" }} />
-              <span style={{ display: "block", width: "5px", height: "17px", borderRadius: "3px", background: "#7C3AED" }} />
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "52px" }}>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: "3px", height: "34px" }}>
+              <span style={{ display: "block", width: "5px", height: "14px", borderRadius: "3px", background: "#60A5FA" }} />
+              <span style={{ display: "block", width: "5px", height: "22px", borderRadius: "3px", background: "#3B82F6" }} />
+              <span style={{ display: "block", width: "5px", height: "34px", borderRadius: "3px", background: "#2563EB" }} />
+              <span style={{ display: "block", width: "5px", height: "20px", borderRadius: "3px", background: "#7C3AED" }} />
             </div>
-            <span style={{ fontSize: "1.45rem", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em" }}>
+            <span style={{ fontSize: "1.6rem", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em" }}>
               Insights<span style={{ color: "#3B82F6" }}>Flow</span>
             </span>
           </div>
@@ -141,12 +131,12 @@ export default function LoginPage() {
           {/* Headline */}
           <h1
             style={{
-              fontSize: "clamp(1.6rem, 3vh, 2.2rem)",
+              fontSize: "2.4rem",
               fontWeight: 800,
               lineHeight: 1.15,
               letterSpacing: "-0.03em",
               color: "#fff",
-              marginBottom: "12px",
+              marginBottom: "16px",
             }}
           >
             Tu empresa,<br />
@@ -155,10 +145,10 @@ export default function LoginPage() {
 
           <p
             style={{
-              fontSize: "0.92rem",
+              fontSize: "1rem",
               color: "#94A3B8",
-              lineHeight: 1.6,
-              marginBottom: "clamp(16px, 3vh, 32px)",
+              lineHeight: 1.7,
+              marginBottom: "44px",
             }}
           >
             Conecta Siigo Nube y accede a reportes ejecutivos, indicadores financieros y dashboards listos para tomar decisiones — sin esperar a nadie.
@@ -171,35 +161,35 @@ export default function LoginPage() {
               height: "2px",
               background: "linear-gradient(90deg, #2563EB, #10B981)",
               borderRadius: "2px",
-              marginBottom: "clamp(16px, 2.5vh, 28px)",
+              marginBottom: "36px",
             }}
           />
 
           {/* Bullets */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "clamp(12px, 2vh, 20px)" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "28px" }}>
             {bullets.map((b) => (
-              <div key={b.title} style={{ display: "flex", gap: "14px", alignItems: "flex-start" }}>
+              <div key={b.title} style={{ display: "flex", gap: "16px", alignItems: "flex-start" }}>
                 <div
                   style={{
-                    width: "34px",
-                    height: "34px",
-                    borderRadius: "9px",
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "10px",
                     background: "rgba(37,99,235,0.15)",
                     border: "1px solid rgba(37,99,235,0.3)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    fontSize: "1rem",
+                    fontSize: "1.1rem",
                     flexShrink: 0,
                   }}
                 >
                   {b.icon}
                 </div>
                 <div>
-                  <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#E2E8F0", marginBottom: "2px" }}>
+                  <div style={{ fontSize: "0.9rem", fontWeight: 700, color: "#E2E8F0", marginBottom: "4px" }}>
                     {b.title}
                   </div>
-                  <div style={{ fontSize: "0.78rem", color: "#64748B", lineHeight: 1.5 }}>
+                  <div style={{ fontSize: "0.82rem", color: "#64748B", lineHeight: 1.6 }}>
                     {b.desc}
                   </div>
                 </div>
@@ -210,15 +200,15 @@ export default function LoginPage() {
           {/* Badge empresa */}
           <div
             style={{
-              marginTop: "clamp(20px, 3.5vh, 36px)",
+              marginTop: "52px",
               display: "inline-flex",
               alignItems: "center",
               gap: "8px",
               background: "rgba(16,185,129,0.1)",
               border: "1px solid rgba(16,185,129,0.25)",
               borderRadius: "50px",
-              padding: "6px 13px",
-              fontSize: "0.7rem",
+              padding: "7px 14px",
+              fontSize: "0.72rem",
               color: "#10B981",
               fontWeight: 600,
               letterSpacing: "0.04em",
@@ -239,15 +229,13 @@ export default function LoginPage() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          padding: "24px 32px",
-          boxSizing: "border-box",
-          overflow: "hidden",
+          padding: "40px 32px",
         }}
       >
         <div style={{ width: "100%", maxWidth: "380px" }}>
 
           {/* Encabezado form */}
-          <div style={{ marginBottom: "24px" }}>
+          <div style={{ marginBottom: "32px" }}>
             <h2 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#0F172A", marginBottom: "6px" }}>
               Iniciar sesión
             </h2>
@@ -277,7 +265,7 @@ export default function LoginPage() {
           <form ref={formRef} onSubmit={handleSubmit}>
 
             {/* Usuario */}
-            <div style={{ marginBottom: "16px" }}>
+            <div style={{ marginBottom: "18px" }}>
               <label
                 htmlFor="email"
                 style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, color: "#374151", marginBottom: "6px" }}
@@ -310,7 +298,7 @@ export default function LoginPage() {
             </div>
 
             {/* Contraseña */}
-            <div style={{ marginBottom: "20px" }}>
+            <div style={{ marginBottom: "24px" }}>
               <label
                 htmlFor="password"
                 style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, color: "#374151", marginBottom: "6px" }}
@@ -397,22 +385,14 @@ export default function LoginPage() {
           </form>
 
           {/* Footer form */}
-          <p style={{ marginTop: "20px", fontSize: "0.72rem", color: "#9CA3AF", textAlign: "center" }}>
+          <p style={{ marginTop: "28px", fontSize: "0.72rem", color: "#9CA3AF", textAlign: "center" }}>
             © {new Date().getFullYear()} Impocommerce SAS · InsightsFlow
           </p>
 
         </div>
       </div>
 
-      {/* Reset de margen del body + responsive */}
-      <style jsx global>{`
-        html, body {
-          margin: 0;
-          padding: 0;
-          height: 100%;
-          overflow: hidden;
-        }
-      `}</style>
+      {/* Responsive: ocultar panel izquierdo en móvil */}
       <style>{`
         @media (max-width: 768px) {
           div[style*="flex: 0 0 58%"] { display: none !important; }

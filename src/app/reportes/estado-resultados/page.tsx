@@ -87,13 +87,24 @@ type ModoVisual = "gerencial" | "auditoria";
 // =========================================================
 // HELPERS
 // =========================================================
+
 function abreviar(valor: number): string {
-  if (!valor) return "0";
-  const absValue = Math.abs(valor);
-  if (absValue >= 1_000_000_000) return `${(valor / 1_000_000_000).toFixed(1)}B`;
-  if (absValue >= 1_000_000) return `${(valor / 1_000_000).toFixed(1)}M`;
-  if (absValue >= 1_000) return `${(valor / 1_000).toFixed(0)}K`;
-  return `${Math.round(valor)}`;
+  const n = Number(valor || 0);
+  const abs = Math.abs(n);
+
+  if (abs >= 1_000_000_000) {
+    const millones = n / 1_000_000;
+    return `${millones.toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}M`;
+  }
+  if (abs >= 1_000_000) {
+    const millones = n / 1_000_000;
+    return `${millones.toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}M`;
+  }
+  if (abs >= 1_000) {
+    const miles = n / 1_000;
+    return `${miles.toLocaleString("es-CO", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}K`;
+  }
+  return `${Math.round(n).toLocaleString("es-CO")}`;
 }
 
 const formatCurrency = (val: number) =>
@@ -1399,7 +1410,7 @@ const InfoHint = ({
     </button>
 
     <div
-      className={`pointer-events-none absolute top-6 z-50 w-64 rounded-2xl border px-3 py-3 text-[11px] leading-5 shadow-2xl opacity-0 scale-95 transition-all duration-200 group-hover/info:opacity-100 group-hover/info:scale-100 group-focus-within/info:opacity-100 group-focus-within/info:scale-100 ${
+      className={`pointer-events-none absolute top-6 z-50 w-64 sm:w-72 rounded-2xl border px-3 py-3 text-[11px] leading-5 shadow-2xl opacity-0 scale-95 transition-all duration-200 group-hover/info:opacity-100 group-hover/info:scale-100 group-focus-within/info:opacity-100 group-focus-within/info:scale-100 ${
         align === "left" ? "left-0" : "right-0"
       } ${
         dark
@@ -1660,7 +1671,7 @@ const StatCard = ({
 
   return (
     <Card
-      className={`relative overflow-visible border shadow-lg rounded-[2rem] transition-all hover:scale-[1.01] ${
+      className={`relative z-0 hover:z-30 focus-within:z-30 overflow-visible border shadow-lg rounded-[2rem] transition-all hover:scale-[1.01] ${
         highlight
           ? "bg-indigo-600 text-white shadow-indigo-200 border-none"
           : themes[color]

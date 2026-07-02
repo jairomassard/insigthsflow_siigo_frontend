@@ -63,8 +63,6 @@ type CuentaItem = {
 
 type Kpis = {
   ingresos_totales?: number;
-  ingresos_operacionales?: number;
-  ingresos_no_operacionales?: number;
   utilidad_bruta?: number;
   utilidad_operativa?: number;
   ebitda?: number;
@@ -231,7 +229,7 @@ const KPI_INFO = {
   ingresosTotales: {
     title: "Ingresos Totales",
     description:
-      "Suma de ingresos operacionales (venta o prestación del servicio) más ingresos no operacionales (financieros, otros ingresos), antes de restar costos, gastos e impuestos.",
+      "Representa el valor total facturado o vendido por la empresa dentro del período analizado, antes de restar costos, gastos e impuestos.",
   },
   utilidadBruta: {
     title: "Utilidad Bruta",
@@ -918,10 +916,6 @@ export default function EstadoResultadosPage() {
           icon={<TrendingUp size={18} />}
           color="emerald"
           description={KPI_INFO.ingresosTotales.description}
-          breakdown={[
-            { label: "Operacionales", value: kpis.ingresos_operacionales || 0 },
-            { label: "No operacionales", value: kpis.ingresos_no_operacionales || 0 },
-          ]}
         />
         <StatCard
           title="Utilidad Bruta"
@@ -1638,7 +1632,6 @@ const StatCard = ({
   highlight = false,
   description,
   badgeDescription,
-  breakdown, // NUEVO
 }: {
   title: string;
   value: number;
@@ -1648,7 +1641,6 @@ const StatCard = ({
   highlight?: boolean;
   description: string;
   badgeDescription?: string;
-  breakdown?: { label: string; value: number }[]; // NUEVO
 }) => {
   const themes: Record<string, string> = {
     emerald: "text-emerald-600 bg-white border-slate-100",
@@ -1711,22 +1703,6 @@ const StatCard = ({
         <p className="text-[1.9rem] leading-none font-black mt-1 tracking-tighter">
           {formatCurrency(value || 0)}
         </p>
-
-        {breakdown && breakdown.length > 0 && (
-          <div className={`mt-2 pt-2 border-t space-y-0.5 ${highlight ? "border-white/20" : "border-slate-100"}`}>
-            {breakdown.map((item, idx) => (
-              <div
-                key={idx}
-                className={`flex justify-between text-[10px] font-bold ${
-                  highlight ? "text-indigo-100" : "text-slate-400"
-                }`}
-              >
-                <span>{item.label}</span>
-                <span>{formatCurrency(item.value)}</span>
-              </div>
-            ))}
-          </div>
-        )}        
       </CardContent>
     </Card>
   );

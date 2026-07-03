@@ -1134,8 +1134,20 @@ function DetalleModal({
   const isIngresos = mode === "ingresos";
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-3 backdrop-blur-sm">
-      <div className="relative max-h-[90vh] w-full max-w-7xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 px-5 py-4">
+      <div
+        className="relative flex w-full max-w-7xl flex-col rounded-3xl border border-slate-200 bg-white shadow-2xl"
+        style={{
+          width: "min(96vw, 1400px)",
+          height: "min(90vh, 860px)",
+          minWidth: "430px",
+          minHeight: "360px",
+          maxWidth: "98vw",
+          maxHeight: "94vh",
+          resize: "both",
+          overflow: "auto",
+        }}
+      >
+        <div className="flex shrink-0 items-start justify-between gap-4 rounded-t-3xl border-b border-slate-200 bg-slate-50 px-5 py-4">
           <div>
             <h2 className="text-lg font-bold text-slate-900">{title}</h2>
             <p className="mt-1 text-sm text-slate-500">
@@ -1151,7 +1163,7 @@ function DetalleModal({
           </button>
         </div>
         {isIngresos && (
-          <div className="grid gap-3 border-b border-slate-100 bg-white px-5 py-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid shrink-0 gap-3 border-b border-slate-100 bg-white px-5 py-3 sm:grid-cols-2 lg:grid-cols-5">
             <ModalMetric
               label="Facturas emitidas"
               value={formatCurrency(resumen?.facturas_emitidas)}
@@ -1185,7 +1197,7 @@ function DetalleModal({
             />
           </div>
         )}
-        <div className="max-h-[72vh] overflow-auto p-4">
+        <div className="flex-1 overflow-auto p-4">
           {loading ? (
             <div className="flex h-48 items-center justify-center text-sm text-slate-500">
               Cargando detalle…

@@ -1049,10 +1049,20 @@ export default function ReporteFinancieroComprasGastosPage() {
           className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-2"
         >
           <div
-            className="mt-2 w-full max-w-6xl overflow-hidden rounded-2xl bg-white shadow-xl animate-[fadeIn_0.2s_ease]"
+            className="mt-2 flex w-full max-w-6xl flex-col rounded-2xl bg-white shadow-xl animate-[fadeIn_0.2s_ease]"
+            style={{
+              width: "min(96vw, 1280px)",
+              height: "min(88vh, 820px)",
+              minWidth: "430px",
+              minHeight: "360px",
+              maxWidth: "98vw",
+              maxHeight: "94vh",
+              resize: "both",
+              overflow: "auto",
+            }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b px-4 py-3">
+            <div className="sticky top-0 z-20 flex shrink-0 items-center justify-between rounded-t-2xl border-b bg-white px-4 py-3">
               <h3 className="text-base font-black">{modalTitle}</h3>
 
               <button
@@ -1063,7 +1073,7 @@ export default function ReporteFinancieroComprasGastosPage() {
               </button>
             </div>
 
-            <div className="max-h-[72vh] overflow-auto p-3">
+            <div className="flex-1 overflow-auto p-3">
               {modalMes && (
                 <div className="mb-4 space-y-3">
                   <div>

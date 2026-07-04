@@ -41,6 +41,12 @@ interface FacturaDetalle {
   idcompra: string;
   factura_proveedor: string;
   estado: "pagado" | "pendiente" | "parcial";
+  centro_costo_nombre?: string;
+}
+
+interface CentroCosto {
+  id: string;
+  nombre: string;
 }
 
 interface ComprasProveedoresKpis {
@@ -127,6 +133,8 @@ export default function ReporteComprasProveedoresPage() {
   const [mostrarSugerencias, setMostrarSugerencias] = useState<boolean>(false);
 
   const [estadoPago, setEstadoPago] = useState<string>("");
+  const [centroCostos, setCentroCostos] = useState<string>("");
+  const [centros, setCentros] = useState<CentroCosto[]>([]);
 
   const [defaultDates] = useState(() => getDefaultYearToDateRange());
 
@@ -136,6 +144,26 @@ export default function ReporteComprasProveedoresPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const fetchCentros = async () => {
+      try {
+        let url = "/catalogos/centros-costo-reales";
+        const q: string[] = [];
+        if (fechaDesde) q.push(`desde=${fechaDesde}`);
+        if (fechaHasta) q.push(`hasta=${fechaHasta}`);
+        if (q.length) url += `?${q.join("&")}`;
+
+        const data = await authFetch(url);
+        setCentros(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error("Error cargando centros de costo reales:", error);
+        setCentros([]);
+      }
+    };
+
+    fetchCentros();
+  }, [fechaDesde, fechaHasta]);
+
+  useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
 
@@ -143,6 +171,7 @@ export default function ReporteComprasProveedoresPage() {
       if (fechaDesde) url += `&desde=${fechaDesde}`;
       if (fechaHasta) url += `&hasta=${fechaHasta}`;
       if (estadoPago) url += `&estado=${estadoPago.toLowerCase()}`;
+      if (centroCostos) url += `&centro_costos=${encodeURIComponent(centroCostos)}`;
 
       try {
         const res = await authFetch(url);
@@ -183,7 +212,7 @@ export default function ReporteComprasProveedoresPage() {
     };
 
     fetchData();
-  }, [fechaDesde, fechaHasta, estadoPago]);
+  }, [fechaDesde, fechaHasta, estadoPago, centroCostos]);
 
   const proveedoresOrdenados = [...proveedores].sort((a, b) =>
     a.proveedor_nombre.localeCompare(b.proveedor_nombre)
@@ -309,7 +338,7 @@ export default function ReporteComprasProveedoresPage() {
       </div>
 
       {/* Filtros */}
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-6 items-start">
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-7 items-start">
         {/* Buscador rápido */}
         <div className="flex flex-col space-y-1 relative lg:col-span-2">
           <label className="text-sm font-medium">Buscar proveedor</label>
@@ -416,6 +445,19 @@ export default function ReporteComprasProveedoresPage() {
             <option value="">Todos</option>
             <option value="pagado">Pagado</option>
             <option value="pendiente">Pendiente</option>
+          </Select>
+        </div>
+
+        <div className="flex flex-col space-y-1">
+          <label className="text-sm font-medium">Centro de Costos</label>
+          <Select
+            value={centroCostos}
+            onChange={(e) => setCentroCostos(e.target.value)}
+          >
+            <option value="">Todos</option>
+            {centros.map((cc) => (
+              <SelectItem key={cc.id} value={cc.id} label={cc.nombre} />
+            ))}
           </Select>
         </div>
 
@@ -586,6 +628,7 @@ export default function ReporteComprasProveedoresPage() {
                               <th className="px-2 py-1 text-left">Fecha</th>
                               <th className="px-2 py-1 text-left">Vencimiento</th>
                               <th className="px-2 py-1 text-left">Estado</th>
+                              <th className="px-2 py-1 text-left">Centro de Costo</th>
                               <th className="px-2 py-1 text-right">Total</th>
                               <th className="px-2 py-1 text-right">Saldo</th>
                             </tr>
@@ -618,6 +661,9 @@ export default function ReporteComprasProveedoresPage() {
                                 </td>
                                 <td className="px-2 py-1">
                                   {labelEstado(f.estado)}
+                                </td>
+                                <td className="px-2 py-1">
+                                  {f.centro_costo_nombre || "—"}
                                 </td>
                                 <td className="px-2 py-1 text-right">
                                   {formatMiles(f.total)}

@@ -7,6 +7,7 @@ export type WhoAmI = {
   perfilid: number;
   email: string;
   cliente?: ClienteLite;
+  proveedor_datos?: "siigo" | "alegra";
 };
 
 const API = process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:5000";

@@ -13,6 +13,7 @@ export default function ClientHome() {
   const [ok, setOk] = useState(false);
   const { permisos, loading: loadingPermisos } = usePermisos();
   const [notif, setNotif] = useState<any>(null);
+  const [proveedorDatos, setProveedorDatos] = useState<"siigo" | "alegra">("siigo");
 
   // 🧩 1. Cargar sesión
   useEffect(() => {
@@ -20,6 +21,7 @@ export default function ClientHome() {
       const me = await getWhoAmI();
       if (!me) return router.replace("/login");
       if (me.perfilid === 0) return router.replace("/dashboard/admin");
+      setProveedorDatos(me.proveedor_datos === "alegra" ? "alegra" : "siigo");
       setOk(true);
     })();
   }, [router]);
@@ -118,12 +120,20 @@ export default function ClientHome() {
                 description="Gestiona los usuarios y sus accesos."
               />
             )}
-            {tiene("ver_integracion_siigo") && (
+            {tiene("ver_integracion_siigo") && proveedorDatos === "siigo" && (
               <FeatureCard
                 icon="🔌"
                 title="Integración Siigo"
                 href="/dashboard/client/integrations/siigo"
                 description="Configura credenciales API Siigo y sincroniza información."
+              />
+            )}
+            {tiene("ver_integracion_siigo") && proveedorDatos === "alegra" && (
+              <FeatureCard
+                icon="🔌"
+                title="Integración Alegra"
+                href="/dashboard/client/integrations/alegra"
+                description="Configura credenciales API Alegra y sincroniza información."
               />
             )}
             {tiene("ver_configuraciones_varias") && (

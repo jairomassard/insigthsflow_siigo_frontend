@@ -36,7 +36,10 @@ type Cliente = {
   paquete_nombre?: string | null;
   idpaquete?: number | null;
   paquete_actual?: PaqueteActual | null;
+  proveedor_datos?: "siigo" | "alegra" | null;
 };
+
+type ProveedorDatos = "siigo" | "alegra";
 
 const PAQUETES: {
   codigo: PaqueteCodigo;
@@ -110,6 +113,7 @@ export default function ClientsPage() {
     activo: "true",
 
     paquete: "operativo" as PaqueteCodigo,
+    proveedor_datos: "siigo" as ProveedorDatos,
 
     admin_nombre: "",
     admin_apellido: "",
@@ -133,6 +137,7 @@ export default function ClientsPage() {
       activo: "true",
 
       paquete: "operativo",
+      proveedor_datos: "siigo",
 
       admin_nombre: "",
       admin_apellido: "",
@@ -186,6 +191,7 @@ export default function ClientsPage() {
       password: form.admin_password,
     },
     paquetes: [form.paquete],
+    proveedor_datos: form.proveedor_datos,
   });
 
   const validarCrearCliente = () => {
@@ -379,6 +385,7 @@ export default function ClientsPage() {
       timezone: c.timezone || "America/Bogota",
 
       paquete: paqueteActual,
+      proveedor_datos: c.proveedor_datos === "alegra" ? "alegra" : "siigo",
 
       admin_nombre: "",
       admin_apellido: "",
@@ -736,6 +743,61 @@ export default function ClientsPage() {
           </div>
         </div>
 
+        {!editingId && (
+          <>
+            <div className="my-6 border-t border-slate-200" />
+
+            <div className="mb-4">
+              <h4 className="text-base font-semibold text-slate-900">
+                Origen de datos
+              </h4>
+              <p className="text-sm text-slate-500">
+                De qué sistema contable vendrán los datos de este cliente.
+                Define qué página de integración verá en su menú (Siigo o
+                Alegra, no ambas) — no se puede cambiar después desde aquí.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {(
+                [
+                  { codigo: "siigo" as ProveedorDatos, nombre: "Siigo Nube" },
+                  { codigo: "alegra" as ProveedorDatos, nombre: "Alegra" },
+                ]
+              ).map((p) => {
+                const selected = form.proveedor_datos === p.codigo;
+                return (
+                  <button
+                    key={p.codigo}
+                    type="button"
+                    onClick={() =>
+                      setForm({ ...form, proveedor_datos: p.codigo })
+                    }
+                    className={`rounded-2xl border p-4 text-left transition ${
+                      selected
+                        ? "border-blue-500 bg-blue-50 shadow-sm"
+                        : "border-slate-200 bg-white hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="font-semibold text-slate-900">
+                        {p.nombre}
+                      </div>
+                      <div
+                        className={`h-4 w-4 rounded-full border ${
+                          selected
+                            ? "border-blue-600 bg-blue-600"
+                            : "border-slate-300"
+                        }`}
+                      />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+
         <div className="my-6 border-t border-slate-200" />
 
         <div className="mb-4">
@@ -1008,6 +1070,7 @@ export default function ClientsPage() {
                 <th className="border-b p-3 text-left">NIT</th>
                 <th className="border-b p-3 text-left">Correo cliente</th>
                 <th className="border-b p-3 text-left">Paquete</th>
+                <th className="border-b p-3 text-left">Origen</th>
                 <th className="border-b p-3 text-left">País</th>
                 <th className="border-b p-3 text-left">Ciudad</th>
                 <th className="border-b p-3 text-left">Teléfono</th>
@@ -1066,6 +1129,17 @@ export default function ClientsPage() {
                           Sin paquete
                         </span>
                       )}
+                    </td>
+                    <td className="border-b p-3">
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                          c.proveedor_datos === "alegra"
+                            ? "bg-indigo-50 text-indigo-700"
+                            : "bg-sky-50 text-sky-700"
+                        }`}
+                      >
+                        {c.proveedor_datos === "alegra" ? "Alegra" : "Siigo Nube"}
+                      </span>
                     </td>
                     <td className="border-b p-3">{c.pais || "-"}</td>
                     <td className="border-b p-3">{c.ciudad || "-"}</td>

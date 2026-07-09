@@ -24,6 +24,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const router = useRouter();
   const [ok, setOk] = useState(false);
   const [cliente, setCliente] = useState<{ nombre: string; logo_url?: string } | null>(null);
+  const [proveedorDatos, setProveedorDatos] = useState<"siigo" | "alegra">("siigo");
   const { permisos, loading: loadingPermisos } = usePermisos();
 
   useEffect(() => {
@@ -36,6 +37,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         nombre: me.cliente?.nombre ?? "Cliente",
         logo_url: me.cliente?.logo_url,
       });
+      setProveedorDatos(me.proveedor_datos === "alegra" ? "alegra" : "siigo");
 
       setOk(true);
     })();
@@ -96,11 +98,17 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           : []),
         ...(tiene("ver_integracion_siigo")
           ? [
-              {
-                href: "/dashboard/client/integrations/siigo",
-                label: "Integración Siigo",
-                icon: <Plug className="w-4 h-4" />,
-              },
+              proveedorDatos === "alegra"
+                ? {
+                    href: "/dashboard/client/integrations/alegra",
+                    label: "Integración Alegra",
+                    icon: <Plug className="w-4 h-4" />,
+                  }
+                : {
+                    href: "/dashboard/client/integrations/siigo",
+                    label: "Integración Siigo",
+                    icon: <Plug className="w-4 h-4" />,
+                  },
             ]
           : []),
         ...(tiene("ver_configuraciones_varias")

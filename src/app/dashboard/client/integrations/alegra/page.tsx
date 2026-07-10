@@ -325,7 +325,7 @@ export default function AlegraIntegrationPage() {
 
       <Card
         title="2. Sincronización completa"
-        subtitle="Ejecuta en orden todos los procesos: catálogos, movimientos contables, facturas, notas crédito, compras y pagos. Puede tardar varios minutos."
+        subtitle="Ejecuta en orden todos los procesos: catálogos, movimientos contables, facturas, notas crédito, compras, pagos y la actualización del auxiliar contable (P&L, Balance, Cruce IVA, Retenciones e Indicadores). Puede tardar varios minutos."
         className="border-blue-200 bg-blue-50/40"
       >
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">

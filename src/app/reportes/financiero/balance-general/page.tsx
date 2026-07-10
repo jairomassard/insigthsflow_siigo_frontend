@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { authFetch } from "@/lib/api";
+import { getWhoAmI } from "@/lib/authInfo";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -687,6 +688,7 @@ export default function BalanceGeneralPage() {
   const [loading, setLoading] = useState(false);
   const [rebuilding, setRebuilding] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [proveedorDatos, setProveedorDatos] = useState<"siigo" | "alegra">("siigo");
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<BalanceResponse | null>(null);
 
@@ -786,8 +788,13 @@ export default function BalanceGeneralPage() {
     const formData = new FormData();
     formData.append("archivo", file);
 
+    const endpoint =
+      proveedorDatos === "alegra"
+        ? "/alegra/cargar_libro_diario"
+        : "/reportes/cargar_auxiliar";
+
     try {
-      await authFetch("/reportes/cargar_auxiliar", {
+      await authFetch(endpoint, {
         method: "POST",
         body: formData,
       });
@@ -806,6 +813,9 @@ export default function BalanceGeneralPage() {
 
   useEffect(() => {
     cargarBalance();
+    getWhoAmI().then((me) => {
+      if (me?.proveedor_datos) setProveedorDatos(me.proveedor_datos);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1055,7 +1065,9 @@ export default function BalanceGeneralPage() {
           </div>
 
           <p className="text-slate-400 text-[10px] font-semibold italic text-right">
-            Ruta Siigo: Contabilidad {" > "} Comprobantes {" > "} Informe auxiliar contable
+            {proveedorDatos === "alegra"
+              ? "Ruta Alegra: Contabilidad > Libro Diario > Exportar Excel"
+              : <>Ruta Siigo: Contabilidad {" > "} Comprobantes {" > "} Informe auxiliar contable</>}
           </p>
         </div>
       </div>

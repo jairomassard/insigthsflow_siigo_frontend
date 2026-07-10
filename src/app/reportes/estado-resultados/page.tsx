@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { authFetch } from "@/lib/api";
+import { getWhoAmI } from "@/lib/authInfo";
 import useAuthGuard from "@/hooks/useAuthGuard";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import {
@@ -287,6 +288,7 @@ export default function EstadoResultadosPage() {
   const [fechaHasta, setFechaHasta] = useState("2026-12-31");
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [proveedorDatos, setProveedorDatos] = useState<"siigo" | "alegra">("siigo");
   const [vista, setVista] = useState<"resumida" | "detallada">("detallada");
   const [modoVisual, setModoVisual] = useState<ModoVisual>("gerencial");
   const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>({
@@ -353,8 +355,13 @@ export default function EstadoResultadosPage() {
     const formData = new FormData();
     formData.append("archivo", file);
 
+    const endpoint =
+      proveedorDatos === "alegra"
+        ? "/alegra/cargar_libro_diario"
+        : "/reportes/cargar_auxiliar";
+
     try {
-      await authFetch("/reportes/cargar_auxiliar", {
+      await authFetch(endpoint, {
         method: "POST",
         body: formData,
       });
@@ -371,6 +378,9 @@ export default function EstadoResultadosPage() {
 
   useEffect(() => {
     fetchData();
+    getWhoAmI().then((me) => {
+      if (me?.proveedor_datos) setProveedorDatos(me.proveedor_datos);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -828,7 +838,9 @@ export default function EstadoResultadosPage() {
           </div>
 
           <p className="text-slate-400 text-[10px] font-semibold italic">
-            Ruta Siigo: Contabilidad {" > "} Comprobantes {" > "} Informe auxiliar contable
+            {proveedorDatos === "alegra"
+              ? "Ruta Alegra: Contabilidad > Libro Diario > Exportar Excel"
+              : <>Ruta Siigo: Contabilidad {" > "} Comprobantes {" > "} Informe auxiliar contable</>}
           </p>
         </div>
       </div>

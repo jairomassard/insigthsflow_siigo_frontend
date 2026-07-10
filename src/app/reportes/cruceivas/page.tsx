@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { authFetch } from "@/lib/api";
+import { getWhoAmI } from "@/lib/authInfo";
 import useAuthGuard from "@/hooks/useAuthGuard";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import {
@@ -92,6 +93,7 @@ export default function CruceIVAReportPage() {
   const [inc5, setInc5] = useState(false);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [proveedorDatos, setProveedorDatos] = useState<"siigo" | "alegra">("siigo");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = async () => {
@@ -114,10 +116,15 @@ export default function CruceIVAReportPage() {
     setUploading(true);
     const formData = new FormData();
     formData.append("archivo", file);
+    const endpoint =
+      proveedorDatos === "alegra"
+        ? "/alegra/cargar_libro_diario"
+        : "/reportes/cargar_auxiliar";
+
     try {
-      await authFetch("/reportes/cargar_auxiliar", { method: "POST", body: formData });
+      await authFetch(endpoint, { method: "POST", body: formData });
       alert(`Éxito: Se procesó el auxiliar contable.`);
-      fetchData(); 
+      fetchData();
     } catch (err) {
       alert("Error cargando el archivo.");
     } finally {
@@ -127,6 +134,12 @@ export default function CruceIVAReportPage() {
   };
 
   useEffect(() => { fetchData(); }, [fechaDesde, fechaHasta, modo, inc19, inc5]);
+
+  useEffect(() => {
+    getWhoAmI().then((me) => {
+      if (me?.proveedor_datos) setProveedorDatos(me.proveedor_datos);
+    });
+  }, []);
 
   return (
     <div className="space-y-3 p-4 bg-slate-50 min-h-screen">
@@ -152,7 +165,9 @@ export default function CruceIVAReportPage() {
             </button>
           </div>
           <p className="text-slate-400 text-[10px] font-semibold italic">
-            Ruta Siigo: Reportes {'>'} Contables {'>'} Contables {'>'} Movimiento auxiliar por cuenta contable en excel
+            {proveedorDatos === "alegra"
+              ? "Ruta Alegra: Contabilidad > Libro Diario > Exportar Excel"
+              : <>Ruta Siigo: Reportes {'>'} Contables {'>'} Contables {'>'} Movimiento auxiliar por cuenta contable en excel</>}
           </p>
         </div>
       </div>

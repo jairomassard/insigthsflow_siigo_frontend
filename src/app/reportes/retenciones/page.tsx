@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { authFetch } from "@/lib/api";
+import { getWhoAmI } from "@/lib/authInfo";
 import useAuthGuard from "@/hooks/useAuthGuard";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import {
@@ -203,6 +204,7 @@ export default function RetencionesReportPage() {
   const [fechaHasta, setFechaHasta] = useState("2026-12-31");
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [proveedorDatos, setProveedorDatos] = useState<"siigo" | "alegra">("siigo");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = async () => {
@@ -237,8 +239,13 @@ export default function RetencionesReportPage() {
     const formData = new FormData();
     formData.append("archivo", file);
 
+    const endpoint =
+      proveedorDatos === "alegra"
+        ? "/alegra/cargar_libro_diario"
+        : "/reportes/cargar_auxiliar";
+
     try {
-      await authFetch("/reportes/cargar_auxiliar", {
+      await authFetch(endpoint, {
         method: "POST",
         body: formData
       });
@@ -258,6 +265,12 @@ export default function RetencionesReportPage() {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fechaDesde, fechaHasta]);
+
+  useEffect(() => {
+    getWhoAmI().then((me) => {
+      if (me?.proveedor_datos) setProveedorDatos(me.proveedor_datos);
+    });
+  }, []);
 
   const topConceptos = useMemo(() => {
     return [...composicion]
@@ -429,7 +442,9 @@ export default function RetencionesReportPage() {
             </button>
           </div>
           <p className="text-slate-400 text-[10px] font-semibold italic text-right">
-            Ruta Siigo: Reportes {" > "} Contables {" > "} Contables {" > "} Movimiento auxiliar por cuenta contable en excel
+            {proveedorDatos === "alegra"
+              ? "Ruta Alegra: Contabilidad > Libro Diario > Exportar Excel"
+              : <>Ruta Siigo: Reportes {" > "} Contables {" > "} Contables {" > "} Movimiento auxiliar por cuenta contable en excel</>}
           </p>
         </div>
       </div>

@@ -57,6 +57,7 @@ interface FacturaDetalle {
   id?: number;
   proveedor_nombre: string;
   factura: string;
+  factura_proveedor?: string | null;
   fecha: string;
   vencimiento: string | null;
   estado_calc?: EstadoCalc;
@@ -1180,6 +1181,7 @@ export default function ReporteFinancieroComprasGastosPage() {
                       {[
                         "Proveedor",
                         "Factura",
+                        "Factura Proveedor",
                         "Fecha",
                         "Vencimiento",
                         "Estado",
@@ -1188,7 +1190,7 @@ export default function ReporteFinancieroComprasGastosPage() {
                         "Pagado",
                         "Saldo",
                       ].map((h, idx) => (
-                        <th key={idx} className={`p-2 ${idx < 6 ? "text-left" : "text-right"}`}>
+                        <th key={idx} className={`p-2 ${idx < 7 ? "text-left" : "text-right"}`}>
                           {h}
                         </th>
                       ))}
@@ -1215,6 +1217,7 @@ export default function ReporteFinancieroComprasGastosPage() {
                         <tr key={`${r.factura || "factura"}-${i}`} className={rowClass}>
                           <td className="p-2">{r.proveedor_nombre || "Sin proveedor"}</td>
                           <td className="p-2">{r.factura || "—"}</td>
+                          <td className="p-2">{r.factura_proveedor || "—"}</td>
                           <td className="p-2">{formatDateSafe(r.fecha)}</td>
                           <td className="p-2">{formatDateSafe(r.vencimiento)}</td>
                           <td className="p-2">

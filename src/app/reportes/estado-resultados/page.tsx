@@ -392,7 +392,12 @@ export default function EstadoResultadosPage() {
   useEffect(() => {
     fetchData();
     getWhoAmI().then((me) => {
-      if (me?.proveedor_datos) setProveedorDatos(me.proveedor_datos);
+      if (me?.proveedor_datos) {
+        setProveedorDatos(me.proveedor_datos);
+        // Clientes Alegra ven primero el formato nativo de Alegra; desde ahi
+        // pueden cambiar a la vista PUC/NIIF con el boton "Ver segun PUC/NIIF".
+        if (me.proveedor_datos === "alegra") setModoAlegraNativo(true);
+      }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

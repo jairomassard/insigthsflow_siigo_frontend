@@ -862,6 +862,12 @@ export default function EstadoResultadosPage() {
     pushSection("GASTOS OPERACIONALES", gasOp);
     pushSection("INGRESOS NO OPERACIONALES", ingNoOp);
     pushSection("GASTOS NO OPERACIONALES", gasNoOp);
+    // En modo "Ver como Alegra" el ICA se saca de GASTOS OPERACIONALES y se
+    // muestra como su propia seccion (igual que en pantalla); si no se agrega
+    // aqui, el detalle exportado no cuadra con la Utilidad Neta mostrada.
+    if (enModoAlegra && impuestosOpCuentas.length > 0) {
+      pushSection("GASTOS POR IMPUESTOS (ICA)", impuestosOpCuentas);
+    }
 
     const matrizSheet = XLSX.utils.json_to_sheet(matrizRows);
 

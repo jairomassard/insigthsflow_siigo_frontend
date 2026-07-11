@@ -466,7 +466,7 @@ export default function EstadoResultadosPage() {
     [composicion]
   );
 
-  const gasOp = useMemo(
+  const gasOpTodas = useMemo(
     () =>
       getCuentas((c) =>
         matchCuenta(
@@ -476,6 +476,26 @@ export default function EstadoResultadosPage() {
         )
       ),
     [composicion]
+  );
+
+  // "Gastos por Impuestos" (ICA/Industria y Comercio, cuenta PUC 5115): en
+  // modo "Ver como Alegra" se saca de Gastos Operacionales y se muestra
+  // como su propia seccion despues de Utilidad Antes de Impuestos, igual
+  // que el reporte nativo de Alegra - en modo PUC/NIIF se queda adentro
+  // (correcto contablemente, ver docstring del backend).
+  const impuestosOpCuentas = useMemo(
+    () => gasOpTodas.filter((c) => getCuentaPrefix(c.cuenta, 4) === "5115"),
+    [gasOpTodas]
+  );
+
+  const enModoAlegra = modoAlegraNativo && proveedorDatos === "alegra";
+
+  const gasOp = useMemo(
+    () =>
+      enModoAlegra
+        ? gasOpTodas.filter((c) => getCuentaPrefix(c.cuenta, 4) !== "5115")
+        : gasOpTodas,
+    [gasOpTodas, enModoAlegra]
   );
 
   const ingNoOp = useMemo(
@@ -521,22 +541,15 @@ export default function EstadoResultadosPage() {
     cuentas.reduce((acc, c) => acc + (c.total || 0), 0);
 
   // Detalle por cuenta (composicion) siempre queda en su clasificacion PUC
-  // real, sin importar el modo de vista - solo los subtotales/cascada se
-  // ajustan, restando impuestos_operativos (ICA) de Gastos Operacionales
-  // cuando el modo "como Alegra" esta activo. Ver aplicarModoAlegra.
-  const enModoAlegra = modoAlegraNativo && proveedorDatos === "alegra";
-  const impuestosOpTotal = enModoAlegra ? (kpisApi.impuestos_operativos || 0) : 0;
-  const impuestosOpPorMes = useMemo(() => {
-    const m: Record<string, number> = {};
-    evolucionApi.forEach((e) => {
-      m[e.label] = e.impuestos_operativos || 0;
-    });
-    return m;
-  }, [evolucionApi]);
+  // real, sin importar el modo de vista - solo Industria y Comercio (5115)
+  // se saca de gasOp/gasOpTodas arriba cuando el modo "como Alegra" esta
+  // activo, y se muestra en su propia seccion (ver impuestosOpCuentas).
+  const impuestosOpTotal = enModoAlegra ? sumCuentas(impuestosOpCuentas) : 0;
+  const impuestosOpPorMes = getTotalesPorMes(impuestosOpCuentas);
 
   const totalIngOp = sumCuentas(ingOp);
   const totalCostos = sumCuentas(costos);
-  const totalGasOp = sumCuentas(gasOp) - impuestosOpTotal;
+  const totalGasOp = sumCuentas(gasOp);
   const totalIngNoOp = sumCuentas(ingNoOp);
   const totalGasNoOp = sumCuentas(gasNoOp);
 
@@ -544,19 +557,14 @@ export default function EstadoResultadosPage() {
   const utilidadOperativa = utilidadBruta - totalGasOp;
   const utilidadAntesImpuestos =
     utilidadOperativa + totalIngNoOp - totalGasNoOp;
-  // En modo "como Alegra", el ICA se resta aqui (despues de Utilidad Antes
-  // de Impuestos) en vez de dentro de Gastos Operacionales - por eso se
-  // vuelve a restar impuestosOpTotal para que la Utilidad Neta final
-  // quede identica en ambos modos.
+  // En modo "como Alegra", el ICA (impuestosOpTotal) se resta aqui, despues
+  // de Utilidad Antes de Impuestos, en vez de dentro de Gastos
+  // Operacionales - asi la Utilidad Neta final queda identica en ambos modos.
   const utilidadNeta = utilidadAntesImpuestos - impuestosOpTotal;
 
   const tIngOpMes = getTotalesPorMes(ingOp);
   const tCostosMes = getTotalesPorMes(costos);
-  const tGasOpMesCrudo = getTotalesPorMes(gasOp);
-  const tGasOpMes = periodos.reduce(
-    (acc, p) => ({ ...acc, [p]: tGasOpMesCrudo[p] - (enModoAlegra ? (impuestosOpPorMes[p] || 0) : 0) }),
-    {} as Record<string, number>
-  );
+  const tGasOpMes = getTotalesPorMes(gasOp);
   const tIngNoOpMes = getTotalesPorMes(ingNoOp);
   const tGasNoOpMes = getTotalesPorMes(gasNoOp);
 
@@ -1389,6 +1397,35 @@ export default function EstadoResultadosPage() {
                     valueClass="text-amber-800"
                     totalClass="text-amber-900 bg-amber-100/50 border-l border-amber-200"
                   />
+
+                  {enModoAlegra && impuestosOpCuentas.length > 0 && (
+                    <>
+                      <SectionHeader
+                        title="GASTOS POR IMPUESTOS (ICA)"
+                        colSpan={periodos.length + 2}
+                        white
+                        expanded
+                        onToggle={() => {}}
+                      />
+                      {impuestosOpCuentas.map((c) => (
+                        <RowCuenta
+                          key={c.cuenta}
+                          cuenta={c}
+                          isGasto={true}
+                          periodos={periodos}
+                          modoVisual={modoVisual}
+                        />
+                      ))}
+                      <RowTotal
+                        title="TOTAL GASTOS POR IMPUESTOS"
+                        totalesMes={impuestosOpPorMes}
+                        totalAcumulado={impuestosOpTotal}
+                        isGasto
+                        periodos={periodos}
+                        modoVisual={modoVisual}
+                      />
+                    </>
+                  )}
 
                   <tr className="bg-slate-900 border-t-4 border-slate-900">
                     <td className="py-5 px-6 font-black text-white text-base uppercase tracking-widest sticky left-0 bg-slate-900">

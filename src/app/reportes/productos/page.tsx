@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { authFetch } from "@/lib/api";
 import { getDefaultYearToDateRange } from "@/lib/dateDefaults";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { RefreshCcw, ArrowUp, ArrowDown, ArrowUpDown, Search } from "lucide-react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -22,6 +24,7 @@ interface Producto {
   producto: string;
   cantidad: number;
   total: number;
+  facturas?: number;
 }
 interface KPIs {
   ventas_totales: number;
@@ -112,6 +115,7 @@ function HistoricoTooltip({ active, payload }: any) {
 export default function ReporteProductosPage() {
   const [top10, setTop10] = useState<Producto[]>([]);
   const [bottom10, setBottom10] = useState<Producto[]>([]);
+  const [todos, setTodos] = useState<Producto[]>([]);
   const [kpis, setKpis] = useState<KPIs | null>(null);
   const [centros, setCentros] = useState<CentroCosto[]>([]);
   const [productos, setProductos] = useState<ProductoCatalogo[]>([]);
@@ -126,6 +130,16 @@ export default function ReporteProductosPage() {
   const [metric, setMetric] = useState<"cantidad" | "total">("cantidad");
   const [productoSeleccionado, setProductoSeleccionado] = useState<string>("");
   const [mesHistoricoSeleccionado, setMesHistoricoSeleccionado] = useState<any | null>(null);
+  const [loadingDetalle, setLoadingDetalle] = useState(false);
+  const detalleRef = useRef<HTMLDivElement>(null);
+
+  const [busquedaTabla, setBusquedaTabla] = useState("");
+  const [ordenTabla, setOrdenTabla] = useState<{
+    columna: "producto" | "code" | "cantidad" | "total" | "facturas";
+    dir: "asc" | "desc";
+  }>({ columna: "total", dir: "desc" });
+  const [paginaTabla, setPaginaTabla] = useState(1);
+  const FILAS_POR_PAGINA = 20;
 
   const queryParams = useMemo(() => {
     const q: string[] = [];
@@ -142,7 +156,9 @@ export default function ReporteProductosPage() {
         const data = await authFetch(`/reportes/productos${queryParams}`);
         setTop10(data.top10 || []);
         setBottom10(data.bottom10 || []);
+        setTodos(data.todos || []);
         setKpis(data.kpis || null);
+        setPaginaTabla(1);
       } catch (e) {
         console.error("Error cargando reporte productos", e);
       }
@@ -174,24 +190,100 @@ export default function ReporteProductosPage() {
     fetchProductos();
   }, []);
 
-  const fetchDetalleProducto = async () => {
-    if (!productoSeleccionado) return;
+  const fetchDetalleProducto = async (codeOverride?: string) => {
+    const code = codeOverride ?? productoSeleccionado;
+    if (!code) return;
+    setLoadingDetalle(true);
     try {
       const data = await authFetch(
         `/reportes/productos/detalle?producto_code=${encodeURIComponent(
-          productoSeleccionado
+          code
         )}&desde=${fechaDesde}&hasta=${fechaHasta}&centro_costo=${centroCostos}`
       );
       setDetalle(data || null);
       setMesHistoricoSeleccionado(null);
     } catch (e) {
       console.error("Error cargando detalle producto", e);
+    } finally {
+      setLoadingDetalle(false);
     }
+  };
+
+  const handleSeleccionProducto = (code: string) => {
+    setProductoSeleccionado(code);
+    if (code) fetchDetalleProducto(code);
+    else setDetalle(null);
+  };
+
+  const handleClickBarra = (code?: string) => {
+    if (!code) return;
+    handleSeleccionProducto(code);
+    detalleRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const handleLimpiar = () => {
     setProductoSeleccionado("");
     setDetalle(null);
+  };
+
+  const toggleOrdenTabla = (columna: typeof ordenTabla.columna) => {
+    setOrdenTabla((prev) =>
+      prev.columna === columna
+        ? { columna, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { columna, dir: "desc" }
+    );
+    setPaginaTabla(1);
+  };
+
+  const tablaFiltrada = useMemo(() => {
+    const q = busquedaTabla.trim().toLowerCase();
+    const base = !q
+      ? todos
+      : todos.filter(
+          (p) =>
+            p.producto.toLowerCase().includes(q) ||
+            p.code.toLowerCase().includes(q)
+        );
+    const { columna, dir } = ordenTabla;
+    const sorted = [...base].sort((a, b) => {
+      const va = a[columna];
+      const vb = b[columna];
+      if (typeof va === "string" || typeof vb === "string") {
+        return String(va ?? "").localeCompare(String(vb ?? ""));
+      }
+      return Number(va ?? 0) - Number(vb ?? 0);
+    });
+    if (dir === "desc") sorted.reverse();
+    return sorted;
+  }, [todos, busquedaTabla, ordenTabla]);
+
+  const totalPaginasTabla = Math.max(
+    1,
+    Math.ceil(tablaFiltrada.length / FILAS_POR_PAGINA)
+  );
+  const paginaTablaSegura = Math.min(paginaTabla, totalPaginasTabla);
+  const tablaPagina = useMemo(
+    () =>
+      tablaFiltrada.slice(
+        (paginaTablaSegura - 1) * FILAS_POR_PAGINA,
+        paginaTablaSegura * FILAS_POR_PAGINA
+      ),
+    [tablaFiltrada, paginaTablaSegura]
+  );
+
+  const IconoOrden = ({
+    columna,
+  }: {
+    columna: typeof ordenTabla.columna;
+  }) => {
+    if (ordenTabla.columna !== columna) {
+      return <ArrowUpDown size={12} className="text-gray-300" />;
+    }
+    return ordenTabla.dir === "asc" ? (
+      <ArrowUp size={12} className="text-gray-700" />
+    ) : (
+      <ArrowDown size={12} className="text-gray-700" />
+    );
   };
 
   // ✅ Fix: asegurar que las fechas se mantengan en el mes correcto (UTC)
@@ -293,6 +385,7 @@ export default function ReporteProductosPage() {
             <CardTitle>
               Top 10 Más Facturados ({metric === "cantidad" ? "Unidades" : "Valor facturado"})
             </CardTitle>
+            <p className="text-xs text-gray-500">Haz clic en una barra para ver su detalle.</p>
           </CardHeader>
           <CardContent className="h-[350px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -306,7 +399,13 @@ export default function ReporteProductosPage() {
                 <Tooltip
                   formatter={(v: number) => (metric === "cantidad" ? abreviar(v) : abreviarMoneda(v))}
                 />
-                <Bar dataKey={metric} fill="#22c55e" radius={[0, 6, 6, 0]}>
+                <Bar
+                  dataKey={metric}
+                  fill="#22c55e"
+                  radius={[0, 6, 6, 0]}
+                  cursor="pointer"
+                  onClick={(data: any) => handleClickBarra(data?.code)}
+                >
                   <LabelList
                     dataKey={metric}
                     position="right"
@@ -325,6 +424,7 @@ export default function ReporteProductosPage() {
             <CardTitle>
               Top 10 Menos Facturados ({metric === "cantidad" ? "Unidades" : "Valor facturado"})
             </CardTitle>
+            <p className="text-xs text-gray-500">Haz clic en una barra para ver su detalle.</p>
           </CardHeader>
           <CardContent className="h-[350px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -342,7 +442,13 @@ export default function ReporteProductosPage() {
                 <Tooltip
                   formatter={(v: number) => (metric === "cantidad" ? abreviar(v) : abreviarMoneda(v))}
                 />
-                <Bar dataKey={metric} fill="#ef4444" radius={[0, 6, 6, 0]}>
+                <Bar
+                  dataKey={metric}
+                  fill="#ef4444"
+                  radius={[0, 6, 6, 0]}
+                  cursor="pointer"
+                  onClick={(data: any) => handleClickBarra(data?.code)}
+                >
                   <LabelList
                     dataKey={metric}
                     position="right"
@@ -357,7 +463,137 @@ export default function ReporteProductosPage() {
         </Card>
       </div>
 
+      {/* Tabla completa de productos */}
+      <Card>
+        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <CardTitle>Todos los Productos</CardTitle>
+            <p className="text-xs text-gray-500 mt-1">
+              {tablaFiltrada.length.toLocaleString("es-CO")} producto
+              {tablaFiltrada.length === 1 ? "" : "s"} en el período seleccionado. Haz clic
+              en una fila para ver su detalle.
+            </p>
+          </div>
+          <div className="relative w-full md:w-72">
+            <Search
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+            />
+            <Input
+              value={busquedaTabla}
+              onChange={(e) => {
+                setBusquedaTabla(e.target.value);
+                setPaginaTabla(1);
+              }}
+              placeholder="Buscar por nombre o código..."
+              className="pl-8"
+            />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-gray-500">
+                  <th
+                    className="py-2 pr-3 cursor-pointer select-none"
+                    onClick={() => toggleOrdenTabla("code")}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      Código <IconoOrden columna="code" />
+                    </span>
+                  </th>
+                  <th
+                    className="py-2 pr-3 cursor-pointer select-none"
+                    onClick={() => toggleOrdenTabla("producto")}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      Producto <IconoOrden columna="producto" />
+                    </span>
+                  </th>
+                  <th
+                    className="py-2 pr-3 cursor-pointer select-none text-right"
+                    onClick={() => toggleOrdenTabla("cantidad")}
+                  >
+                    <span className="inline-flex items-center gap-1 justify-end w-full">
+                      Unidades <IconoOrden columna="cantidad" />
+                    </span>
+                  </th>
+                  <th
+                    className="py-2 pr-3 cursor-pointer select-none text-right"
+                    onClick={() => toggleOrdenTabla("total")}
+                  >
+                    <span className="inline-flex items-center gap-1 justify-end w-full">
+                      Total facturado <IconoOrden columna="total" />
+                    </span>
+                  </th>
+                  <th
+                    className="py-2 pr-3 cursor-pointer select-none text-right"
+                    onClick={() => toggleOrdenTabla("facturas")}
+                  >
+                    <span className="inline-flex items-center gap-1 justify-end w-full">
+                      Facturas <IconoOrden columna="facturas" />
+                    </span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {tablaPagina.map((p) => (
+                  <tr
+                    key={p.code}
+                    onClick={() => handleClickBarra(p.code)}
+                    className="border-b last:border-0 cursor-pointer hover:bg-emerald-50"
+                  >
+                    <td className="py-2 pr-3 text-gray-500">{p.code}</td>
+                    <td className="py-2 pr-3 font-medium text-gray-800">{p.producto}</td>
+                    <td className="py-2 pr-3 text-right">
+                      {Number(p.cantidad || 0).toLocaleString("es-CO")}
+                    </td>
+                    <td className="py-2 pr-3 text-right">{formatCurrency(p.total)}</td>
+                    <td className="py-2 pr-3 text-right">{p.facturas ?? 0}</td>
+                  </tr>
+                ))}
+                {tablaPagina.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="py-6 text-center text-gray-400">
+                      No se encontraron productos con ese nombre o código.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {totalPaginasTabla > 1 && (
+            <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+              <span>
+                Página {paginaTablaSegura} de {totalPaginasTabla}
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setPaginaTabla((p) => Math.max(1, p - 1))}
+                  disabled={paginaTablaSegura <= 1}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    setPaginaTabla((p) => Math.min(totalPaginasTabla, p + 1))
+                  }
+                  disabled={paginaTablaSegura >= totalPaginasTabla}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Detalle producto */}
+      <div ref={detalleRef} className="scroll-mt-4">
       <Card className="relative">
         <CardHeader className="flex justify-between items-start">
           <CardTitle>Detalle Producto</CardTitle>
@@ -372,24 +608,33 @@ export default function ReporteProductosPage() {
           )}
         </CardHeader>
         <CardContent>
-          <div className="flex space-x-2">
-            <select
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <SearchableSelect
+              className="w-full sm:w-96"
+              options={productos.map((p) => ({ value: p.code, label: p.label }))}
               value={productoSeleccionado}
-              onChange={(e) => setProductoSeleccionado(e.target.value)}
-              className="border rounded p-2"
+              onChange={handleSeleccionProducto}
+              placeholder="Busca por nombre o código de producto..."
+              emptyText="No se encontraron productos con ese nombre o código."
+            />
+            <Button
+              onClick={() => fetchDetalleProducto()}
+              disabled={!productoSeleccionado || loadingDetalle}
             >
-              <option value="">Seleccione un producto</option>
-              {productos.map((p) => (
-                <option key={p.code} value={p.code}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-            <Button onClick={fetchDetalleProducto}>Ver Detalle</Button>
+              {loadingDetalle ? (
+                <RefreshCcw className="mr-1 inline animate-spin" size={14} />
+              ) : null}
+              {loadingDetalle ? "Cargando..." : "Ver Detalle"}
+            </Button>
             <Button variant="outline" onClick={handleLimpiar}>
               Limpiar
             </Button>
           </div>
+          <p className="mt-1 text-xs text-gray-500">
+            {productos.length > 0
+              ? `${productos.length.toLocaleString("es-CO")} productos disponibles. Escribe para filtrar.`
+              : null}
+          </p>
 
           {detalle && (
             <div className="mt-4 space-y-4">
@@ -510,6 +755,7 @@ export default function ReporteProductosPage() {
           )}
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

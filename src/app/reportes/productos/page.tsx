@@ -463,135 +463,6 @@ export default function ReporteProductosPage() {
         </Card>
       </div>
 
-      {/* Tabla completa de productos */}
-      <Card>
-        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <CardTitle>Todos los Productos</CardTitle>
-            <p className="text-xs text-gray-500 mt-1">
-              {tablaFiltrada.length.toLocaleString("es-CO")} producto
-              {tablaFiltrada.length === 1 ? "" : "s"} en el período seleccionado. Haz clic
-              en una fila para ver su detalle.
-            </p>
-          </div>
-          <div className="relative w-full md:w-72">
-            <Search
-              size={14}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-            />
-            <Input
-              value={busquedaTabla}
-              onChange={(e) => {
-                setBusquedaTabla(e.target.value);
-                setPaginaTabla(1);
-              }}
-              placeholder="Buscar por nombre o código..."
-              className="pl-8"
-            />
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-gray-500">
-                  <th
-                    className="py-2 pr-3 cursor-pointer select-none"
-                    onClick={() => toggleOrdenTabla("code")}
-                  >
-                    <span className="inline-flex items-center gap-1">
-                      Código <IconoOrden columna="code" />
-                    </span>
-                  </th>
-                  <th
-                    className="py-2 pr-3 cursor-pointer select-none"
-                    onClick={() => toggleOrdenTabla("producto")}
-                  >
-                    <span className="inline-flex items-center gap-1">
-                      Producto <IconoOrden columna="producto" />
-                    </span>
-                  </th>
-                  <th
-                    className="py-2 pr-3 cursor-pointer select-none text-right"
-                    onClick={() => toggleOrdenTabla("cantidad")}
-                  >
-                    <span className="inline-flex items-center gap-1 justify-end w-full">
-                      Unidades <IconoOrden columna="cantidad" />
-                    </span>
-                  </th>
-                  <th
-                    className="py-2 pr-3 cursor-pointer select-none text-right"
-                    onClick={() => toggleOrdenTabla("total")}
-                  >
-                    <span className="inline-flex items-center gap-1 justify-end w-full">
-                      Total facturado <IconoOrden columna="total" />
-                    </span>
-                  </th>
-                  <th
-                    className="py-2 pr-3 cursor-pointer select-none text-right"
-                    onClick={() => toggleOrdenTabla("facturas")}
-                  >
-                    <span className="inline-flex items-center gap-1 justify-end w-full">
-                      Facturas <IconoOrden columna="facturas" />
-                    </span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {tablaPagina.map((p) => (
-                  <tr
-                    key={p.code}
-                    onClick={() => handleClickBarra(p.code)}
-                    className="border-b last:border-0 cursor-pointer hover:bg-emerald-50"
-                  >
-                    <td className="py-2 pr-3 text-gray-500">{p.code}</td>
-                    <td className="py-2 pr-3 font-medium text-gray-800">{p.producto}</td>
-                    <td className="py-2 pr-3 text-right">
-                      {Number(p.cantidad || 0).toLocaleString("es-CO")}
-                    </td>
-                    <td className="py-2 pr-3 text-right">{formatCurrency(p.total)}</td>
-                    <td className="py-2 pr-3 text-right">{p.facturas ?? 0}</td>
-                  </tr>
-                ))}
-                {tablaPagina.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="py-6 text-center text-gray-400">
-                      No se encontraron productos con ese nombre o código.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {totalPaginasTabla > 1 && (
-            <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
-              <span>
-                Página {paginaTablaSegura} de {totalPaginasTabla}
-              </span>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setPaginaTabla((p) => Math.max(1, p - 1))}
-                  disabled={paginaTablaSegura <= 1}
-                >
-                  Anterior
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    setPaginaTabla((p) => Math.min(totalPaginasTabla, p + 1))
-                  }
-                  disabled={paginaTablaSegura >= totalPaginasTabla}
-                >
-                  Siguiente
-                </Button>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
       {/* Detalle producto */}
       <div ref={detalleRef} className="scroll-mt-4">
       <Card className="relative">
@@ -756,6 +627,171 @@ export default function ReporteProductosPage() {
         </CardContent>
       </Card>
       </div>
+
+      {/* Tabla completa de productos */}
+      <Card>
+        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <CardTitle>Todos los Productos</CardTitle>
+            <p className="text-xs text-gray-500 mt-1">
+              {tablaFiltrada.length.toLocaleString("es-CO")} producto
+              {tablaFiltrada.length === 1 ? "" : "s"} en el período seleccionado. Haz clic
+              en una fila o en un encabezado de columna para ordenar.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative w-full sm:w-64">
+              <Search
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              />
+              <Input
+                value={busquedaTabla}
+                onChange={(e) => {
+                  setBusquedaTabla(e.target.value);
+                  setPaginaTabla(1);
+                }}
+                placeholder="Buscar por nombre o código..."
+                className="pl-8"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                value={ordenTabla.columna}
+                onChange={(e) => {
+                  const columna = e.target.value as typeof ordenTabla.columna;
+                  setOrdenTabla((prev) => ({ columna, dir: prev.dir }));
+                  setPaginaTabla(1);
+                }}
+                className="border rounded-md p-2 text-sm bg-background"
+              >
+                <option value="total">Ordenar: Total facturado</option>
+                <option value="cantidad">Ordenar: Unidades</option>
+                <option value="producto">Ordenar: Producto (A-Z)</option>
+                <option value="code">Ordenar: Código</option>
+                <option value="facturas">Ordenar: Facturas</option>
+              </select>
+              <button
+                type="button"
+                onClick={() =>
+                  setOrdenTabla((prev) => ({
+                    ...prev,
+                    dir: prev.dir === "asc" ? "desc" : "asc",
+                  }))
+                }
+                className="flex items-center gap-1 rounded-md border px-3 py-2 text-sm hover:bg-slate-50"
+                title={ordenTabla.dir === "asc" ? "Ascendente" : "Descendente"}
+              >
+                {ordenTabla.dir === "asc" ? (
+                  <ArrowUp size={14} />
+                ) : (
+                  <ArrowDown size={14} />
+                )}
+              </button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-gray-500">
+                  <th
+                    className="py-2 pr-3 cursor-pointer select-none"
+                    onClick={() => toggleOrdenTabla("code")}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      Código <IconoOrden columna="code" />
+                    </span>
+                  </th>
+                  <th
+                    className="py-2 pr-3 cursor-pointer select-none"
+                    onClick={() => toggleOrdenTabla("producto")}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      Producto <IconoOrden columna="producto" />
+                    </span>
+                  </th>
+                  <th
+                    className="py-2 pr-3 cursor-pointer select-none text-right"
+                    onClick={() => toggleOrdenTabla("cantidad")}
+                  >
+                    <span className="inline-flex items-center gap-1 justify-end w-full">
+                      Unidades <IconoOrden columna="cantidad" />
+                    </span>
+                  </th>
+                  <th
+                    className="py-2 pr-3 cursor-pointer select-none text-right"
+                    onClick={() => toggleOrdenTabla("total")}
+                  >
+                    <span className="inline-flex items-center gap-1 justify-end w-full">
+                      Total facturado <IconoOrden columna="total" />
+                    </span>
+                  </th>
+                  <th
+                    className="py-2 pr-3 cursor-pointer select-none text-right"
+                    onClick={() => toggleOrdenTabla("facturas")}
+                  >
+                    <span className="inline-flex items-center gap-1 justify-end w-full">
+                      Facturas <IconoOrden columna="facturas" />
+                    </span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {tablaPagina.map((p) => (
+                  <tr
+                    key={p.code}
+                    onClick={() => handleClickBarra(p.code)}
+                    className="border-b last:border-0 cursor-pointer hover:bg-emerald-50"
+                  >
+                    <td className="py-2 pr-3 text-gray-500">{p.code}</td>
+                    <td className="py-2 pr-3 font-medium text-gray-800">{p.producto}</td>
+                    <td className="py-2 pr-3 text-right">
+                      {Number(p.cantidad || 0).toLocaleString("es-CO")}
+                    </td>
+                    <td className="py-2 pr-3 text-right">{formatCurrency(p.total)}</td>
+                    <td className="py-2 pr-3 text-right">{p.facturas ?? 0}</td>
+                  </tr>
+                ))}
+                {tablaPagina.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="py-6 text-center text-gray-400">
+                      No se encontraron productos con ese nombre o código.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {totalPaginasTabla > 1 && (
+            <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+              <span>
+                Página {paginaTablaSegura} de {totalPaginasTabla}
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setPaginaTabla((p) => Math.max(1, p - 1))}
+                  disabled={paginaTablaSegura <= 1}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    setPaginaTabla((p) => Math.min(totalPaginasTabla, p + 1))
+                  }
+                  disabled={paginaTablaSegura >= totalPaginasTabla}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

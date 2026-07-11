@@ -49,6 +49,9 @@ type EvolucionItem = {
   margen_operativo?: number;
   margen_ebitda?: number;
   margen_neto?: number;
+  gastos_operacionales?: number;
+  impuestos_operativos?: number;
+  utilidad_antes_impuestos?: number;
 };
 
 type CuentaItem = {
@@ -74,6 +77,9 @@ type Kpis = {
   margen_operativo?: number;
   margen_ebitda?: number;
   margen_neto?: number;
+  gastos_operacionales?: number;
+  impuestos_operativos?: number;
+  utilidad_antes_impuestos?: number;
 };
 
 type SectionKey =
@@ -281,14 +287,21 @@ const KPI_INFO = {
 export default function EstadoResultadosPage() {
   useAuthGuard();
 
-  const [evolucion, setEvolucion] = useState<EvolucionItem[]>([]);
+  const [evolucionApi, setEvolucionApi] = useState<EvolucionItem[]>([]);
   const [composicion, setComposicion] = useState<CuentaItem[]>([]);
-  const [kpis, setKpis] = useState<Kpis>({});
+  const [kpisApi, setKpisApi] = useState<Kpis>({});
   const [fechaDesde, setFechaDesde] = useState("2026-01-01");
   const [fechaHasta, setFechaHasta] = useState("2026-12-31");
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [proveedorDatos, setProveedorDatos] = useState<"siigo" | "alegra">("siigo");
+  // Solo aplica para clientes Alegra: Alegra agrupa "Gastos por Impuestos"
+  // (ICA/Industria y Comercio, cuenta PUC 5115) despues de "Utilidad Antes
+  // de Impuestos" en su propio reporte nativo, mientras que la practica
+  // contable correcta (PUC/NIIF) es tratarlo como gasto operacional -
+  // que es lo que este sistema calcula por defecto. La Utilidad Neta final
+  // es identica en ambos modos, solo cambia donde se resta en la cascada.
+  const [modoAlegraNativo, setModoAlegraNativo] = useState(false);
   const [vista, setVista] = useState<"resumida" | "detallada">("detallada");
   const [modoVisual, setModoVisual] = useState<ModoVisual>("gerencial");
   const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>({
@@ -334,9 +347,9 @@ export default function EstadoResultadosPage() {
       const res = await authFetch(
         `/reportes/pnl_v1?desde=${fechaDesde}&hasta=${fechaHasta}`
       );
-      setEvolucion(res.evolucion ?? []);
+      setEvolucionApi(res.evolucion ?? []);
       setComposicion(res.composicion ?? []);
-      setKpis(res.kpis ?? {});
+      setKpisApi(res.kpis ?? {});
     } catch (err) {
       console.error(err);
       alert("No fue posible cargar el Estado de Resultados.");
@@ -383,6 +396,37 @@ export default function EstadoResultadosPage() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Recalcula KPIs/evolucion para la vista "como lo muestra Alegra
+  // nativo": mueve impuestos_operativos (ICA) de Gastos Operacionales a
+  // despues de Utilidad Antes de Impuestos. Utilidad Neta queda identica
+  // en ambos modos - solo cambia donde se resta en la cascada.
+  const aplicarModoAlegra = (k: Kpis & { costos_gastos?: number }) => {
+    if (!modoAlegraNativo || proveedorDatos !== "alegra") return k;
+    const imp = k.impuestos_operativos || 0;
+    if (!imp) return k;
+    const gastosOp = (k.gastos_operacionales || 0) - imp;
+    const utilOp = (k.utilidad_operativa || 0) + imp;
+    const ebitda = (k.ebitda || 0) + imp;
+    const utilAntesImp = (k.utilidad_antes_impuestos || 0) + imp;
+    const base = k.ingresos_totales || 0;
+    return {
+      ...k,
+      gastos_operacionales: gastosOp,
+      utilidad_operativa: utilOp,
+      ebitda,
+      utilidad_antes_impuestos: utilAntesImp,
+      margen_operativo: base ? Math.round((utilOp / base) * 10000) / 100 : 0,
+      margen_ebitda: base ? Math.round((ebitda / base) * 10000) / 100 : 0,
+      ...(k.costos_gastos !== undefined ? { costos_gastos: k.costos_gastos - imp } : {}),
+    };
+  };
+
+  const kpis = useMemo(() => aplicarModoAlegra(kpisApi) as Kpis, [kpisApi, modoAlegraNativo, proveedorDatos]);
+  const evolucion = useMemo(
+    () => evolucionApi.map((e) => aplicarModoAlegra(e) as EvolucionItem),
+    [evolucionApi, modoAlegraNativo, proveedorDatos]
+  );
 
   const periodos = useMemo(() => evolucion.map((e) => e.label), [evolucion]);
 
@@ -476,9 +520,23 @@ export default function EstadoResultadosPage() {
   const sumCuentas = (cuentas: CuentaItem[]) =>
     cuentas.reduce((acc, c) => acc + (c.total || 0), 0);
 
+  // Detalle por cuenta (composicion) siempre queda en su clasificacion PUC
+  // real, sin importar el modo de vista - solo los subtotales/cascada se
+  // ajustan, restando impuestos_operativos (ICA) de Gastos Operacionales
+  // cuando el modo "como Alegra" esta activo. Ver aplicarModoAlegra.
+  const enModoAlegra = modoAlegraNativo && proveedorDatos === "alegra";
+  const impuestosOpTotal = enModoAlegra ? (kpisApi.impuestos_operativos || 0) : 0;
+  const impuestosOpPorMes = useMemo(() => {
+    const m: Record<string, number> = {};
+    evolucionApi.forEach((e) => {
+      m[e.label] = e.impuestos_operativos || 0;
+    });
+    return m;
+  }, [evolucionApi]);
+
   const totalIngOp = sumCuentas(ingOp);
   const totalCostos = sumCuentas(costos);
-  const totalGasOp = sumCuentas(gasOp);
+  const totalGasOp = sumCuentas(gasOp) - impuestosOpTotal;
   const totalIngNoOp = sumCuentas(ingNoOp);
   const totalGasNoOp = sumCuentas(gasNoOp);
 
@@ -486,11 +544,19 @@ export default function EstadoResultadosPage() {
   const utilidadOperativa = utilidadBruta - totalGasOp;
   const utilidadAntesImpuestos =
     utilidadOperativa + totalIngNoOp - totalGasNoOp;
-  const utilidadNeta = utilidadAntesImpuestos;
+  // En modo "como Alegra", el ICA se resta aqui (despues de Utilidad Antes
+  // de Impuestos) en vez de dentro de Gastos Operacionales - por eso se
+  // vuelve a restar impuestosOpTotal para que la Utilidad Neta final
+  // quede identica en ambos modos.
+  const utilidadNeta = utilidadAntesImpuestos - impuestosOpTotal;
 
   const tIngOpMes = getTotalesPorMes(ingOp);
   const tCostosMes = getTotalesPorMes(costos);
-  const tGasOpMes = getTotalesPorMes(gasOp);
+  const tGasOpMesCrudo = getTotalesPorMes(gasOp);
+  const tGasOpMes = periodos.reduce(
+    (acc, p) => ({ ...acc, [p]: tGasOpMesCrudo[p] - (enModoAlegra ? (impuestosOpPorMes[p] || 0) : 0) }),
+    {} as Record<string, number>
+  );
   const tIngNoOpMes = getTotalesPorMes(ingNoOp);
   const tGasNoOpMes = getTotalesPorMes(gasNoOp);
 
@@ -509,7 +575,10 @@ export default function EstadoResultadosPage() {
     {} as Record<string, number>
   );
 
-  const unMes = uaiMes;
+  const unMes = periodos.reduce(
+    (acc, p) => ({ ...acc, [p]: uaiMes[p] - (enModoAlegra ? (impuestosOpPorMes[p] || 0) : 0) }),
+    {} as Record<string, number>
+  );
 
   const alertasAuditoria = useMemo(() => {
     const alertas: string[] = [];
@@ -844,6 +913,33 @@ export default function EstadoResultadosPage() {
           </p>
         </div>
       </div>
+
+      {proveedorDatos === "alegra" && (kpisApi.impuestos_operativos || 0) !== 0 && (
+        <div className="bg-indigo-50 border border-indigo-200 rounded-[1.5rem] p-4 flex flex-col md:flex-row md:items-center gap-3 justify-between">
+          <p className="text-indigo-900 text-xs font-medium leading-relaxed">
+            {modoAlegraNativo ? (
+              <>
+                <strong>Vista: como lo muestra Alegra.</strong> El Impuesto de Industria y Comercio (ICA) se resta después de
+                &quot;Utilidad Antes de Impuestos&quot;, igual que en el reporte nativo de Alegra. La Utilidad Neta final es la misma en
+                los dos modos — solo cambia en qué punto de la cascada se resta ese gasto.
+              </>
+            ) : (
+              <>
+                <strong>Vista: norma contable PUC/NIIF (por defecto).</strong> El Impuesto de Industria y Comercio (ICA) se trata
+                como gasto operacional, no como impuesto sobre la utilidad — así lo clasifica el PUC colombiano (cuenta 5115,
+                dentro de Gastos de Administración). Por eso la Utilidad Operativa puede verse distinta a la de Alegra, aunque
+                la Utilidad Neta final coincide.
+              </>
+            )}
+          </p>
+          <button
+            onClick={() => setModoAlegraNativo((v) => !v)}
+            className="shrink-0 flex items-center gap-2 px-4 py-2 bg-white text-indigo-700 border border-indigo-300 rounded-xl text-xs font-black hover:bg-indigo-100 transition-all"
+          >
+            {modoAlegraNativo ? "Ver según norma PUC/NIIF" : "Ver como Alegra"}
+          </button>
+        </div>
+      )}
 
       {/* FILTROS + VISTA */}
       <div className="flex flex-wrap gap-4 bg-white p-4 rounded-[2rem] border shadow-sm items-end justify-between">

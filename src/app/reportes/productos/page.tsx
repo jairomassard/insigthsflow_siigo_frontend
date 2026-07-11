@@ -397,7 +397,11 @@ export default function ReporteProductosPage() {
                 />
                 <YAxis type="category" dataKey="producto" width={180} tick={{ fontSize: 12 }} />
                 <Tooltip
-                  formatter={(v: number) => (metric === "cantidad" ? abreviar(v) : abreviarMoneda(v))}
+                  formatter={(v: number) =>
+                    metric === "cantidad"
+                      ? Number(v || 0).toLocaleString("es-CO")
+                      : formatCurrency(v)
+                  }
                 />
                 <Bar
                   dataKey={metric}
@@ -440,7 +444,11 @@ export default function ReporteProductosPage() {
                 />
                 <YAxis type="category" dataKey="producto" width={180} tick={{ fontSize: 12 }} />
                 <Tooltip
-                  formatter={(v: number) => (metric === "cantidad" ? abreviar(v) : abreviarMoneda(v))}
+                  formatter={(v: number) =>
+                    metric === "cantidad"
+                      ? Number(v || 0).toLocaleString("es-CO")
+                      : formatCurrency(v)
+                  }
                 />
                 <Bar
                   dataKey={metric}

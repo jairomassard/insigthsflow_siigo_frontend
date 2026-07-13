@@ -579,7 +579,7 @@ export default function BuscadorFacturasPage() {
                 </select>
               </div>
 
-              <div className="space-y-1.5 xl:col-span-1">
+              <div className="space-y-1.5 xl:col-span-2">
                 <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Desde
                 </label>
@@ -587,11 +587,11 @@ export default function BuscadorFacturasPage() {
                   type="date"
                   value={desde}
                   onChange={(e) => setDesde(e.target.value)}
-                  className="h-10 rounded-xl border-slate-200"
+                  className="h-10 min-w-[150px] rounded-xl border-slate-200"
                 />
               </div>
 
-              <div className="space-y-1.5 xl:col-span-1">
+              <div className="space-y-1.5 xl:col-span-2">
                 <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Hasta
                 </label>
@@ -599,7 +599,7 @@ export default function BuscadorFacturasPage() {
                   type="date"
                   value={hasta}
                   onChange={(e) => setHasta(e.target.value)}
-                  className="h-10 rounded-xl border-slate-200"
+                  className="h-10 min-w-[150px] rounded-xl border-slate-200"
                 />
               </div>
 

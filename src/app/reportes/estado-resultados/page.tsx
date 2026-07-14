@@ -82,6 +82,13 @@ type Kpis = {
   utilidad_antes_impuestos?: number;
 };
 
+type Cobertura = {
+  pct_cobertura: number;
+  monto_codificado: number;
+  monto_sin_codigo: number;
+  detalle: { cuenta_nombre: string; monto: number; n_filas: number }[];
+};
+
 type SectionKey =
   | "ingOp"
   | "costos"
@@ -290,6 +297,8 @@ export default function EstadoResultadosPage() {
   const [evolucionApi, setEvolucionApi] = useState<EvolucionItem[]>([]);
   const [composicion, setComposicion] = useState<CuentaItem[]>([]);
   const [kpisApi, setKpisApi] = useState<Kpis>({});
+  const [cobertura, setCobertura] = useState<Cobertura | null>(null);
+  const [mostrarDetalleCobertura, setMostrarDetalleCobertura] = useState(false);
   const [fechaDesde, setFechaDesde] = useState("2026-01-01");
   const [fechaHasta, setFechaHasta] = useState("2026-12-31");
   const [loading, setLoading] = useState(false);
@@ -350,6 +359,7 @@ export default function EstadoResultadosPage() {
       setEvolucionApi(res.evolucion ?? []);
       setComposicion(res.composicion ?? []);
       setKpisApi(res.kpis ?? {});
+      setCobertura(res.cobertura ?? null);
     } catch (err) {
       console.error(err);
       alert("No fue posible cargar el Estado de Resultados.");
@@ -957,6 +967,50 @@ export default function EstadoResultadosPage() {
           >
             {modoAlegraNativo ? "Ver según norma PUC/NIIF" : "Ver como Alegra"}
           </button>
+        </div>
+      )}
+
+      {proveedorDatos === "alegra" && cobertura && cobertura.monto_sin_codigo > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-[1.5rem] p-4 flex flex-col gap-3">
+          <div className="flex flex-col md:flex-row md:items-center gap-3 justify-between">
+            <p className="text-amber-900 text-xs font-medium leading-relaxed">
+              <strong>{formatCurrency(cobertura.monto_sin_codigo)} sin clasificar</strong> en este período
+              ({formatPercent(100 - cobertura.pct_cobertura * 100)} de tus movimientos) — hay cuentas en Alegra sin
+              código contable asignado, por eso no aparecen en este reporte. Verifica con tu contador.
+            </p>
+            <button
+              onClick={() => setMostrarDetalleCobertura((v) => !v)}
+              className="shrink-0 flex items-center gap-2 px-4 py-2 bg-white text-amber-700 border border-amber-300 rounded-xl text-xs font-black hover:bg-amber-100 transition-all"
+            >
+              {mostrarDetalleCobertura ? <Minus size={14} /> : <Plus size={14} />}
+              Ver detalle
+            </button>
+          </div>
+
+          {mostrarDetalleCobertura && (
+            <div className="bg-white border border-amber-200 rounded-2xl overflow-hidden">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-amber-100/60 text-amber-900">
+                    <th className="text-left font-black px-3 py-2">Cuenta sin código</th>
+                    <th className="text-right font-black px-3 py-2">Monto</th>
+                    <th className="text-right font-black px-3 py-2">Movimientos</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cobertura.detalle.map((item) => (
+                    <tr key={item.cuenta_nombre} className="border-t border-amber-100">
+                      <td className="px-3 py-2 text-slate-700">{item.cuenta_nombre}</td>
+                      <td className="px-3 py-2 text-right text-slate-700 font-semibold">
+                        {formatCurrency(item.monto)}
+                      </td>
+                      <td className="px-3 py-2 text-right text-slate-400">{item.n_filas}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

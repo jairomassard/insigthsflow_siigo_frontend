@@ -978,15 +978,16 @@ export default function EstadoResultadosPage() {
           <div className="flex flex-col md:flex-row md:items-center gap-3 justify-between">
             <div className="flex flex-col gap-1">
               <p className="text-amber-900 text-xs font-medium leading-relaxed">
-                <strong>{formatCurrency(cobertura.monto_sin_codigo)} sin clasificar</strong> en este período
-                ({formatPercent(100 - cobertura.pct_cobertura * 100)} de tus movimientos).{" "}
-                <strong>Este monto NO está incluido</strong> en la Utilidad Bruta, Operativa ni Neta de arriba.
+                <strong>{formatCurrency(cobertura.monto_sin_codigo)}</strong> de este período
+                ({formatPercent(100 - cobertura.pct_cobertura * 100)} de tus movimientos) se clasificó
+                automáticamente por no tener código contable en Alegra.{" "}
+                <strong>Ya está incluido en tu Utilidad Neta</strong> — lo que falta es precisión, no plata.
               </p>
               <p className="text-amber-800 text-[11px] leading-relaxed">
-                No es un problema de la plataforma ni de Alegra: para que la revisión sea más precisa, hace falta
-                nombrar (asignar) el código contable de estas cuentas en Alegra. Es un ajuste de una sola vez — una
-                vez asignado, se refleja automáticamente la próxima vez que sincronices o vuelvas a subir el Libro
-                Diario.
+                Sin el código contable no podemos separar con exactitud si algo es operacional o no operacional,
+                ni darte el detalle por sub-cuenta. Para esa precisión, pídele a tu contador que nombre (asigne)
+                el código contable de estas cuentas en Alegra. Es un ajuste de una sola vez — una vez asignado, se
+                refleja automáticamente en la próxima sincronización, sin cambiar tu Utilidad Neta final.
               </p>
             </div>
             <button
@@ -1006,7 +1007,7 @@ export default function EstadoResultadosPage() {
                   accion:
                     "Qué hacer: pídele a tu contador que entre a Alegra → Contabilidad → Plan de Cuentas, busque estas cuentas y les asigne un código contable (PUC).",
                   resultado:
-                    "Resultado esperado: al volver a sincronizar o subir el Libro Diario, este monto se sumará al reporte y la Utilidad Neta puede cambiar.",
+                    "Resultado esperado: el monto ya está en tu Utilidad Neta hoy. Al asignar el código, se reclasifica con precisión (operacional/no operacional, sub-cuenta) — la Utilidad Neta no debería cambiar, sí puede cambiar cómo se ven la Utilidad Bruta, Operativa y el EBITDA en el camino hasta ahí.",
                   items: cobertura.detalle_cuentas_existentes,
                 },
                 {
@@ -1014,7 +1015,7 @@ export default function EstadoResultadosPage() {
                   accion:
                     "Qué hacer: consulta con tu contador si estas deben registrarse como una cuenta contable propia en Alegra (suelen venir de nómina automática u otros módulos).",
                   resultado:
-                    "Resultado esperado: una vez creada y codificada, aparecerá en este reporte en la próxima sincronización.",
+                    "Resultado esperado: el monto ya está en tu Utilidad Neta hoy, clasificado por su tipo (ingreso/costo/gasto). Si se crea como cuenta propia y se codifica, se reclasifica con precisión total en la próxima sincronización.",
                   items: cobertura.detalle_cuentas_no_existentes,
                 },
               ]

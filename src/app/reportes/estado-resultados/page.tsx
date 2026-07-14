@@ -82,11 +82,14 @@ type Kpis = {
   utilidad_antes_impuestos?: number;
 };
 
+type CuentaSinCodigo = { cuenta_nombre: string; monto: number; n_filas: number };
+
 type Cobertura = {
   pct_cobertura: number;
   monto_codificado: number;
   monto_sin_codigo: number;
-  detalle: { cuenta_nombre: string; monto: number; n_filas: number }[];
+  detalle_cuentas_existentes: CuentaSinCodigo[];
+  detalle_cuentas_no_existentes: CuentaSinCodigo[];
 };
 
 type SectionKey =
@@ -973,11 +976,19 @@ export default function EstadoResultadosPage() {
       {proveedorDatos === "alegra" && cobertura && cobertura.monto_sin_codigo > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-[1.5rem] p-4 flex flex-col gap-3">
           <div className="flex flex-col md:flex-row md:items-center gap-3 justify-between">
-            <p className="text-amber-900 text-xs font-medium leading-relaxed">
-              <strong>{formatCurrency(cobertura.monto_sin_codigo)} sin clasificar</strong> en este período
-              ({formatPercent(100 - cobertura.pct_cobertura * 100)} de tus movimientos) — hay cuentas en Alegra sin
-              código contable asignado, por eso no aparecen en este reporte. Verifica con tu contador.
-            </p>
+            <div className="flex flex-col gap-1">
+              <p className="text-amber-900 text-xs font-medium leading-relaxed">
+                <strong>{formatCurrency(cobertura.monto_sin_codigo)} sin clasificar</strong> en este período
+                ({formatPercent(100 - cobertura.pct_cobertura * 100)} de tus movimientos).{" "}
+                <strong>Este monto NO está incluido</strong> en la Utilidad Bruta, Operativa ni Neta de arriba.
+              </p>
+              <p className="text-amber-800 text-[11px] leading-relaxed">
+                No es un problema de la plataforma ni de Alegra: para que la revisión sea más precisa, hace falta
+                nombrar (asignar) el código contable de estas cuentas en Alegra. Es un ajuste de una sola vez — una
+                vez asignado, se refleja automáticamente la próxima vez que sincronices o vuelvas a subir el Libro
+                Diario.
+              </p>
+            </div>
             <button
               onClick={() => setMostrarDetalleCobertura((v) => !v)}
               className="shrink-0 flex items-center gap-2 px-4 py-2 bg-white text-amber-700 border border-amber-300 rounded-xl text-xs font-black hover:bg-amber-100 transition-all"
@@ -988,27 +999,55 @@ export default function EstadoResultadosPage() {
           </div>
 
           {mostrarDetalleCobertura && (
-            <div className="bg-white border border-amber-200 rounded-2xl overflow-hidden">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="bg-amber-100/60 text-amber-900">
-                    <th className="text-left font-black px-3 py-2">Cuenta sin código</th>
-                    <th className="text-right font-black px-3 py-2">Monto</th>
-                    <th className="text-right font-black px-3 py-2">Movimientos</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cobertura.detalle.map((item) => (
-                    <tr key={item.cuenta_nombre} className="border-t border-amber-100">
-                      <td className="px-3 py-2 text-slate-700">{item.cuenta_nombre}</td>
-                      <td className="px-3 py-2 text-right text-slate-700 font-semibold">
-                        {formatCurrency(item.monto)}
-                      </td>
-                      <td className="px-3 py-2 text-right text-slate-400">{item.n_filas}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="flex flex-col gap-4">
+              {[
+                {
+                  titulo: "Cuentas de tu plan de cuentas sin código asignado",
+                  accion:
+                    "Qué hacer: pídele a tu contador que entre a Alegra → Contabilidad → Plan de Cuentas, busque estas cuentas y les asigne un código contable (PUC).",
+                  resultado:
+                    "Resultado esperado: al volver a sincronizar o subir el Libro Diario, este monto se sumará al reporte y la Utilidad Neta puede cambiar.",
+                  items: cobertura.detalle_cuentas_existentes,
+                },
+                {
+                  titulo: "Etiquetas que no existen como cuenta propia en tu plan de cuentas",
+                  accion:
+                    "Qué hacer: consulta con tu contador si estas deben registrarse como una cuenta contable propia en Alegra (suelen venir de nómina automática u otros módulos).",
+                  resultado:
+                    "Resultado esperado: una vez creada y codificada, aparecerá en este reporte en la próxima sincronización.",
+                  items: cobertura.detalle_cuentas_no_existentes,
+                },
+              ]
+                .filter((grupo) => grupo.items.length > 0)
+                .map((grupo) => (
+                  <div key={grupo.titulo} className="bg-white border border-amber-200 rounded-2xl overflow-hidden">
+                    <div className="px-3 py-2 bg-amber-100/60">
+                      <p className="text-amber-900 text-[11px] font-black">{grupo.titulo}</p>
+                      <p className="text-amber-800 text-[10px] mt-0.5 leading-relaxed">{grupo.accion}</p>
+                      <p className="text-amber-800 text-[10px] leading-relaxed">{grupo.resultado}</p>
+                    </div>
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-amber-100/40 text-amber-900">
+                          <th className="text-left font-black px-3 py-2">Cuenta</th>
+                          <th className="text-right font-black px-3 py-2">Monto</th>
+                          <th className="text-right font-black px-3 py-2">Movimientos</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {grupo.items.map((item) => (
+                          <tr key={item.cuenta_nombre} className="border-t border-amber-100">
+                            <td className="px-3 py-2 text-slate-700">{item.cuenta_nombre}</td>
+                            <td className="px-3 py-2 text-right text-slate-700 font-semibold">
+                              {formatCurrency(item.monto)}
+                            </td>
+                            <td className="px-3 py-2 text-right text-slate-400">{item.n_filas}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
             </div>
           )}
         </div>

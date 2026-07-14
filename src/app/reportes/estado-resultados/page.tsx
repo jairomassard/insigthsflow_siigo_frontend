@@ -63,6 +63,7 @@ type CuentaItem = {
   naturaleza?: string;
   valores_mes: Record<string, number>;
   total: number;
+  es_impuesto_operativo?: boolean;
 };
 
 type Kpis = {
@@ -496,13 +497,20 @@ export default function EstadoResultadosPage() {
     [composicion]
   );
 
-  // "Gastos por Impuestos" (ICA/Industria y Comercio, cuenta PUC 5115): en
-  // modo "Ver como Alegra" se saca de Gastos Operacionales y se muestra
-  // como su propia seccion despues de Utilidad Antes de Impuestos, igual
-  // que el reporte nativo de Alegra - en modo PUC/NIIF se queda adentro
-  // (correcto contablemente, ver docstring del backend).
+  // "Gastos por Impuestos" (ICA/Industria y Comercio, cuenta PUC 5115, mas
+  // cuentas Alegra sin codigo que el backend marca con es_impuesto_operativo
+  // - ej. pagos a la DIAN sin cuenta PUC asignada): en modo "Ver como
+  // Alegra" se sacan de Gastos Operacionales y se muestran como su propia
+  // seccion despues de Utilidad Antes de Impuestos, igual que el reporte
+  // nativo de Alegra - en modo PUC/NIIF se quedan adentro (correcto
+  // contablemente, ver docstring del backend). El prefijo "5115" solo
+  // sirve para cuentas con codigo PUC real; las cuentas sin codigo no
+  // matchean ningun prefijo, por eso necesitan la bandera explicita.
+  const esImpuestoOperativo = (c: CuentaItem) =>
+    getCuentaPrefix(c.cuenta, 4) === "5115" || !!c.es_impuesto_operativo;
+
   const impuestosOpCuentas = useMemo(
-    () => gasOpTodas.filter((c) => getCuentaPrefix(c.cuenta, 4) === "5115"),
+    () => gasOpTodas.filter(esImpuestoOperativo),
     [gasOpTodas]
   );
 
@@ -511,7 +519,7 @@ export default function EstadoResultadosPage() {
   const gasOp = useMemo(
     () =>
       enModoAlegra
-        ? gasOpTodas.filter((c) => getCuentaPrefix(c.cuenta, 4) !== "5115")
+        ? gasOpTodas.filter((c) => !esImpuestoOperativo(c))
         : gasOpTodas,
     [gasOpTodas, enModoAlegra]
   );

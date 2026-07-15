@@ -47,7 +47,7 @@ export default function LoginPage() {
     {
       icon: "⚡",
       title: "Sincronización automática",
-      desc: "Tu información de Siigo Nube, siempre actualizada sin intervención manual.",
+      desc: "Tu información de Siigo Nube o Alegra, siempre actualizada sin intervención manual.",
     },
     {
       icon: "📊",
@@ -161,7 +161,7 @@ export default function LoginPage() {
               marginBottom: "clamp(16px, 3vh, 32px)",
             }}
           >
-            Conecta Siigo Nube y accede a reportes ejecutivos, indicadores financieros y dashboards listos para tomar decisiones — sin esperar a nadie.
+            Conecta Siigo Nube o Alegra y accede a reportes ejecutivos, indicadores financieros y dashboards listos para tomar decisiones — sin esperar a nadie.
           </p>
 
           {/* Divider */}
@@ -225,7 +225,7 @@ export default function LoginPage() {
             }}
           >
             <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10B981", display: "inline-block" }} />
-            Conectado a Siigo Nube · Impocommerce SAS
+            Compatible con Siigo Nube y Alegra · Impocommerce SAS
           </div>
 
         </div>

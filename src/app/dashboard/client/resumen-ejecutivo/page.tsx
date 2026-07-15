@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { authFetch } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,9 @@ import {
   Users,
   CircleHelp,
   X,
+  HandCoins,
+  Receipt,
+  ArrowRight,
 } from "lucide-react";
 
 /* =========================================================
@@ -196,6 +200,7 @@ type KpiCardItem = {
   icon: ReactNode;
   helpText?: string;
   helpAlign?: "left" | "center" | "right";
+  link?: { href: string; label: string };
 };
 
 /* =========================================================
@@ -492,6 +497,16 @@ function KpiDetailModal({
               <div>{centroCostos ? "Filtrado" : "Todos"}</div>
             </div>
           </div>
+
+          {item.link && (
+            <Link
+              href={item.link.href}
+              className="flex items-center justify-between gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-lg transition hover:bg-black active:scale-[0.99]"
+            >
+              {item.link.label}
+              <ArrowRight size={16} />
+            </Link>
+          )}
         </div>
       </div>
     </div>
@@ -549,6 +564,9 @@ export default function DashboardResumenEjecutivoPage() {
   const [indicadorSeleccionado, setIndicadorSeleccionado] =
     useState<IndicadorVista>("eficiencia_operativa");
   const [selectedKpi, setSelectedKpi] = useState<KpiCardItem | null>(null);
+
+  const [cxcTotal, setCxcTotal] = useState<number | null>(null);
+  const [cxpTotal, setCxpTotal] = useState<number | null>(null);
 
   async function cargarFechasSugeridas() {
     try {
@@ -618,6 +636,26 @@ export default function DashboardResumenEjecutivoPage() {
     }
   }
 
+  async function cargarCarteraKpis() {
+    try {
+      const qsCompras = centroCostos
+        ? `?centro_costos=${encodeURIComponent(centroCostos)}`
+        : "";
+
+      const [cxcRes, cxpRes] = await Promise.all([
+        authFetch("/reportes/cuentas-por-cobrar"),
+        authFetch(`/reportes/financiero/compras-gastos${qsCompras}`),
+      ]);
+
+      setCxcTotal(Number(cxcRes?.resumen_global?.total_global_num ?? 0));
+      setCxpTotal(Number(cxpRes?.kpis?.total_saldo ?? 0));
+    } catch (e) {
+      console.error("Error cargando KPIs de cartera y cuentas por pagar", e);
+      setCxcTotal(null);
+      setCxpTotal(null);
+    }
+  }
+
   useEffect(() => {
     async function init() {
       await cargarFechasSugeridas();
@@ -631,6 +669,12 @@ export default function DashboardResumenEjecutivoPage() {
     cargarDashboard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initReady, fechaDesde, fechaHasta, centroCostos, modoPeriodo]);
+
+  useEffect(() => {
+    if (!initReady) return;
+    cargarCarteraKpis();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initReady, centroCostos]);
 
   const hayAuxiliar = data?.metadata?.hay_datos_auxiliar_actual ?? true;
 
@@ -771,8 +815,48 @@ export default function DashboardResumenEjecutivoPage() {
           "Indica cuántos meses podría operar la empresa con la caja actual, asumiendo el ritmo reciente de gasto.",
         helpAlign: "left" as const,
       },
+      {
+        label: "Cuentas por cobrar",
+        value: cxcTotal != null ? formatCurrencyShort(cxcTotal) : "Cargando...",
+        valueFull: cxcTotal != null ? formatCurrency(cxcTotal) : "Cargando...",
+        description:
+          "Saldo total que los clientes le deben a la empresa a la fecha, sumando cartera vigente y vencida.",
+        delta: "Ver detalle de cartera",
+        accent: "from-teal-100 via-cyan-50 to-white",
+        chip: "bg-teal-50 text-teal-700 border-teal-200",
+        bar: "bg-teal-500",
+        glow: "bg-teal-300/60",
+        icon: <HandCoins size={16} />,
+        helpText:
+          "Muestra el dinero pendiente de recaudo a clientes a la fecha actual. Abre el detalle para ir directo a la Cartera (Cuentas por Cobrar) y revisar por cliente y factura.",
+        helpAlign: "right" as const,
+        link: {
+          href: "/reportes/financiero/cxc",
+          label: "Ver Cartera / Cuentas por Cobrar",
+        },
+      },
+      {
+        label: "Cuentas por pagar",
+        value: cxpTotal != null ? formatCurrencyShort(cxpTotal) : "Cargando...",
+        valueFull: cxpTotal != null ? formatCurrency(cxpTotal) : "Cargando...",
+        description:
+          "Saldo total pendiente de pago a proveedores por compras y gastos, a la fecha actual.",
+        delta: "Ver detalle de compras/gastos",
+        accent: "from-orange-100 via-amber-50 to-white",
+        chip: "bg-orange-50 text-orange-700 border-orange-200",
+        bar: "bg-orange-500",
+        glow: "bg-orange-300/60",
+        icon: <Receipt size={16} />,
+        helpText:
+          "Muestra el dinero pendiente de pagar a proveedores a la fecha actual. Abre el detalle para ir directo a Egresos por Compras/Gastos y revisar por proveedor y documento.",
+        helpAlign: "left" as const,
+        link: {
+          href: "/reportes/financiero/compras_gastos",
+          label: "Ver Compras y Gastos / Cuentas por Pagar",
+        },
+      },
     ];
-  }, [data, hayAuxiliar]);
+  }, [data, hayAuxiliar, cxcTotal, cxpTotal]);
 
   const detalleIndicador = useMemo<DetalleIndicador | null>(() => {
     if (!data?.kpis) return null;
@@ -1048,7 +1132,7 @@ export default function DashboardResumenEjecutivoPage() {
 
         {/* KPIs EN UNA FILA PARA 1366PX */}
         {!!kpiCards.length && (
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
             {kpiCards.map((item, i) => (
               <KpiCard key={i} item={item} onOpen={setSelectedKpi} />
             ))}

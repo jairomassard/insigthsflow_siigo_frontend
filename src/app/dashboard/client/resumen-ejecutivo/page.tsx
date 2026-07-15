@@ -847,6 +847,10 @@ export default function DashboardResumenEjecutivoPage() {
         helpText:
           "Mide qué porcentaje de las ventas se convierte en EBITDA. Ayuda a saber si el negocio está transformando las ventas en resultado operativo.",
         helpAlign: "right" as const,
+        link: {
+          href: "/reportes/estado-resultados",
+          label: "Ver Estado de Resultados (PyG)",
+        },
       },
       {
         label: "EBITDA",
@@ -864,6 +868,10 @@ export default function DashboardResumenEjecutivoPage() {
         helpText:
           "Representa la utilidad operativa del negocio antes de considerar intereses, impuestos, depreciaciones y amortizaciones.",
         helpAlign: "center" as const,
+        link: {
+          href: "/reportes/estado-resultados",
+          label: "Ver Estado de Resultados (PyG)",
+        },
       },
       {
         label: "Ventas netas",
@@ -881,6 +889,10 @@ export default function DashboardResumenEjecutivoPage() {
         helpText:
           "Corresponde a los ingresos operacionales del período. Sirve para monitorear el tamaño real de la operación y su evolución mensual.",
         helpAlign: "center" as const,
+        link: {
+          href: "/reportes/estado-resultados",
+          label: "Ver Estado de Resultados (PyG)",
+        },
       },
       {
         label: "Caja disponible",

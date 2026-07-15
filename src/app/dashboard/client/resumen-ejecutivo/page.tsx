@@ -36,6 +36,7 @@ import {
   HandCoins,
   Receipt,
   ArrowRight,
+  CalendarClock,
 } from "lucide-react";
 
 /* =========================================================
@@ -201,7 +202,14 @@ type KpiCardItem = {
   helpText?: string;
   helpAlign?: "left" | "center" | "right";
   link?: { href: string; label: string };
+  sinceLabel?: string;
 };
+
+type PendienteAntiguo = {
+  fecha: string;
+  numero: string;
+  nombre: string;
+} | null;
 
 /* =========================================================
  * HELPERS
@@ -310,6 +318,16 @@ function formatDateSafe(value?: string | null) {
   const [y, m, d] = raw.split("-");
   if (!y || !m || !d) return String(value);
   return `${d}/${m}/${y}`;
+}
+
+function toYYYYMM(value: string): string {
+  const raw = String(value || "").slice(0, 10);
+  const [y, m] = raw.split("-");
+  if (y && m) return `${y}-${m}`;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${mm}`;
 }
 
 function shortenName(value: string, max = 28) {
@@ -498,6 +516,13 @@ function KpiDetailModal({
             </div>
           </div>
 
+          {item.sinceLabel && (
+            <div className="flex items-start gap-2 rounded-2xl border border-amber-100 bg-amber-50 p-3 text-sm font-semibold leading-6 text-amber-800">
+              <CalendarClock size={16} className="mt-0.5 shrink-0" />
+              <span>{item.sinceLabel}</span>
+            </div>
+          )}
+
           {item.link && (
             <Link
               href={item.link.href}
@@ -567,6 +592,10 @@ export default function DashboardResumenEjecutivoPage() {
 
   const [cxcTotal, setCxcTotal] = useState<number | null>(null);
   const [cxpTotal, setCxpTotal] = useState<number | null>(null);
+  const [cxcPendienteAntiguo, setCxcPendienteAntiguo] =
+    useState<PendienteAntiguo>(null);
+  const [cxpPendienteAntiguo, setCxpPendienteAntiguo] =
+    useState<PendienteAntiguo>(null);
 
   async function cargarFechasSugeridas() {
     try {
@@ -638,21 +667,96 @@ export default function DashboardResumenEjecutivoPage() {
 
   async function cargarCarteraKpis() {
     try {
-      const qsCompras = centroCostos
-        ? `?centro_costos=${encodeURIComponent(centroCostos)}`
+      const sufijoCentro = centroCostos
+        ? `centro_costos=${encodeURIComponent(centroCostos)}`
         : "";
 
       const [cxcRes, cxpRes] = await Promise.all([
-        authFetch("/reportes/cuentas-por-cobrar"),
-        authFetch(`/reportes/financiero/compras-gastos${qsCompras}`),
+        authFetch(`/reportes/cuentas-por-cobrar?detalle=1`),
+        authFetch(
+          `/reportes/financiero/compras-gastos${sufijoCentro ? `?${sufijoCentro}` : ""}`,
+        ),
       ]);
 
       setCxcTotal(Number(cxcRes?.resumen_global?.total_global_num ?? 0));
       setCxpTotal(Number(cxpRes?.kpis?.total_saldo ?? 0));
+
+      const facturasCxC: Array<{
+        fecha?: string;
+        idfactura?: string;
+        cliente_nombre?: string;
+      }> = Array.isArray(cxcRes?.detalle) ? cxcRes.detalle : [];
+
+      // El detalle de CxC devuelve la fecha en formato DD/MM/YYYY (no ISO),
+      // por lo que no se puede ordenar como string directamente.
+      const parseFechaDDMMYYYY = (value: string) => {
+        const [d, m, y] = value.split("/");
+        if (!d || !m || !y) return 0;
+        return new Date(Number(y), Number(m) - 1, Number(d)).getTime();
+      };
+
+      const facturaMasAntigua = facturasCxC
+        .filter((f) => f.fecha)
+        .sort(
+          (a, b) =>
+            parseFechaDDMMYYYY(String(a.fecha)) - parseFechaDDMMYYYY(String(b.fecha)),
+        )[0];
+
+      setCxcPendienteAntiguo(
+        facturaMasAntigua
+          ? {
+              fecha: String(facturaMasAntigua.fecha),
+              numero: facturaMasAntigua.idfactura || "Sin número",
+              nombre: facturaMasAntigua.cliente_nombre || "Cliente sin nombre",
+            }
+          : null,
+      );
+
+      const evolucionCxP: Array<{ mes?: string; total_pendientes?: any }> =
+        Array.isArray(cxpRes?.evolucion) ? cxpRes.evolucion : [];
+
+      const mesesConPendiente = evolucionCxP
+        .filter((m) => m.mes && Number(m.total_pendientes || 0) > 0)
+        .map((m) => ({ mes: m.mes as string, t: new Date(m.mes as string).getTime() }))
+        .filter((m) => !Number.isNaN(m.t))
+        .sort((a, b) => a.t - b.t);
+
+      if (mesesConPendiente.length) {
+        const mesYYYYMM = toYYYYMM(mesesConPendiente[0].mes);
+        const urlDetalle = `/reportes/financiero/compras-gastos/detalle?mes=${mesYYYYMM}&estado=total&tipo_documento=todos${
+          sufijoCentro ? `&${sufijoCentro}` : ""
+        }`;
+
+        const documentosMes = await authFetch(urlDetalle);
+        const documentos: Array<{
+          fecha?: string;
+          factura?: string;
+          proveedor_nombre?: string;
+          saldo?: number;
+        }> = Array.isArray(documentosMes) ? documentosMes : [];
+
+        const documentoMasAntiguo = documentos
+          .filter((d) => Number(d.saldo || 0) > 0 && d.fecha)
+          .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)))[0];
+
+        setCxpPendienteAntiguo(
+          documentoMasAntiguo
+            ? {
+                fecha: String(documentoMasAntiguo.fecha),
+                numero: documentoMasAntiguo.factura || "Sin número",
+                nombre: documentoMasAntiguo.proveedor_nombre || "Proveedor sin nombre",
+              }
+            : null,
+        );
+      } else {
+        setCxpPendienteAntiguo(null);
+      }
     } catch (e) {
       console.error("Error cargando KPIs de cartera y cuentas por pagar", e);
       setCxcTotal(null);
       setCxpTotal(null);
+      setCxcPendienteAntiguo(null);
+      setCxpPendienteAntiguo(null);
     }
   }
 
@@ -821,7 +925,9 @@ export default function DashboardResumenEjecutivoPage() {
         valueFull: cxcTotal != null ? formatCurrency(cxcTotal) : "Cargando...",
         description:
           "Saldo total que los clientes le deben a la empresa a la fecha, sumando cartera vigente y vencida.",
-        delta: "Ver detalle de cartera",
+        delta: cxcPendienteAntiguo
+          ? `Debe desde ${cxcPendienteAntiguo.fecha}`
+          : "Ver detalle de cartera",
         accent: "from-teal-100 via-cyan-50 to-white",
         chip: "bg-teal-50 text-teal-700 border-teal-200",
         bar: "bg-teal-500",
@@ -830,6 +936,9 @@ export default function DashboardResumenEjecutivoPage() {
         helpText:
           "Muestra el dinero pendiente de recaudo a clientes a la fecha actual. Abre el detalle para ir directo a la Cartera (Cuentas por Cobrar) y revisar por cliente y factura.",
         helpAlign: "right" as const,
+        sinceLabel: cxcPendienteAntiguo
+          ? `La factura pendiente más antigua es del ${cxcPendienteAntiguo.fecha}: N.° ${cxcPendienteAntiguo.numero}, cliente ${cxcPendienteAntiguo.nombre}`
+          : undefined,
         link: {
           href: "/reportes/financiero/cxc",
           label: "Ver Cartera / Cuentas por Cobrar",
@@ -841,7 +950,9 @@ export default function DashboardResumenEjecutivoPage() {
         valueFull: cxpTotal != null ? formatCurrency(cxpTotal) : "Cargando...",
         description:
           "Saldo total pendiente de pago a proveedores por compras y gastos, a la fecha actual.",
-        delta: "Ver detalle de compras/gastos",
+        delta: cxpPendienteAntiguo
+          ? `Debes desde ${formatDateSafe(cxpPendienteAntiguo.fecha)}`
+          : "Ver detalle de compras/gastos",
         accent: "from-orange-100 via-amber-50 to-white",
         chip: "bg-orange-50 text-orange-700 border-orange-200",
         bar: "bg-orange-500",
@@ -850,13 +961,16 @@ export default function DashboardResumenEjecutivoPage() {
         helpText:
           "Muestra el dinero pendiente de pagar a proveedores a la fecha actual. Abre el detalle para ir directo a Egresos por Compras/Gastos y revisar por proveedor y documento.",
         helpAlign: "left" as const,
+        sinceLabel: cxpPendienteAntiguo
+          ? `El documento pendiente más antiguo es del ${formatDateSafe(cxpPendienteAntiguo.fecha)}: N.° ${cxpPendienteAntiguo.numero}, proveedor ${cxpPendienteAntiguo.nombre} — si es anterior al 1 de enero, amplía el filtro "Fecha desde" en Compras/Gastos para verlo (esa página abre por defecto desde el 1 de enero)`
+          : undefined,
         link: {
           href: "/reportes/financiero/compras_gastos",
           label: "Ver Compras y Gastos / Cuentas por Pagar",
         },
       },
     ];
-  }, [data, hayAuxiliar, cxcTotal, cxpTotal]);
+  }, [data, hayAuxiliar, cxcTotal, cxpTotal, cxcPendienteAntiguo, cxpPendienteAntiguo]);
 
   const detalleIndicador = useMemo<DetalleIndicador | null>(() => {
     if (!data?.kpis) return null;

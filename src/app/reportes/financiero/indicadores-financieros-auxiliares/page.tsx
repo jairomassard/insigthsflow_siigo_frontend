@@ -181,6 +181,10 @@ const CAMPOS_BASE = [
   "activo_no_corriente",
   "pasivo_corto",
   "pasivo_largo",
+  "inventarios",
+  "cartera_total",
+  "cuentas_por_pagar_total",
+  "gastos_financieros",
 ];
 
 const CONFIG_FIELDS = [
@@ -916,7 +920,7 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
     const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
     saveAs(
       new Blob([buf], { type: "application/octet-stream" }),
-      `indicadores_financieros_auxiliares_${anio}_${mesInicio}_${mesFin}.xlsx`
+      `indicadores_financieros_${anio}_${mesInicio}_${mesFin}.xlsx`
     );
   };
 
@@ -997,13 +1001,13 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-[2rem] border shadow-sm">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-            Indicadores Financieros desde Auxiliares
+            Indicadores Financieros
             <span className="text-[10px] bg-emerald-600 text-white px-3 py-1 rounded-full uppercase tracking-widest">
               Premium
             </span>
           </h1>
           <p className="text-slate-500 text-xs font-medium mt-1">
-            Indicadores calculados desde auxiliares. Sin parámetros empresariales, no se emite dictamen automático.
+            Combina el balance, el estado de resultados y cartera/compras reales. Sin parámetros empresariales, no se emite dictamen automático.
           </p>
         </div>
 

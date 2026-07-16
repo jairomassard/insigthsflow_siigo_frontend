@@ -138,6 +138,13 @@ function getLastDayOfPreviousMonth(dateStr: string) {
   return prevMonthLastDay.toISOString().slice(0, 10);
 }
 
+function formatFechaCorta(fecha?: string | null) {
+  if (!fecha) return "";
+  const [y, m, d] = fecha.slice(0, 10).split("-");
+  if (!y || !m || !d) return fecha;
+  return `${d}/${m}/${y}`;
+}
+
 const BALANCE_INFO: Record<string, string> = {
   activos_totales:
     "Representa el total de bienes, derechos y recursos controlados por la empresa al corte seleccionado.",
@@ -377,6 +384,8 @@ function SectionTable({
   showComparison,
   open,
   onToggle,
+  fechaActualLabel,
+  fechaAnteriorLabel,
 }: {
   title: string;
   subtitle?: string;
@@ -384,7 +393,11 @@ function SectionTable({
   showComparison: boolean;
   open: boolean;
   onToggle: () => void;
+  fechaActualLabel?: string;
+  fechaAnteriorLabel?: string;
 }) {
+  const labelActual = fechaActualLabel ? `Actual (${fechaActualLabel})` : "Actual";
+  const labelAnterior = fechaAnteriorLabel ? `Anterior (${fechaAnteriorLabel})` : "Anterior";
   const totalActual = items.reduce((acc, it) => acc + (it.saldo_actual || 0), 0);
   const totalAnterior = showComparison
     ? items.reduce((acc, it) => acc + (it.saldo_anterior || 0), 0)
@@ -427,7 +440,7 @@ function SectionTable({
 
             <div className="p-4 text-right md:col-span-3">
               <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
-                Actual
+                {labelActual}
               </div>
               <ValueCell value={totalActual} emphasizeNegative />
             </div>
@@ -436,7 +449,7 @@ function SectionTable({
               <>
                 <div className="p-4 text-right md:col-span-2 border-t md:border-t-0 md:border-l">
                   <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
-                    Anterior
+                    {labelAnterior}
                   </div>
                   <ValueCell value={totalAnterior} emphasizeNegative />
                 </div>
@@ -470,10 +483,10 @@ function SectionTable({
                 <tr className="border-b bg-slate-100 text-slate-500 text-[10px] uppercase font-black tracking-widest">
                   <th className="text-left p-3">Cuenta</th>
                   <th className="text-left p-3">Nombre</th>
-                  <th className="text-right p-3">Actual</th>
+                  <th className="text-right p-3">{labelActual}</th>
                   {showComparison && (
                     <>
-                      <th className="text-right p-3">Anterior</th>
+                      <th className="text-right p-3">{labelAnterior}</th>
                       <th className="text-right p-3">Variación $</th>
                       <th className="text-right p-3">Variación %</th>
                     </>
@@ -929,6 +942,9 @@ export default function BalanceGeneralPage() {
   const modoComparativo = !!data?.meta?.modo_comparativo;
   const snapshotComparativoExiste = !!data?.meta?.snapshot_comparativo_existe;
   const comparacionSolicitada = !!data?.meta?.comparacion_solicitada;
+
+  const fechaActualLabel = formatFechaCorta(data?.fechas?.fecha_corte || fechaCorte);
+  const fechaAnteriorLabel = formatFechaCorta(data?.fechas?.comparar_con || compararCon);
 
   const patrimonioCalculado = useMemo(() => {
     return !!data?.meta?.patrimonio?.usa_patrimonio_calculado;
@@ -1600,6 +1616,8 @@ export default function BalanceGeneralPage() {
             showComparison={modoComparativo}
             open={openSections.activo_corriente}
             onToggle={() => toggleSection("activo_corriente")}
+          fechaActualLabel={fechaActualLabel}
+          fechaAnteriorLabel={fechaAnteriorLabel}
           />
 
           <SectionTable
@@ -1609,6 +1627,8 @@ export default function BalanceGeneralPage() {
             showComparison={modoComparativo}
             open={openSections.activo_no_corriente_bruto}
             onToggle={() => toggleSection("activo_no_corriente_bruto")}
+          fechaActualLabel={fechaActualLabel}
+          fechaAnteriorLabel={fechaAnteriorLabel}
           />
 
           <SectionTable
@@ -1618,6 +1638,8 @@ export default function BalanceGeneralPage() {
             showComparison={modoComparativo}
             open={openSections.activo_no_corriente_contra}
             onToggle={() => toggleSection("activo_no_corriente_contra")}
+          fechaActualLabel={fechaActualLabel}
+          fechaAnteriorLabel={fechaAnteriorLabel}
           />
 
           <SectionTable
@@ -1626,6 +1648,8 @@ export default function BalanceGeneralPage() {
             showComparison={modoComparativo}
             open={openSections.pasivo_corriente}
             onToggle={() => toggleSection("pasivo_corriente")}
+          fechaActualLabel={fechaActualLabel}
+          fechaAnteriorLabel={fechaAnteriorLabel}
           />
 
           <SectionTable
@@ -1634,6 +1658,8 @@ export default function BalanceGeneralPage() {
             showComparison={modoComparativo}
             open={openSections.pasivo_no_corriente}
             onToggle={() => toggleSection("pasivo_no_corriente")}
+          fechaActualLabel={fechaActualLabel}
+          fechaAnteriorLabel={fechaAnteriorLabel}
           />
 
           <SectionTable
@@ -1643,6 +1669,8 @@ export default function BalanceGeneralPage() {
             showComparison={modoComparativo}
             open={openSections.patrimonio_explicito}
             onToggle={() => toggleSection("patrimonio_explicito")}
+          fechaActualLabel={fechaActualLabel}
+          fechaAnteriorLabel={fechaAnteriorLabel}
           />
 
           <SectionTable
@@ -1652,6 +1680,8 @@ export default function BalanceGeneralPage() {
             showComparison={modoComparativo}
             open={openSections.patrimonio_calculado}
             onToggle={() => toggleSection("patrimonio_calculado")}
+          fechaActualLabel={fechaActualLabel}
+          fechaAnteriorLabel={fechaAnteriorLabel}
           />
         </div>
       )}

@@ -694,6 +694,20 @@ export default function BalanceGeneralPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Balance de Prueba real (Siigo): generar desde la API de Siigo, subir
+  // el Excel y usarlo como fuente del snapshot de este corte, en vez de
+  // acumular auxiliar_contable. Validado 2026-07-15 contra un estado
+  // financiero firmado - reconcilia al centavo.
+  const [bpAnio, setBpAnio] = useState<number>(new Date(fechaCorte).getFullYear());
+  const [bpMesInicio, setBpMesInicio] = useState<number>(1);
+  const [bpMesFin, setBpMesFin] = useState<number>(new Date(fechaCorte).getMonth() + 1);
+  const [bpGenerando, setBpGenerando] = useState(false);
+  const [bpLinkDescarga, setBpLinkDescarga] = useState<string | null>(null);
+  const [bpArchivo, setBpArchivo] = useState<File | null>(null);
+  const [bpSubiendo, setBpSubiendo] = useState(false);
+  const [bpMensaje, setBpMensaje] = useState<string | null>(null);
+  const bpFileInputRef = useRef<HTMLInputElement>(null);
+
   const [openSections, setOpenSections] = useState({
     activo_corriente: false,
     activo_no_corriente_bruto: false,
@@ -723,13 +737,13 @@ export default function BalanceGeneralPage() {
     setOpenAlertas(false);
   };
 
-  const cargarBalance = async () => {
+  const cargarBalance = async (fechaCorteOverride?: string) => {
     try {
       setLoading(true);
       setError(null);
 
       const params = new URLSearchParams({
-        fecha_corte: fechaCorte,
+        fecha_corte: fechaCorteOverride || fechaCorte,
       });
 
       if (usarComparacion && compararCon) {
@@ -808,6 +822,94 @@ export default function BalanceGeneralPage() {
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const generarBalancePrueba = async () => {
+    setBpGenerando(true);
+    setError(null);
+    setBpLinkDescarga(null);
+    setBpMensaje(null);
+
+    try {
+      const resp = await authFetch("/siigo/balance/generar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          year: bpAnio,
+          month_start: bpMesInicio,
+          month_end: bpMesFin,
+          includes_tax_difference: false,
+        }),
+      });
+
+      if (resp?.file_url) {
+        setBpLinkDescarga(resp.file_url);
+      } else {
+        setError(resp?.error || "No se pudo generar el Balance de Prueba desde Siigo.");
+      }
+    } catch (err: any) {
+      setError(err.message || "Error generando el Balance de Prueba desde Siigo.");
+    } finally {
+      setBpGenerando(false);
+    }
+  };
+
+  const subirYUsarBalancePrueba = async () => {
+    if (!bpArchivo) {
+      alert("Selecciona primero el archivo Excel descargado de Siigo.");
+      return;
+    }
+
+    setBpSubiendo(true);
+    setError(null);
+    setBpMensaje(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("archivo", bpArchivo);
+      formData.append("anio", String(bpAnio));
+      formData.append("mes_inicio", String(bpMesInicio));
+      formData.append("mes_fin", String(bpMesFin));
+
+      const resImport = await authFetch("/importar/balance-excel", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (resImport?.error) {
+        setError(resImport.error);
+        return;
+      }
+
+      const resSnapshot = await authFetch(
+        "/reportes/balance_general/rebuild_snapshot_desde_balance_prueba",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            periodo_anio: bpAnio,
+            periodo_mes_inicio: bpMesInicio,
+            periodo_mes_fin: bpMesFin,
+          }),
+        }
+      );
+
+      if (!resSnapshot?.ok) {
+        setError(resSnapshot?.error || "No se pudo aplicar el Balance de Prueba a este corte.");
+        return;
+      }
+
+      setBpMensaje(
+        `Balance de Prueba aplicado al corte ${resSnapshot.fecha_corte}. Ya puedes consultarlo abajo.`
+      );
+      setFechaCorte(resSnapshot.fecha_corte);
+      await cargarBalance(resSnapshot.fecha_corte);
+    } catch (err: any) {
+      setError(err.message || "Error subiendo o aplicando el Balance de Prueba.");
+    } finally {
+      setBpSubiendo(false);
+      if (bpFileInputRef.current) bpFileInputRef.current.value = "";
     }
   };
 
@@ -1107,7 +1209,7 @@ export default function BalanceGeneralPage() {
                   .
                 </label>
                 <Button
-                  onClick={cargarBalance}
+                  onClick={() => cargarBalance()}
                   disabled={loading}
                   className="bg-slate-900 text-white rounded-xl px-6 py-2.5 text-xs font-black hover:bg-black"
                 >
@@ -1115,19 +1217,6 @@ export default function BalanceGeneralPage() {
                 </Button>
               </div>
 
-              <div className="flex flex-col justify-end">
-                <label className="text-[10px] font-black text-white uppercase ml-1 mb-1">
-                  .
-                </label>
-                <Button
-                  onClick={regenerarSnapshot}
-                  disabled={rebuilding}
-                  variant="outline"
-                  className="rounded-xl px-6 py-2.5 text-xs font-black border-slate-200"
-                >
-                  {rebuilding ? "Regenerando..." : "Regenerar snapshot"}
-                </Button>
-              </div>
             </div>
 
             <div className="flex items-center gap-2 bg-slate-50 rounded-2xl p-3 border">
@@ -1162,8 +1251,134 @@ export default function BalanceGeneralPage() {
               porque el snapshot comparativo no existe o no fue regenerado.
             </div>
           )}
+
+          <details className="text-xs text-slate-500">
+            <summary className="cursor-pointer font-bold text-slate-400 hover:text-slate-600">
+              Opción avanzada: regenerar desde auxiliar contable
+            </summary>
+            <div className="mt-2 space-y-2 border-l-2 border-slate-200 pl-3">
+              <p className="text-amber-700">
+                No recomendado como fuente principal: si el auxiliar contable cargado no cubre
+                todo el histórico de la cuenta (saldo inicial de años anteriores), el Activo
+                total y los indicadores pueden salir incompletos. Usa mejor el Balance de
+                Prueba real de Siigo más abajo.
+              </p>
+              <Button
+                onClick={regenerarSnapshot}
+                disabled={rebuilding}
+                variant="outline"
+                className="rounded-xl px-4 py-2 text-[11px] font-bold border-slate-200 text-slate-500"
+              >
+                {rebuilding ? "Regenerando..." : "Regenerar snapshot desde auxiliar"}
+              </Button>
+            </div>
+          </details>
         </CardContent>
       </Card>
+
+      {/* BALANCE DE PRUEBA REAL (SIIGO) */}
+      {proveedorDatos === "siigo" && (
+        <Card className="rounded-[2rem] border shadow-sm bg-white">
+          <CardContent className="p-5 space-y-4">
+            <div>
+              <h3 className="text-sm font-black text-slate-800">
+                Balance de Prueba real (Siigo)
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Descarga el Balance de Prueba directo de Siigo y úsalo como fuente de este
+                corte, en vez de acumular el auxiliar contable cargado a mano. Para comparar
+                dos cortes, repite este proceso una vez por cada fecha (ej. cierre 2025 y
+                cierre 2024).
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-4 items-end">
+              <div className="flex flex-col w-24">
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1">
+                  Año
+                </label>
+                <Input
+                  type="number"
+                  value={bpAnio}
+                  onChange={(e) => setBpAnio(Number(e.target.value))}
+                  className="rounded-xl bg-slate-50 text-xs font-bold"
+                />
+              </div>
+
+              <div className="flex flex-col w-24">
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1">
+                  Mes inicio
+                </label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={12}
+                  value={bpMesInicio}
+                  onChange={(e) => setBpMesInicio(Number(e.target.value))}
+                  className="rounded-xl bg-slate-50 text-xs font-bold"
+                />
+              </div>
+
+              <div className="flex flex-col w-24">
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1">
+                  Mes fin
+                </label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={12}
+                  value={bpMesFin}
+                  onChange={(e) => setBpMesFin(Number(e.target.value))}
+                  className="rounded-xl bg-slate-50 text-xs font-bold"
+                />
+              </div>
+
+              <Button
+                onClick={generarBalancePrueba}
+                disabled={bpGenerando}
+                variant="outline"
+                className="rounded-xl px-5 py-2.5 text-xs font-black border-slate-200"
+              >
+                {bpGenerando ? "Generando..." : "① Generar desde Siigo"}
+              </Button>
+
+              {bpLinkDescarga && (
+                <a
+                  href={bpLinkDescarga}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-bold text-blue-600 underline"
+                >
+                  Descargar Excel generado
+                </a>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-3 items-center border-t pt-4">
+              <input
+                ref={bpFileInputRef}
+                type="file"
+                accept=".xlsx"
+                onChange={(e) => setBpArchivo(e.target.files?.[0] || null)}
+                className="text-xs"
+              />
+              <Button
+                onClick={subirYUsarBalancePrueba}
+                disabled={bpSubiendo}
+                className="bg-slate-900 text-white rounded-xl px-5 py-2.5 text-xs font-black hover:bg-black"
+              >
+                {bpSubiendo ? "Procesando..." : "② Subir y usar para este corte"}
+              </Button>
+            </div>
+
+            {bpMensaje && (
+              <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
+                {bpMensaje}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {error && (
         <Card className="rounded-[2rem] border-red-200 bg-white">

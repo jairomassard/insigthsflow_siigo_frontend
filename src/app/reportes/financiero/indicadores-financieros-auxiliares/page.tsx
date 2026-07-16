@@ -77,11 +77,16 @@ function nombreIndicador(k: string): string {
     rentabilidad: "Rentabilidad neta",
     autonomia: "Autonomía financiera",
     capital_trabajo: "Capital de trabajo",
-    cobertura_activo_pasivo: "Cobertura activo/pasivo",
     porcentaje_activo_no_corriente: "Activo no corriente",
     porcentaje_pasivo_corto: "Pasivo corto plazo",
     solvencia: "Solvencia",
     endeudamiento_largo_plazo: "Endeudamiento largo plazo",
+    roe: "ROE (rentab. patrimonio)",
+    roa: "ROA (rentab. activos)",
+    prueba_acida: "Prueba ácida",
+    dso_dias_cobro: "Días de cobro (DSO)",
+    dpo_dias_pago: "Días de pago (DPO)",
+    cobertura_intereses: "Cobertura de intereses",
     activo_total: "Activo total",
     pasivo_total: "Pasivo total",
     patrimonio: "Patrimonio",
@@ -94,6 +99,10 @@ function nombreIndicador(k: string): string {
 function valorIndicador(k: string, v: number | null | undefined) {
   if (["capital_trabajo", "activo_total", "pasivo_total", "patrimonio", "utilidad_neta"].includes(k)) {
     return abreviarMoneda(v);
+  }
+  if (["dso_dias_cobro", "dpo_dias_pago"].includes(k)) {
+    if (v === null || v === undefined || Number.isNaN(Number(v))) return "—";
+    return `${fmt2(v)} días`;
   }
   return fmt2(v);
 }
@@ -130,8 +139,6 @@ const INDICADOR_INFO: Record<string, string> = {
     "Refleja qué proporción del activo está financiada con recursos propios.",
   capital_trabajo:
     "Activo corriente menos pasivo corriente. Muestra la diferencia entre recursos corrientes y obligaciones corrientes.",
-  cobertura_activo_pasivo:
-    "Mide la relación global entre activos y pasivos.",
   porcentaje_activo_no_corriente:
     "Indica qué proporción del activo total está concentrada en activos no corrientes o de permanencia.",
   porcentaje_pasivo_corto:
@@ -140,6 +147,18 @@ const INDICADOR_INFO: Record<string, string> = {
     "Mide la cobertura general de pasivos con activos.",
   endeudamiento_largo_plazo:
     "Mide la relación entre deuda de largo plazo y patrimonio.",
+  roe:
+    "Utilidad neta dividida entre el patrimonio. Mide el rendimiento que obtienen los socios sobre su capital invertido - el indicador de rentabilidad que más le importa al dueño de la empresa.",
+  roa:
+    "Utilidad neta dividida entre el activo total. Mide qué tan eficientemente los activos de la empresa generan utilidad, sin importar cómo se financiaron.",
+  prueba_acida:
+    "Activo corriente menos inventarios, dividido entre pasivo corriente. Liquidez más estricta que la razón corriente porque no depende de vender inventario para pagar deudas.",
+  dso_dias_cobro:
+    "Días promedio que tarda la empresa en recaudar su cartera, calculado con el saldo real pendiente de clientes y las ventas del período.",
+  dpo_dias_pago:
+    "Días promedio que la empresa tarda en pagar a sus proveedores, calculado con el saldo real pendiente y las compras del período.",
+  cobertura_intereses:
+    "Utilidad operativa dividida entre los gastos financieros del período. Mide cuántas veces la utilidad alcanza para cubrir el costo de la deuda.",
   activo_total:
     "Representa el total de recursos económicos controlados por la empresa al corte seleccionado.",
   pasivo_total:
@@ -171,11 +190,16 @@ const CONFIG_FIELDS = [
   "rentabilidad_min",
   "autonomia_min",
   "solvencia_min",
-  "cobertura_activo_pasivo_min",
   "capital_trabajo_min",
   "porcentaje_pasivo_corto_max",
   "porcentaje_activo_no_corriente_max",
   "endeudamiento_largo_plazo_max",
+  "roe_min",
+  "roa_min",
+  "prueba_acida_min",
+  "dso_dias_cobro_max",
+  "dpo_dias_pago_min",
+  "cobertura_intereses_min",
 ] as const;
 
 type ConfigField = typeof CONFIG_FIELDS[number];
@@ -228,11 +252,6 @@ const CONFIG_LABELS: Record<ConfigField, { label: string; help: string; placehol
     help: "Mínimo esperado para Activo total / Pasivo total.",
     placeholder: "Ej: 1.30",
   },
-  cobertura_activo_pasivo_min: {
-    label: "Cobertura activo/pasivo mínima",
-    help: "Mínimo esperado para cobertura global de pasivos con activos.",
-    placeholder: "Ej: 1.30",
-  },
   capital_trabajo_min: {
     label: "Capital de trabajo mínimo",
     help: "Valor mínimo esperado en pesos para Activo corriente - Pasivo corriente.",
@@ -252,6 +271,36 @@ const CONFIG_LABELS: Record<ConfigField, { label: string; help: string; placehol
     label: "Endeudamiento largo plazo máximo",
     help: "Máximo aceptado para Pasivo no corriente / Patrimonio.",
     placeholder: "Ej: 1.00",
+  },
+  roe_min: {
+    label: "ROE mínimo",
+    help: "Mínimo esperado para Utilidad neta / Patrimonio (rentabilidad sobre el capital propio).",
+    placeholder: "Ej: 0.15",
+  },
+  roa_min: {
+    label: "ROA mínimo",
+    help: "Mínimo esperado para Utilidad neta / Activo total (rentabilidad sobre los activos).",
+    placeholder: "Ej: 0.05",
+  },
+  prueba_acida_min: {
+    label: "Prueba ácida mínima",
+    help: "Mínimo esperado para (Activo corriente - Inventarios) / Pasivo corriente.",
+    placeholder: "Ej: 1.00",
+  },
+  dso_dias_cobro_max: {
+    label: "Días de cobro máximo (DSO)",
+    help: "Máximo de días aceptado para recaudar la cartera de clientes.",
+    placeholder: "Ej: 45",
+  },
+  dpo_dias_pago_min: {
+    label: "Días de pago mínimo (DPO)",
+    help: "Mínimo de días esperado antes de pagar a proveedores, para preservar caja.",
+    placeholder: "Ej: 30",
+  },
+  cobertura_intereses_min: {
+    label: "Cobertura de intereses mínima",
+    help: "Mínimo esperado para Utilidad operativa / Gastos financieros.",
+    placeholder: "Ej: 3.00",
   },
 };
 
@@ -570,7 +619,7 @@ const ConfigModal = ({
     {
       title: "Liquidez y solvencia",
       description: "Rangos mínimos o máximos para evaluar capacidad de cobertura.",
-      fields: ["liquidez_min", "liquidez_max", "solvencia_min", "cobertura_activo_pasivo_min", "capital_trabajo_min"],
+      fields: ["liquidez_min", "liquidez_max", "solvencia_min", "capital_trabajo_min", "prueba_acida_min"],
     },
     {
       title: "Endeudamiento y estructura",
@@ -579,8 +628,13 @@ const ConfigModal = ({
     },
     {
       title: "Rentabilidad",
-      description: "Objetivo mínimo para margen neto del período.",
-      fields: ["rentabilidad_min"],
+      description: "Objetivos mínimos de margen y retorno sobre lo invertido.",
+      fields: ["rentabilidad_min", "roe_min", "roa_min"],
+    },
+    {
+      title: "Ciclo de caja y cobertura de deuda",
+      description: "Objetivos para el tiempo de cobro/pago y la capacidad de cubrir intereses.",
+      fields: ["dso_dias_cobro_max", "dpo_dias_pago_min", "cobertura_intereses_min"],
     },
   ];
 
@@ -866,14 +920,18 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
     );
   };
 
-  const kpisPrincipales = ["liquidez", "apalancamiento", "rentabilidad", "autonomia"];
+  const kpisPrincipales = ["liquidez", "apalancamiento", "rentabilidad", "autonomia", "roe"];
   const kpisComplementarios = [
     "capital_trabajo",
-    "cobertura_activo_pasivo",
     "porcentaje_activo_no_corriente",
     "porcentaje_pasivo_corto",
     "solvencia",
     "endeudamiento_largo_plazo",
+    "roa",
+    "prueba_acida",
+    "dso_dias_cobro",
+    "dpo_dias_pago",
+    "cobertura_intereses",
   ];
 
   const tarjetasEjecutivas = useMemo(

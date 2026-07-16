@@ -302,7 +302,9 @@ export default function CruceIVAReportPage() {
             <thead className="bg-slate-50 border-b text-slate-400 font-black text-[10px] uppercase">
               <tr>
                 <th className="px-5 py-3 text-left">Periodo Agrupado</th>
+                <th className="px-5 py-3 text-right">Base Ventas</th>
                 <th className="px-5 py-3 text-right">IVA Ventas</th>
+                <th className="px-5 py-3 text-right">Base Compras</th>
                 <th className="px-5 py-3 text-right">IVA Compras</th>
                 <th className="px-5 py-3 text-right">ReteIVA (135517)</th>
                 <th className="px-5 py-3 text-right">Saldo Neto</th>
@@ -313,7 +315,9 @@ export default function CruceIVAReportPage() {
               {agrupadas.map((f, i) => (
                 <tr key={i} className="hover:bg-indigo-50/30 transition-colors">
                   <td className="px-5 py-3 text-slate-700">{f.label}</td>
+                  <td className="px-5 py-3 text-right text-slate-400 font-semibold">{formatCurrency(f.base_ventas)}</td>
                   <td className="px-5 py-3 text-right text-indigo-600 font-black">{formatCurrency(f.iva_ventas)}</td>
+                  <td className="px-5 py-3 text-right text-slate-400 font-semibold">{formatCurrency(f.base_compras)}</td>
                   <td className="px-5 py-3 text-right text-red-500">{formatCurrency(f.iva_compras)}</td>
                   <td className="px-5 py-3 text-right text-orange-600">{formatCurrency(f.reteiva_favor)}</td>
                   <td className="px-5 py-3 text-right">

@@ -1124,25 +1124,29 @@ export default function BalanceGeneralPage() {
 
         <div className="flex flex-col items-end gap-2">
           <div className="flex items-center gap-2 flex-wrap justify-end">
-            <input
-              type="file"
-              ref={fileInputRef}
-              className="hidden"
-              accept=".xlsx,.xls,.csv"
-              onChange={handleFileUpload}
-            />
+            {proveedorDatos === "alegra" && (
+              <>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={handleFileUpload}
+                />
 
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-2xl text-xs font-black hover:bg-black transition-all shadow-lg active:scale-95"
-            >
-              {uploading ? (
-                <RefreshCcw className="animate-spin" size={16} />
-              ) : (
-                <FileText size={16} />
-              )}
-              {uploading ? "Sincronizando..." : "Sincronizar Auxiliar"}
-            </button>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-2xl text-xs font-black hover:bg-black transition-all shadow-lg active:scale-95"
+                >
+                  {uploading ? (
+                    <RefreshCcw className="animate-spin" size={16} />
+                  ) : (
+                    <FileText size={16} />
+                  )}
+                  {uploading ? "Sincronizando..." : "Sincronizar Auxiliar"}
+                </button>
+              </>
+            )}
 
             <Button
               onClick={exportarExcel}
@@ -1166,11 +1170,11 @@ export default function BalanceGeneralPage() {
             )}
           </div>
 
-          <p className="text-slate-400 text-[10px] font-semibold italic text-right">
-            {proveedorDatos === "alegra"
-              ? "Ruta Alegra: Contabilidad > Libro Diario > Exportar Excel"
-              : <>Ruta Siigo: Contabilidad {" > "} Comprobantes {" > "} Informe auxiliar contable</>}
-          </p>
+          {proveedorDatos === "alegra" && (
+            <p className="text-slate-400 text-[10px] font-semibold italic text-right">
+              Ruta Alegra: Contabilidad {" > "} Libro Diario {" > "} Exportar Excel
+            </p>
+          )}
         </div>
       </div>
 
@@ -1252,27 +1256,18 @@ export default function BalanceGeneralPage() {
             </div>
           )}
 
-          <details className="text-xs text-slate-500">
-            <summary className="cursor-pointer font-bold text-slate-400 hover:text-slate-600">
-              Opción avanzada: regenerar desde auxiliar contable
-            </summary>
-            <div className="mt-2 space-y-2 border-l-2 border-slate-200 pl-3">
-              <p className="text-amber-700">
-                No recomendado como fuente principal: si el auxiliar contable cargado no cubre
-                todo el histórico de la cuenta (saldo inicial de años anteriores), el Activo
-                total y los indicadores pueden salir incompletos. Usa mejor el Balance de
-                Prueba real de Siigo más abajo.
-              </p>
+          {proveedorDatos === "alegra" && (
+            <div className="flex flex-col justify-end items-start gap-1">
               <Button
                 onClick={regenerarSnapshot}
                 disabled={rebuilding}
                 variant="outline"
-                className="rounded-xl px-4 py-2 text-[11px] font-bold border-slate-200 text-slate-500"
+                className="rounded-xl px-5 py-2.5 text-xs font-black border-slate-200"
               >
                 {rebuilding ? "Regenerando..." : "Regenerar snapshot desde auxiliar"}
               </Button>
             </div>
-          </details>
+          )}
         </CardContent>
       </Card>
 

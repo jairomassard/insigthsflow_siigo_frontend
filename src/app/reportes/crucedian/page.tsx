@@ -25,6 +25,8 @@ type ItemCruce = {
   iva_siigo?: number | null;
   total_siigo?: number | null;
   estado?: string;
+  match_debil?: boolean;
+  siigo_folio_real?: string | null;
 };
 
 type SeccionData = {
@@ -322,9 +324,26 @@ function SeccionCruce({
               {filas.map((f, i) => (
                 <tr key={i} className="hover:bg-indigo-50/30 transition-colors">
                   <td className="px-4 py-2">
-                    <EstadoBadge tipo={f._tipo} />
+                    <div className="flex flex-col gap-1 items-start">
+                      <EstadoBadge tipo={f._tipo} />
+                      {f.match_debil && (
+                        <span
+                          className="text-[9px] font-black px-2 py-0.5 rounded-full uppercase bg-purple-100 text-purple-700"
+                          title="No coincidió el número de factura, se emparejó por NIT + fecha exacta (único candidato de ambos lados). Verifica el número en Siigo."
+                        >
+                          Match débil, revisar N°
+                        </span>
+                      )}
+                    </div>
                   </td>
-                  <td className="px-4 py-2 text-slate-700">{f.folio || f.siigo_id || "—"}</td>
+                  <td className="px-4 py-2 text-slate-700">
+                    {f.folio || f.siigo_id || "—"}
+                    {f.siigo_folio_real && (
+                      <div className="text-[10px] text-purple-600 font-bold">
+                        En Siigo: {f.siigo_folio_real}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-2 text-slate-500">{f.tercero_nombre || f.tercero_nit || "—"}</td>
                   <td className="px-4 py-2 text-slate-500">{f.fecha || "—"}</td>
                   <td className="px-4 py-2 text-right text-slate-700">{formatCurrency(f.total_dian)}</td>

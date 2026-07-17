@@ -239,6 +239,15 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               },
             ]
           : []),
+        ...(tiene("ver_reporte_cruce_dian")
+          ? [
+              {
+                href: "/reportes/crucedian",
+                label: "Cruce DIAN vs Siigo",
+                icon: <FileBarChart2 className="w-4 h-4" />,
+              },
+            ]
+          : []),
         ...(tiene("ver_reporte_retenciones")
           ? [
               {

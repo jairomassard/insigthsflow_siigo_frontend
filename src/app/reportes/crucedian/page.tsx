@@ -60,6 +60,7 @@ export default function CruceDianPage() {
   const [proveedorDatos, setProveedorDatos] = useState<string>("siigo");
   const [implementado, setImplementado] = useState(true);
   const [mensaje, setMensaje] = useState<string | null>(null);
+  const [coberturaDianHasta, setCoberturaDianHasta] = useState<string | null>(null);
   const [fechaDesde, setFechaDesde] = useState("2026-01-01");
   const [fechaHasta, setFechaHasta] = useState("2026-12-31");
   const [loading, setLoading] = useState(false);
@@ -75,7 +76,8 @@ export default function CruceDianPage() {
       setProveedorDatos(res?.proveedor_datos ?? "siigo");
       setImplementado(res?.implementado !== false);
       setMensaje(res?.mensaje ?? null);
-      const { proveedor_datos, implementado: _impl, mensaje: _msg, ...secciones } = res ?? {};
+      setCoberturaDianHasta(res?.cobertura_dian_hasta ?? null);
+      const { proveedor_datos, implementado: _impl, mensaje: _msg, cobertura_dian_hasta, ...secciones } = res ?? {};
       setData(secciones as Record<string, SeccionData>);
     } catch (err) {
       console.error(err);
@@ -182,6 +184,18 @@ export default function CruceDianPage() {
           </button>
         </div>
       </div>
+
+      {implementado && (
+        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2 rounded-xl text-xs font-bold">
+          <AlertTriangle size={14} />
+          {coberturaDianHasta
+            ? `Datos de la DIAN cargados hasta el ${new Date(coberturaDianHasta + "T00:00:00").toLocaleDateString(
+                "es-CO",
+                { day: "2-digit", month: "long", year: "numeric" }
+              )}. Documentos de Siigo posteriores a esa fecha van a aparecer como "Extra en Siigo" hasta que subas un export más reciente de la DIAN.`
+            : "Todavía no has cargado ningún export de la DIAN — sube el archivo para ver el cruce."}
+        </div>
+      )}
 
       {!implementado ? (
         <Card className="rounded-[1.5rem] shadow-xl border-none bg-white p-6">

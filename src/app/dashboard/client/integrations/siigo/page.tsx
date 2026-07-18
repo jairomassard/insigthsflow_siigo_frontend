@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import useAuthGuard from "@/hooks/useAuthGuard";
 import { authFetch, getToken, API } from "@/lib/api";
 import { jwtDecode } from "jwt-decode";
+import { usePermisos } from "@/hooks/usePermisos";
 
 import CargarDocumentosSoporte from "../../../../../components/CargarDocumentosSoporte";
 import CargarNomina from "../../../../../components/CargarNomina";
@@ -428,6 +429,9 @@ function DebugCompraPanel() {
 
 export default function SiigoIntegrationPage() {
   useAuthGuard();
+
+  const { permisos } = usePermisos();
+  const tieneNomina = permisos.includes("ver_reporte_nomina");
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1666,37 +1670,39 @@ export default function SiigoIntegrationPage() {
         title="7. Archivos complementarios"
         subtitle="Cargues que todavía dependen de archivos externos. Documento Soporte por Excel se conserva solo como contingencia."
       >
-        <details className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
-          <summary className="cursor-pointer text-sm font-semibold text-indigo-950">
-            Cargar nómina desde Excel
-          </summary>
+        {tieneNomina && (
+          <details className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+            <summary className="cursor-pointer text-sm font-semibold text-indigo-950">
+              Cargar nómina desde Excel
+            </summary>
 
-          <div className="mt-3">
-            <p className="mb-4 text-sm leading-6 text-indigo-900">
-              Exporta el reporte mensual de nómina desde Siigo y súbelo indicando mes, año y archivo Excel.
-              Este cargue actualiza la información de nómina utilizada por InsightFlow para reportes
-              financieros y operativos.
-            </p>
+            <div className="mt-3">
+              <p className="mb-4 text-sm leading-6 text-indigo-900">
+                Exporta el reporte mensual de nómina desde Siigo y súbelo indicando mes, año y archivo Excel.
+                Este cargue actualiza la información de nómina utilizada por InsightFlow para reportes
+                financieros y operativos.
+              </p>
 
-            <div className="rounded-xl border border-indigo-200 bg-white p-4 shadow-sm">
-              <CargarNomina />
-            </div>
-
-            <div className="mt-4 flex flex-col gap-3 rounded-xl border border-indigo-200 bg-white p-3 text-sm text-indigo-900 md:flex-row md:items-center md:justify-between">
-              <div>
-                El resultado de este cargue queda registrado en el historial de sincronizaciones.
+              <div className="rounded-xl border border-indigo-200 bg-white p-4 shadow-sm">
+                <CargarNomina />
               </div>
 
-              <button
-                type="button"
-                onClick={openHistoryModal}
-                className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-800 hover:bg-indigo-100"
-              >
-                Ver historial
-              </button>
+              <div className="mt-4 flex flex-col gap-3 rounded-xl border border-indigo-200 bg-white p-3 text-sm text-indigo-900 md:flex-row md:items-center md:justify-between">
+                <div>
+                  El resultado de este cargue queda registrado en el historial de sincronizaciones.
+                </div>
+
+                <button
+                  type="button"
+                  onClick={openHistoryModal}
+                  className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-800 hover:bg-indigo-100"
+                >
+                  Ver historial
+                </button>
+              </div>
             </div>
-          </div>
-        </details>
+          </details>
+        )}
 
         <details className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-4">
           <summary className="cursor-pointer text-sm font-semibold text-rose-950">

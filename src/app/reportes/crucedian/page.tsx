@@ -124,13 +124,13 @@ export default function CruceDianPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-white px-5 py-3 rounded-[1.5rem] border shadow-sm">
         <div>
           <h1 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-            Cruce DIAN vs Siigo{" "}
+            Cruce DIAN vs {NOMBRE_PROVEEDOR[proveedorDatos] ?? "Siigo"}{" "}
             <span className="text-[10px] bg-indigo-600 text-white px-3 py-1 rounded-full uppercase tracking-widest">
               V1
             </span>
           </h1>
           <p className="text-slate-500 text-xs font-medium mt-0.5">
-            Compara documento por documento lo reportado a la DIAN contra lo sincronizado de Siigo.
+            Compara documento por documento lo reportado a la DIAN contra lo sincronizado de {NOMBRE_PROVEEDOR[proveedorDatos] ?? "Siigo"}.
           </p>
         </div>
 
@@ -194,7 +194,7 @@ export default function CruceDianPage() {
             ? `Datos de la DIAN cargados hasta el ${new Date(coberturaDianHasta + "T00:00:00").toLocaleDateString(
                 "es-CO",
                 { day: "2-digit", month: "long", year: "numeric" }
-              )}. Documentos de Siigo posteriores a esa fecha van a aparecer como "Extra en Siigo" hasta que subas un export más reciente de la DIAN.`
+              )}. Documentos de ${NOMBRE_PROVEEDOR[proveedorDatos] ?? "Siigo"} posteriores a esa fecha van a aparecer como "Extra en ${NOMBRE_PROVEEDOR[proveedorDatos] ?? "Siigo"}" hasta que subas un export más reciente de la DIAN.`
             : "Todavía no has cargado ningún export de la DIAN — sube el archivo para ver el cruce."}
         </div>
       )}
@@ -206,14 +206,20 @@ export default function CruceDianPage() {
           </p>
         </Card>
       ) : (
-        SECCIONES.map((s) => (
-          <SeccionCruce
-            key={s.key}
-            titulo={s.titulo}
-            datos={data[s.key]}
-            nombreProveedor={NOMBRE_PROVEEDOR[proveedorDatos] ?? proveedorDatos}
-          />
-        ))
+        SECCIONES
+          // Alegra no tiene concepto de "Documento soporte" en su export DIAN
+          // (los clientes probados solo traen Factura electrónica y Nota
+          // crédito) - mostrar la sección igual saldría siempre en cero, sin
+          // aportar nada.
+          .filter((s) => proveedorDatos === "siigo" || s.key !== "documento_soporte")
+          .map((s) => (
+            <SeccionCruce
+              key={s.key}
+              titulo={s.titulo}
+              datos={data[s.key]}
+              nombreProveedor={NOMBRE_PROVEEDOR[proveedorDatos] ?? proveedorDatos}
+            />
+          ))
       )}
     </div>
   );
@@ -284,7 +290,7 @@ function SeccionCruce({
         <Pill
           icon={<XCircle size={14} />}
           color="red"
-          label="Falta en Siigo"
+          label={`Falta en ${nombreProveedor}`}
           value={r?.falta_en_siigo}
           activo={activos.has("falta_en_siigo")}
           onClick={() => toggle("falta_en_siigo")}
@@ -292,7 +298,7 @@ function SeccionCruce({
         <Pill
           icon={<HelpCircle size={14} />}
           color="slate"
-          label="Extra en Siigo"
+          label={`Extra en ${nombreProveedor}`}
           value={r?.extra_en_siigo}
           activo={activos.has("extra_en_siigo")}
           onClick={() => toggle("extra_en_siigo")}
@@ -325,11 +331,11 @@ function SeccionCruce({
                 <tr key={i} className="hover:bg-indigo-50/30 transition-colors">
                   <td className="px-4 py-2">
                     <div className="flex flex-col gap-1 items-start">
-                      <EstadoBadge tipo={f._tipo} />
+                      <EstadoBadge tipo={f._tipo} nombreProveedor={nombreProveedor} />
                       {f.match_debil && (
                         <span
                           className="text-[9px] font-black px-2 py-0.5 rounded-full uppercase bg-purple-100 text-purple-700"
-                          title="No coincidió el número de factura, se emparejó por NIT + fecha exacta (único candidato de ambos lados). Verifica el número en Siigo."
+                          title={`No coincidió el número de factura, se emparejó por NIT + fecha exacta (único candidato de ambos lados). Verifica el número en ${nombreProveedor}.`}
                         >
                           Match débil, revisar N°
                         </span>
@@ -340,7 +346,7 @@ function SeccionCruce({
                     {f.folio || f.siigo_id || "—"}
                     {f.siigo_folio_real && (
                       <div className="text-[10px] text-purple-600 font-bold">
-                        En Siigo: {f.siigo_folio_real}
+                        En {nombreProveedor}: {f.siigo_folio_real}
                       </div>
                     )}
                   </td>
@@ -360,12 +366,12 @@ function SeccionCruce({
   );
 }
 
-function EstadoBadge({ tipo }: { tipo: TipoEstado }) {
+function EstadoBadge({ tipo, nombreProveedor }: { tipo: TipoEstado; nombreProveedor: string }) {
   const cfg = {
     coincide: { label: "Coincide", cls: "bg-emerald-100 text-emerald-700" },
-    falta_en_siigo: { label: "Falta en Siigo", cls: "bg-red-100 text-red-700" },
+    falta_en_siigo: { label: `Falta en ${nombreProveedor}`, cls: "bg-red-100 text-red-700" },
     monto_distinto: { label: "Monto distinto", cls: "bg-orange-100 text-orange-700" },
-    extra_en_siigo: { label: "Extra en Siigo", cls: "bg-slate-100 text-slate-600" },
+    extra_en_siigo: { label: `Extra en ${nombreProveedor}`, cls: "bg-slate-100 text-slate-600" },
   }[tipo];
   return (
     <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase ${cfg.cls}`}>{cfg.label}</span>

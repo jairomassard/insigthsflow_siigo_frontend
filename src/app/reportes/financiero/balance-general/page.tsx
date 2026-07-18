@@ -707,6 +707,18 @@ export default function BalanceGeneralPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Saldo inicial (Alegra): carga el "Estado de situación financiera" nativo
+  // de Alegra como piso de saldos - necesario porque el Libro Diario
+  // cargado normalmente solo cubre el año en curso, sin ningún saldo
+  // acumulado de años anteriores (ver /alegra/cargar_saldos_iniciales,
+  // validado con datos reales de Maslux LED 2026-07-18). Por defecto
+  // propone el 31 de diciembre del año anterior al de fechaCorte.
+  const [saldoInicialFecha, setSaldoInicialFecha] = useState(
+    `${new Date(fechaCorte).getFullYear() - 1}-12-31`
+  );
+  const [subiendoSaldoInicial, setSubiendoSaldoInicial] = useState(false);
+  const saldoInicialFileInputRef = useRef<HTMLInputElement>(null);
+
   // Balance de Prueba real (Siigo): generar desde la API de Siigo, subir
   // el Excel y usarlo como fuente del snapshot de este corte, en vez de
   // acumular auxiliar_contable. Validado 2026-07-15 contra un estado
@@ -835,6 +847,45 @@ export default function BalanceGeneralPage() {
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleSaldoInicialUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!saldoInicialFecha) {
+      alert("Indica la fecha de corte del saldo inicial (la fecha 'al' del export de Alegra).");
+      if (saldoInicialFileInputRef.current) saldoInicialFileInputRef.current.value = "";
+      return;
+    }
+
+    setSubiendoSaldoInicial(true);
+    setError(null);
+
+    const formData = new FormData();
+    formData.append("archivo", file);
+    formData.append("fecha_corte_inicial", saldoInicialFecha);
+
+    try {
+      const res = await authFetch("/alegra/cargar_saldos_iniciales", {
+        method: "POST",
+        body: formData,
+      });
+
+      await cargarBalance();
+      alert(
+        `Éxito: ${res?.cuentas_cargadas ?? 0} cuentas cargadas como saldo inicial al ${saldoInicialFecha} (columna usada: ${res?.columna_usada ?? "?"}).`
+      );
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Error cargando el saldo inicial");
+      alert("Error cargando el saldo inicial.");
+    } finally {
+      setSubiendoSaldoInicial(false);
+      if (saldoInicialFileInputRef.current) saldoInicialFileInputRef.current.value = "";
     }
   };
 
@@ -1161,6 +1212,35 @@ export default function BalanceGeneralPage() {
                   )}
                   {uploading ? "Sincronizando..." : "Sincronizar Auxiliar"}
                 </button>
+
+                <div className="flex items-center gap-1.5 bg-white border rounded-2xl px-2 py-1">
+                  <input
+                    type="date"
+                    value={saldoInicialFecha}
+                    onChange={(e) => setSaldoInicialFecha(e.target.value)}
+                    title="Fecha 'al' del export de Alegra (ej. 31 de diciembre del año anterior)"
+                    className="text-xs font-bold border-none focus:outline-none bg-transparent w-[110px]"
+                  />
+                  <input
+                    type="file"
+                    ref={saldoInicialFileInputRef}
+                    className="hidden"
+                    accept=".xlsx,.xls"
+                    onChange={handleSaldoInicialUpload}
+                  />
+                  <button
+                    onClick={() => saldoInicialFileInputRef.current?.click()}
+                    title="Sube el 'Estado de situación financiera' nativo de Alegra al corte indicado, para usarlo como saldo de apertura"
+                    className="flex items-center gap-2 px-4 py-2 bg-emerald-700 text-white rounded-xl text-xs font-black hover:bg-emerald-800 transition-all shadow active:scale-95"
+                  >
+                    {subiendoSaldoInicial ? (
+                      <RefreshCcw className="animate-spin" size={14} />
+                    ) : (
+                      <FileText size={14} />
+                    )}
+                    {subiendoSaldoInicial ? "Cargando..." : "Cargar Saldo Inicial"}
+                  </button>
+                </div>
               </>
             )}
 

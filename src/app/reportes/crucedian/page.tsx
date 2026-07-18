@@ -211,6 +211,21 @@ export default function CruceDianPage() {
         </div>
       )}
 
+      {implementado && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 bg-white border rounded-xl px-4 py-2 text-[10px] text-slate-500">
+          <span className="font-black uppercase text-slate-400 tracking-widest">Qué significa cada estado:</span>
+          <span><b className="text-emerald-700">Coincide</b> — el documento está en ambos lados y el monto cuadra.</span>
+          <span><b className="text-orange-700">Monto distinto</b> — está en ambos lados, pero el valor no coincide.</span>
+          <span>
+            <b className="text-red-700">Falta en {NOMBRE_PROVEEDOR[proveedorDatos] ?? "Siigo"}</b> — la DIAN lo reporta, pero no está sincronizado.
+          </span>
+          <span>
+            <b className="text-slate-600">Extra en {NOMBRE_PROVEEDOR[proveedorDatos] ?? "Siigo"}</b> — está sincronizado, pero la DIAN no lo reporta (revisa la cobertura de arriba).
+          </span>
+          <span><b className="text-purple-700">Match débil</b> — no coincidió el número de documento; se emparejó por NIT + fecha exacta.</span>
+        </div>
+      )}
+
       {!implementado ? (
         <Card className="rounded-[1.5rem] shadow-xl border-none bg-white p-6">
           <p className="text-sm font-bold text-slate-600">

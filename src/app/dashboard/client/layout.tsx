@@ -225,16 +225,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           ? [
               {
                 href: "/reportes/financiero/consolidado",
-                label: "Financiero Consolidado",
-                icon: <FileBarChart2 className="w-4 h-4" />,
-              },
-            ]
-          : []),
-        ...(tiene("ver_reporte_cruceivas")
-          ? [
-              {
-                href: "/reportes/cruceivas",
-                label: "Reporte de Cruce de IVAs",
+                label: "Ingresos Vs Egresos Consolidado",
                 icon: <FileBarChart2 className="w-4 h-4" />,
               },
             ]
@@ -244,6 +235,15 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               {
                 href: "/reportes/crucedian",
                 label: "Cruce DIAN vs Siigo",
+                icon: <FileBarChart2 className="w-4 h-4" />,
+              },
+            ]
+          : []),  
+          ...(tiene("ver_reporte_cruceivas")
+          ? [
+              {
+                href: "/reportes/cruceivas",
+                label: "Reporte de Cruce de IVAs",
                 icon: <FileBarChart2 className="w-4 h-4" />,
               },
             ]
@@ -292,7 +292,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 icon: <FileBarChart2 className="w-4 h-4" />,
               },
             ]
-          : []),    
+          : []),
         ...(tiene("ver_reporte_balance")
           ? [
               {

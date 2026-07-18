@@ -265,17 +265,9 @@ export default function ClientHome() {
             {tiene("ver_reporte_consolidado") && (
               <FeatureCard
                 icon="📚"
-                title="Financiero Consolidado"
+                title="Ingresos Vs Egresos Consolidado"
                 href="/reportes/financiero/consolidado"
                 description="Facturación vs gastos, top clientes y proveedores."
-              />
-            )}
-            {tiene("ver_reporte_cruceivas") && (
-              <FeatureCard
-                icon="📊"
-                title="Cruce IVAs"
-                href="/reportes/cruceivas"
-                description="Muestra los cruce de IVAs mes a mes, sin considerar retenciones y muestra valores tentativos a pagar por cruce por periodos."
               />
             )}
             {tiene("ver_reporte_cruce_dian") && (
@@ -284,6 +276,14 @@ export default function ClientHome() {
                 title="Cruce DIAN vs Siigo"
                 href="/reportes/crucedian"
                 description="Compara documento por documento (facturas, notas crédito, compras y documento soporte) lo reportado a la DIAN contra lo sincronizado de Siigo."
+              />
+            )}
+            {tiene("ver_reporte_cruceivas") && (
+              <FeatureCard
+                icon="📊"
+                title="Cruce IVAs"
+                href="/reportes/cruceivas"
+                description="Muestra los cruce de IVAs mes a mes, sin considerar retenciones y muestra valores tentativos a pagar por cruce por periodos."
               />
             )}
             {tiene("ver_reporte_retenciones") && (

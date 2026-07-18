@@ -274,7 +274,7 @@ export default function DashboardFinanciero() {
               <p className="text-xl font-bold text-orange-600">{fmtCOP(totalRetenciones)}</p>
             </div>
             <div className="bg-white p-4 rounded shadow text-center">
-              <p className="text-gray-500">Total facturado (Siigo)</p>
+              <p className="text-gray-500">Total facturado</p>
               <p className="text-xl font-bold text-emerald-600">{fmtCOP(totalFacturado)}</p>
             </div>
             <div className="bg-white p-4 rounded shadow text-center">

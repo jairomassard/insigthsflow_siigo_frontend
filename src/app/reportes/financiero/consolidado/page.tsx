@@ -511,8 +511,8 @@ export default function ReporteFinancieroConsolidadoPage() {
                 Consolidado Ingresos vs Egresos
               </h1>
               <p className="mt-1 max-w-4xl text-sm text-slate-600">
-                Vista operativa basada en documentos de Siigo: ingresos netos, egresos,
-                nómina y resultado operativo estimado. La utilidad contable se consulta
+                Vista operativa basada en documentos reales: ingresos netos, egresos
+                y resultado operativo estimado. La utilidad contable se consulta
                 en el Estado de Resultados.
               </p>
             </div>

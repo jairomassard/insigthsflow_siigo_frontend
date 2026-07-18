@@ -621,7 +621,7 @@ export default function DashboardFinanciero() {
             </h1>
 
             <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-600">
-              Vista ejecutiva de ventas netas alineadas con Siigo, facturas emitidas,
+              Vista ejecutiva de ventas netas, facturas emitidas,
               notas crédito, pagos, cartera pendiente, clientes y centros de costo.
             </p>
           </div>
@@ -718,7 +718,7 @@ export default function DashboardFinanciero() {
               </select>
             </Field>
 
-            <Field label="Opciones Siigo a Incluir">
+            <Field label="Opciones a Incluir">
               <div className="flex h-10 items-center gap-4 rounded-lg border border-slate-300 bg-white px-3 text-xs">
                 <label className="inline-flex items-center gap-2 whitespace-nowrap">
                   <input
@@ -773,8 +773,8 @@ export default function DashboardFinanciero() {
                 value={fmtCOP(totalVentasNetas)}
                 helper={
                   incluyeImpuesto
-                    ? "Equivale al comparativo de Siigo con 'Incluye impuesto' activo: facturas menos notas crédito."
-                    : "Equivale al comparativo de Siigo sin 'Incluye impuesto': facturas menos notas crédito."
+                    ? "Equivale al comparativo con 'Incluye impuesto' activo: facturas menos notas crédito."
+                    : "Equivale al comparativo sin 'Incluye impuesto': facturas menos notas crédito."
                 }
                 tone="green"
               />

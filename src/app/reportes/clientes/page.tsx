@@ -371,7 +371,7 @@ export default function ReporteClientesPage() {
             </h1>
 
             <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-600">
-              Vista ejecutiva para analizar ventas netas, notas crédito, total facturado Siigo,
+              Vista ejecutiva para analizar ventas netas, notas crédito, total facturado,
               cartera pendiente, pagos, centros de costo y movimientos recientes.
             </p>
           </div>
@@ -516,9 +516,9 @@ export default function ReporteClientesPage() {
             />
 
             <KpiCard
-              title="Total facturado Siigo"
+              title="Total facturado"
               value={resumen?.total_facturado_siigo_str}
-              helper="Valor total de documentos facturados en Siigo."
+              helper="Valor total de documentos facturados."
               tone="slate"
             />
             <KpiCard
@@ -531,7 +531,7 @@ export default function ReporteClientesPage() {
             <KpiCard
               title="Total pagado"
               value={resumen?.total_pagado_str}
-              helper={`${resumen?.pct_pagado ?? 0}% del total facturado Siigo.`}
+              helper={`${resumen?.pct_pagado ?? 0}% del total facturado.`}
               tone="green"
             />
 
@@ -708,7 +708,7 @@ export default function ReporteClientesPage() {
                     className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   >
                     <option value="ventas_netas">Ordenar: ventas netas</option>
-                    <option value="total_siigo">Ordenar: total Siigo</option>
+                    <option value="total_siigo">Ordenar: total facturado</option>
                     <option value="saldo">Ordenar: saldo pendiente</option>
                     <option value="vencido">Ordenar: saldo vencido</option>
                     <option value="facturas">Ordenar: # facturas</option>
@@ -733,7 +733,7 @@ export default function ReporteClientesPage() {
                       <th className="p-3 text-left">Cliente</th>
                       <th className="p-3 text-right">Docs</th>
                       <th className="p-3 text-right">Ventas netas</th>
-                      <th className="p-3 text-right">Total Siigo</th>
+                      <th className="p-3 text-right">Total facturado</th>
                       <th className="p-3 text-right">Pagado</th>
                       <th className="p-3 text-right">Saldo pendiente</th>
                       <th className="p-3 text-right">Saldo vencido</th>
@@ -1007,9 +1007,9 @@ function ClienteFicha({ cliente }: { cliente: ClienteInsight }) {
           tone="blue"
         />
         <KpiCard
-          title="Total facturado Siigo"
+          title="Total facturado"
           value={cliente.total_facturado_siigo_str}
-          helper="Valor total facturado en Siigo."
+          helper="Valor total facturado."
           tone="slate"
         />
 
@@ -1019,17 +1019,17 @@ function ClienteFicha({ cliente }: { cliente: ClienteInsight }) {
           helper={`${cliente.cantidad_notas_credito ?? 0} nota(s) crédito del cliente.`}
           tone="red"
         />
-  
+
         <KpiCard
           title="Total pagado"
           value={cliente.total_pagado_str}
-          helper={`${fmtPct(cliente.pct_pagado)} del total facturado Siigo.`}
+          helper={`${fmtPct(cliente.pct_pagado)} del total facturado.`}
           tone="green"
         />
         <KpiCard
           title="Saldo pendiente"
           value={cliente.saldo_pendiente_str}
-          helper={`${fmtPct(cliente.pct_pendiente)} del total facturado Siigo.`}
+          helper={`${fmtPct(cliente.pct_pendiente)} del total facturado.`}
           tone="orange"
         />
         <KpiCard

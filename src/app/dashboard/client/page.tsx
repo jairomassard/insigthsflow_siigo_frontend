@@ -91,7 +91,7 @@ export default function ClientHome() {
       <div className="space-y-1">
         <h1 className="text-3xl font-bold tracking-tight">📊 Panel Clientes</h1>
         <p className="text-muted-foreground text-sm max-w-2xl">
-          Configura tu sistema, la integración con Siigo y accede fácilmente a los diferentes reportes.
+          Configura tu sistema, la integración con tu sistema contable y accede fácilmente a los diferentes reportes.
         </p>
         <hr className="border-gray-900 mt-3" />
       </div>
@@ -273,9 +273,13 @@ export default function ClientHome() {
             {tiene("ver_reporte_cruce_dian") && (
               <FeatureCard
                 icon="🧾"
-                title="Cruce DIAN vs Siigo"
+                title={`Cruce DIAN vs ${proveedorDatos === "alegra" ? "Alegra" : "Siigo"}`}
                 href="/reportes/crucedian"
-                description="Compara documento por documento (facturas, notas crédito, compras y documento soporte) lo reportado a la DIAN contra lo sincronizado de Siigo."
+                description={`Compara documento por documento (facturas, notas crédito y compras${
+                  proveedorDatos === "alegra" ? "" : " y documento soporte"
+                }) lo reportado a la DIAN contra lo sincronizado de ${
+                  proveedorDatos === "alegra" ? "Alegra" : "Siigo"
+                }.`}
               />
             )}
             {tiene("ver_reporte_cruceivas") && (
@@ -325,7 +329,7 @@ export default function ClientHome() {
                 description="Consulta indicadores financieros calculados directamente desde los auxiliares contables."
               />
             )}
-            {tiene("ver_reporte_balance") && (
+            {tiene("ver_reporte_balance") && proveedorDatos === "siigo" && (
               <FeatureCard
                 icon="⚖️"
                 title="Analisis Balance de Prueba"
@@ -333,7 +337,7 @@ export default function ClientHome() {
                 description="Generar y subir balance emitido por Siigo. Ver indicadores financieros rápidamente y obtener conclusiones útiles para decisiones."
               />
             )}
-            {tiene("ver_reporte_indicadores") && (
+            {tiene("ver_reporte_indicadores") && proveedorDatos === "siigo" && (
               <FeatureCard
                 icon="📈"
                 title="Indicadores Financieros desde Balance Prueba"

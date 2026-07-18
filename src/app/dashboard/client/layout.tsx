@@ -293,7 +293,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               },
             ]
           : []),
-        ...(tiene("ver_reporte_balance")
+        ...(tiene("ver_reporte_balance") && proveedorDatos === "siigo"
           ? [
               {
                 href: "/reportes/balance",
@@ -302,7 +302,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               },
             ]
           : []),
-        ...(tiene("ver_reporte_indicadores")
+        ...(tiene("ver_reporte_indicadores") && proveedorDatos === "siigo"
           ? [
               {
                 href: "/reportes/indicadores",

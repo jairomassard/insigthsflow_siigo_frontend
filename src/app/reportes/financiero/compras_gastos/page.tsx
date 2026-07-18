@@ -374,7 +374,7 @@ export default function ReporteFinancieroComprasGastosPage() {
         setTopFacturas([]);
 
         setErrorMsg(
-          "No fue posible cargar información de compras y gastos. Si el cliente es nuevo, primero debes sincronizar compras desde Siigo o cargar documentos soporte."
+          "No fue posible cargar información de compras y gastos. Si el cliente es nuevo, primero debes sincronizar las compras."
         );
       } finally {
         setLoading(false);
@@ -752,8 +752,7 @@ export default function ReporteFinancieroComprasGastosPage() {
       {!loading && !errorMsg && !hayData && (
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
           Este cliente todavía no tiene información de compras y gastos cargada. El reporte se
-          mostrará en cero hasta que se sincronicen compras desde Siigo o se carguen documentos
-          soporte.
+          mostrará en cero hasta que se sincronicen las compras.
         </div>
       )}
 

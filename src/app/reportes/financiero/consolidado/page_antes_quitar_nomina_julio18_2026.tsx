@@ -32,6 +32,7 @@ interface EvolucionMes {
   notas_credito?: number;
   egresos: number;
   egresos_base?: number;
+  nomina?: number;
   utilidad: number;
   margen: number;
   utilidad_acumulada: number;
@@ -49,6 +50,7 @@ interface KPIs {
   facturas_emitidas?: number;
   notas_credito?: number;
   egresos: number;
+  nomina?: number;
   utilidad: number;
   margen: number;
   facturas_venta: number;
@@ -392,6 +394,7 @@ export default function ReporteFinancieroConsolidadoPage() {
   const facturasEmitidas = toNum(kpis?.facturas_emitidas);
   const notasCredito = toNum(kpis?.notas_credito);
   const egresos = toNum(kpis?.egresos);
+  const nomina = toNum(kpis?.nomina);
   const utilidad = toNum(kpis?.utilidad);
   const margen = toNum(kpis?.margen);
   const facturasVenta = toNum(kpis?.facturas_venta);
@@ -435,6 +438,15 @@ export default function ReporteFinancieroConsolidadoPage() {
           accent: "from-rose-500/15 to-red-400/5",
           text: "text-rose-700",
           chip: "bg-rose-100 text-rose-700",
+        },
+        {
+          label: "Nómina",
+          value: `$ ${abreviar(nomina)}`,
+          fullValue: formatCurrency(nomina),
+          helper: "Costos de nómina integrados al cálculo de egresos.",
+          accent: "from-orange-500/15 to-amber-400/5",
+          text: "text-orange-700",
+          chip: "bg-orange-100 text-orange-700",
         },
         {
           label: "Resultado operativo estimado",
@@ -780,7 +792,7 @@ export default function ReporteFinancieroConsolidadoPage() {
           </CardContent>
         </Card>
 
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className="grid gap-4 xl:grid-cols-3">
           <TopBarCard
             title="Top 10 Clientes"
             subtitle="Ventas netas con impuesto: facturas menos notas crédito."
@@ -790,6 +802,49 @@ export default function ReporteFinancieroConsolidadoPage() {
             onClick={handleClienteClick}
             tooltipKind="clientes"
           />
+          <Card className="rounded-3xl border-slate-200 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-bold text-slate-900">
+                Costos x Nómina
+              </CardTitle>
+              <p className="text-xs text-slate-500">
+                Costos de nómina integrados al cálculo de egresos.
+              </p>
+            </CardHeader>
+            <CardContent className="h-[310px] pt-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={evolucion}
+                  layout="vertical"
+                  margin={{ top: 8, bottom: 8, left: 0, right: 18 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis
+                    type="number"
+                    tickFormatter={(v) => abreviar(Number(v))}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="mes"
+                    tickFormatter={(mes) => getMesLabel(mes)}
+                    width={95}
+                    tick={{ fontSize: 11, fill: "#334155" }}
+                    axisLine={{ stroke: "#cbd5e1" }}
+                    tickLine={{ stroke: "#cbd5e1" }}
+                  />
+                  <Tooltip formatter={(v: any) => formatCurrency(v)} />
+                  <Bar dataKey="nomina" fill="#f97316" radius={[0, 8, 8, 0]}>
+                    <LabelList
+                      dataKey="nomina"
+                      position="right"
+                      formatter={(v: any) => abreviar(Number(v))}
+                      style={{ fontSize: 10, fill: "#9a3412", fontWeight: 700 }}
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
           <TopBarCard
             title="Top 10 Proveedores"
             subtitle="Compras y gastos por proveedor."
@@ -885,6 +940,11 @@ function MonthlyTooltip({ active, payload }: any) {
           label="Egresos"
           value={formatCurrency(row.egresos)}
           className="text-rose-700"
+        />
+        <TooltipLine
+          label="Nómina"
+          value={formatCurrency(row.nomina)}
+          className="text-orange-700"
         />
         <TooltipLine
           label="Resultado operativo mensual"

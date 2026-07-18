@@ -13,6 +13,15 @@ const formatCurrency = (val: number | null | undefined) =>
     maximumFractionDigits: 0,
   }).format(val || 0);
 
+const formatFechaLarga = (fecha: string | null) =>
+  fecha
+    ? new Date(fecha + "T00:00:00").toLocaleDateString("es-CO", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      })
+    : "—";
+
 type ItemCruce = {
   cufe?: string;
   folio?: string;
@@ -62,6 +71,7 @@ export default function CruceDianPage() {
   const [proveedorDatos, setProveedorDatos] = useState<string>("siigo");
   const [implementado, setImplementado] = useState(true);
   const [mensaje, setMensaje] = useState<string | null>(null);
+  const [coberturaDianDesde, setCoberturaDianDesde] = useState<string | null>(null);
   const [coberturaDianHasta, setCoberturaDianHasta] = useState<string | null>(null);
   const [fechaDesde, setFechaDesde] = useState("2026-01-01");
   const [fechaHasta, setFechaHasta] = useState("2026-12-31");
@@ -78,8 +88,9 @@ export default function CruceDianPage() {
       setProveedorDatos(res?.proveedor_datos ?? "siigo");
       setImplementado(res?.implementado !== false);
       setMensaje(res?.mensaje ?? null);
+      setCoberturaDianDesde(res?.cobertura_dian_desde ?? null);
       setCoberturaDianHasta(res?.cobertura_dian_hasta ?? null);
-      const { proveedor_datos, implementado: _impl, mensaje: _msg, cobertura_dian_hasta, ...secciones } = res ?? {};
+      const { proveedor_datos, implementado: _impl, mensaje: _msg, cobertura_dian_desde, cobertura_dian_hasta, ...secciones } = res ?? {};
       setData(secciones as Record<string, SeccionData>);
     } catch (err) {
       console.error(err);
@@ -191,10 +202,11 @@ export default function CruceDianPage() {
         <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2 rounded-xl text-xs font-bold">
           <AlertTriangle size={14} />
           {coberturaDianHasta
-            ? `Datos de la DIAN cargados hasta el ${new Date(coberturaDianHasta + "T00:00:00").toLocaleDateString(
-                "es-CO",
-                { day: "2-digit", month: "long", year: "numeric" }
-              )}. Documentos de ${NOMBRE_PROVEEDOR[proveedorDatos] ?? "Siigo"} posteriores a esa fecha van a aparecer como "Extra en ${NOMBRE_PROVEEDOR[proveedorDatos] ?? "Siigo"}" hasta que subas un export más reciente de la DIAN.`
+            ? `Datos de la DIAN cargados desde el ${formatFechaLarga(coberturaDianDesde)} hasta el ${formatFechaLarga(
+                coberturaDianHasta
+              )}. Para ver el cruce completo, ajusta el filtro de fecha a ese mismo rango — documentos de ${
+                NOMBRE_PROVEEDOR[proveedorDatos] ?? "Siigo"
+              } fuera de esas fechas van a aparecer como "Extra en ${NOMBRE_PROVEEDOR[proveedorDatos] ?? "Siigo"}" porque la DIAN todavía no los reporta.`
             : "Todavía no has cargado ningún export de la DIAN — sube el archivo para ver el cruce."}
         </div>
       )}

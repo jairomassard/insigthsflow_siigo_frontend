@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import LogoutButton from "@/components/LogoutButton";
 import { getWhoAmI } from "@/lib/authInfo";
 import { usePermisos } from "@/hooks/usePermisos";
@@ -340,14 +341,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               )}
               <div className="space-y-1">
                 {section.items.map((link, i) => (
-                  <a
+                  <Link
                     key={i}
                     href={(link as any).href}
                     className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium w-full hover:bg-white hover:text-black"
                   >
                     <span className="text-white">{link.icon}</span>
                     <span>{link.label}</span>
-                  </a>
+                  </Link>
                 ))}
               </div>
             </div>

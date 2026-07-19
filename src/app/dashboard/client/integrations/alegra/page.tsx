@@ -81,6 +81,11 @@ export default function AlegraIntegrationPage() {
   const [syncMsg, setSyncMsg] = useState("");
   const [syncLog, setSyncLog] = useState("");
 
+  const [status, setStatus] = useState<any>(null);
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [saveMsg, setSaveMsg] = useState("");
+  const [syncActivoConfig, setSyncActivoConfig] = useState(true);
+
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyMsg, setHistoryMsg] = useState("");
@@ -109,9 +114,48 @@ export default function AlegraIntegrationPage() {
     }
   };
 
+  const loadStatus = async () => {
+    try {
+      const data = await authFetch("/config/alegra-sync-status");
+      setStatus(data);
+      setSyncActivoConfig(!!data?.activo);
+    } catch (e: any) {
+      console.error("Error cargando estado de programación:", e);
+    }
+  };
+
   useEffect(() => {
     load();
+    loadStatus();
   }, []);
+
+  const saveSyncConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaveMsg("");
+    setSavingConfig(true);
+
+    try {
+      const formTarget = e.target as any;
+      const hora = formTarget.hora.value;
+      const frecuencia = formTarget.frecuencia.value;
+
+      await authFetch("/config/alegra-sync", {
+        method: "POST",
+        body: JSON.stringify({
+          hora_ejecucion: hora,
+          frecuencia_dias: Number(frecuencia),
+          activo: syncActivoConfig,
+        }),
+      });
+
+      setSaveMsg("✅ Programación guardada correctamente.");
+      await loadStatus();
+    } catch (e: any) {
+      setSaveMsg("❌ Error al guardar la programación: " + e.message);
+    } finally {
+      setSavingConfig(false);
+    }
+  };
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -323,8 +367,96 @@ export default function AlegraIntegrationPage() {
         )}
       </Card>
 
+      <div className="grid gap-4 md:grid-cols-4">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            Última ejecución
+          </div>
+          <div className="mt-2 text-sm font-semibold text-slate-900">
+            {formatDateTime(status?.ultimo_ejec, status?.timezone)}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            Última automática
+          </div>
+          <div className="mt-2 text-sm font-semibold text-slate-900">
+            {formatDateTime(status?.ultimo_auto_ejec, status?.timezone)}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            Hora automática
+          </div>
+          <div className="mt-2 text-sm font-semibold text-slate-900">
+            {status?.hora_ejecucion || "No configurada"}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            Frecuencia
+          </div>
+          <div className="mt-2 text-sm font-semibold text-slate-900">
+            Cada {status?.frecuencia_dias || 1} día(s)
+          </div>
+        </div>
+      </div>
+
       <Card
-        title="2. Sincronización completa"
+        title="2. Programación automática"
+        subtitle="Define cuándo debe correr la sincronización automática. La ejecución manual no cambia esta programación."
+      >
+        <form className="space-y-4" onSubmit={saveSyncConfig}>
+          <div className="grid gap-4 md:grid-cols-3">
+            <label className="flex flex-col text-sm font-medium text-slate-700">
+              Hora ejecución
+              <input
+                type="time"
+                name="hora"
+                defaultValue={status?.hora_ejecucion || "05:00"}
+                className="mt-1 rounded-xl border border-slate-300 p-2 text-sm"
+              />
+            </label>
+
+            <label className="flex flex-col text-sm font-medium text-slate-700">
+              Frecuencia en días
+              <input
+                type="number"
+                min={1}
+                name="frecuencia"
+                defaultValue={status?.frecuencia_dias || 1}
+                className="mt-1 rounded-xl border border-slate-300 p-2 text-sm"
+              />
+            </label>
+
+            <label className="flex items-center gap-2 pt-6 text-sm font-medium text-slate-700">
+              <input
+                type="checkbox"
+                name="activo"
+                checked={syncActivoConfig}
+                onChange={(e) => setSyncActivoConfig(e.target.checked)}
+              />
+              Sincronización activa
+            </label>
+          </div>
+
+          <button
+            type="submit"
+            disabled={savingConfig}
+            className="rounded-xl bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50"
+          >
+            {savingConfig ? "Guardando…" : "Guardar programación"}
+          </button>
+
+          {saveMsg && <div className="text-sm text-slate-700">{saveMsg}</div>}
+        </form>
+      </Card>
+
+      <Card
+        title="3. Sincronización completa"
         subtitle="Ejecuta en orden todos los procesos: catálogos, movimientos contables, facturas, notas crédito, compras, pagos y la actualización del auxiliar contable (P&L, Balance, Cruce IVA, Retenciones e Indicadores). Puede tardar varios minutos."
         className="border-blue-200 bg-blue-50/40"
       >

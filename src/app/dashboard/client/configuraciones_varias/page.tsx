@@ -1010,8 +1010,12 @@ export default function ConfiguracionesVariasPage() {
                   >
                     <option value="sin_configurar">Sin configurar</option>
                     <option value="egresos_promedio">Egresos promedio</option>
-                    <option value="burn_operativo">Consumo operativo</option>
-                    <option value="personalizado">Personalizado</option>
+                    <option value="burn_operativo" disabled>
+                      Consumo operativo (próximamente)
+                    </option>
+                    <option value="personalizado" disabled>
+                      Personalizado (próximamente)
+                    </option>
                   </select>
                 </div>
 

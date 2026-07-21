@@ -97,19 +97,27 @@ function getCompraEstadoTone(estado: any, saldo?: any) {
 
   const saldoNum = Number(saldo || 0);
 
-  const isNoPagada =
-    estadoNorm === "no pagada" ||
-    estadoNorm === "no pagado" ||
-    estadoNorm === "pendiente" ||
-    estadoNorm === "vencida" ||
-    estadoNorm === "vencido" ||
-    saldoNum > 0;
+  const isParcial = estadoNorm === "parcial";
 
   const isPagada =
-    !isNoPagada &&
+    !isParcial &&
     (estadoNorm === "pagada" ||
       estadoNorm === "pagado" ||
       estadoNorm === "paid");
+
+  const isNoPagada =
+    !isParcial &&
+    !isPagada &&
+    (estadoNorm === "no pagada" ||
+      estadoNorm === "no pagado" ||
+      estadoNorm === "pendiente" ||
+      estadoNorm === "vencida" ||
+      estadoNorm === "vencido" ||
+      saldoNum > 0);
+
+  if (isParcial) {
+    return "bg-amber-100 text-amber-700 border border-amber-200";
+  }
 
   if (isNoPagada) {
     return "bg-red-100 text-red-700 border border-red-200";

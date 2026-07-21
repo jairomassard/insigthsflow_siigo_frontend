@@ -70,6 +70,32 @@ function formatCurrency(valor: number): string {
   return `$ ${Math.round(Number(valor || 0)).toLocaleString("es-CO")}`;
 }
 
+function truncarNombreProducto(nombre: string, max = 26): string {
+  const texto = String(nombre || "").trim();
+  if (texto.length <= max) return texto;
+  return `${texto.slice(0, max - 1).trimEnd()}…`;
+}
+
+// Tick propio para el eje Y: los nombres de producto reales pueden ser muy
+// largos (ej. descripciones completas de luminarias) y el <text> por
+// defecto de Recharts no los recorta ni los ajusta - se desbordaban y se
+// superponían con la fila de arriba/abajo. Se trunca a un largo fijo y se
+// deja el nombre completo en el atributo `title` (tooltip nativo del
+// navegador al pasar el mouse).
+function EjeYProducto({ x, y, payload }: any) {
+  const nombreCompleto = String(payload?.value || "");
+  const nombreCorto = truncarNombreProducto(nombreCompleto, 26);
+
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text x={-6} y={0} dy={4} textAnchor="end" fontSize={11} fill="#374151">
+        {nombreCorto}
+        <title>{nombreCompleto}</title>
+      </text>
+    </g>
+  );
+}
+
 function formatMesCorto(value: any): string {
   try {
     const d = new Date(value);
@@ -395,7 +421,7 @@ export default function ReporteProductosPage() {
                   type="number"
                   tickFormatter={(v) => (metric === "cantidad" ? abreviar(v) : abreviarMoneda(v))}
                 />
-                <YAxis type="category" dataKey="producto" width={180} tick={{ fontSize: 12 }} />
+                <YAxis type="category" dataKey="producto" width={165} tick={<EjeYProducto />} />
                 <Tooltip
                   formatter={(v: number) =>
                     metric === "cantidad"
@@ -442,7 +468,7 @@ export default function ReporteProductosPage() {
                   type="number"
                   tickFormatter={(v) => (metric === "cantidad" ? abreviar(v) : abreviarMoneda(v))}
                 />
-                <YAxis type="category" dataKey="producto" width={180} tick={{ fontSize: 12 }} />
+                <YAxis type="category" dataKey="producto" width={165} tick={<EjeYProducto />} />
                 <Tooltip
                   formatter={(v: number) =>
                     metric === "cantidad"

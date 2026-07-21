@@ -576,7 +576,8 @@ export default function ReporteClientesPage() {
                       type="category"
                       dataKey="cliente"
                       width={120}
-                      tick={{ fontSize: 11 }}
+                      interval={0}
+                      tick={<EjeYCliente />}
                     />
                     <Tooltip formatter={(v: any) => fmt(Number(v))} />
                     <Bar dataKey="ventas_netas" fill="#2563eb" radius={[0, 6, 6, 0]}>
@@ -618,7 +619,8 @@ export default function ReporteClientesPage() {
                       type="category"
                       dataKey="cliente"
                       width={120}
-                      tick={{ fontSize: 11 }}
+                      interval={0}
+                      tick={<EjeYCliente />}
                     />
                     <Tooltip formatter={(v: any) => fmt(Number(v))} />
                     <Bar dataKey="saldo_pendiente" fill="#f97316" radius={[0, 6, 6, 0]}>
@@ -1317,6 +1319,32 @@ function EstadoBadge({ estado }: { estado: string }) {
 function fmt(n: any) {
   const value = Number(n || 0);
   return `$ ${value.toLocaleString("es-CO", { maximumFractionDigits: 0 })}`;
+}
+
+function truncarNombreCliente(nombre: string, max = 20): string {
+  const texto = String(nombre || "").trim();
+  if (texto.length <= max) return texto;
+  return `${texto.slice(0, max - 1).trimEnd()}…`;
+}
+
+// Tick propio para el eje Y de los "Top clientes": nombres largos
+// desbordaban el <text> por defecto de Recharts y se superponian entre
+// filas. Se trunca a un largo fijo, con el nombre completo en el tooltip
+// nativo del navegador (title). Requiere ademas interval={0} en el YAxis -
+// sin eso, Recharts calcula su propio salto de filas midiendo el nombre
+// CRUDO (largo) en vez del ya truncado, y se saltaba filas.
+function EjeYCliente({ x, y, payload }: any) {
+  const nombreCompleto = String(payload?.value || "");
+  const nombreCorto = truncarNombreCliente(nombreCompleto, 20);
+
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text x={-6} y={0} dy={4} textAnchor="end" fontSize={11} fill="#334155">
+        {nombreCorto}
+        <title>{nombreCompleto}</title>
+      </text>
+    </g>
+  );
 }
 
 function fmtPct(n: any) {

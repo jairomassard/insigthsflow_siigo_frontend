@@ -18,7 +18,6 @@ import {
   Cell,
 } from "recharts";
 import { Select, SelectItem } from "@/components/ui/select";
-import { format } from "date-fns";
 
 interface ProveedorResumen {
   proveedor_nombre: string;
@@ -100,10 +99,17 @@ function formatCantidad(valor: number): string {
 function formatFecha(fecha?: string): string {
   if (!fecha) return "-";
 
-  const d = new Date(fecha);
-  if (Number.isNaN(d.getTime())) return "-";
+  // No usar new Date(fecha) + format(): para una fecha sin hora
+  // ("2026-03-24"), JS la interpreta como medianoche UTC y luego el
+  // navegador la muestra en su zona horaria local - en Bogotá (UTC-5) eso
+  // corre la fecha un día hacia atrás (confirmado real 2026-07-21: esta
+  // página mostraba un día antes que las otras 2 páginas de compras para
+  // el mismo documento). Se recorta el string directo, sin pasar por Date.
+  const raw = String(fecha).slice(0, 10);
+  const [y, m, d] = raw.split("-");
+  if (!y || !m || !d) return "-";
 
-  return format(d, "dd-MM-yyyy");
+  return `${d}-${m}-${y}`;
 }
 
 function labelEstado(estado: FacturaDetalle["estado"]): string {

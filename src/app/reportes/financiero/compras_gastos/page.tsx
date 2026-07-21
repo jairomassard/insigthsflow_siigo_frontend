@@ -20,6 +20,7 @@ import {
 } from "recharts";
 import { format } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
+import { getWhoAmI } from "@/lib/authInfo";
 
 interface EvolucionMes {
   mes: string;
@@ -47,6 +48,16 @@ type EstadoCalc = "pagado" | "pendiente" | "parcial";
 type EstadoModal = "total" | "pagado" | "pendiente" | "parcial";
 type TipoDocumentoModal = "todos" | "factura" | "documento_soporte";
 type ModalSortBy = "fecha_desc" | "fecha_asc" | "proveedor_asc" | "proveedor_desc";
+
+// Ver nota junto a proveedorDatos: estos 4 KPIs (y el filtro "Tipo de
+// documento" del modal) dependen de distinguir Factura de Compra vs
+// Documento Soporte, algo que hoy no se puede sustentar con datos de Alegra.
+const KPIS_SOLO_SIIGO = new Set([
+  "valor_compras_x_factura",
+  "compras_x_factura",
+  "valor_compras_x_cta_cobro",
+  "compras_x_cta_cobro",
+]);
 
 interface CentroCosto {
   id: string;
@@ -323,6 +334,27 @@ export default function ReporteFinancieroComprasGastosPage() {
 
   const [selectedKpi, setSelectedKpi] = useState<KpiInfo | null>(null);
 
+  // Alegra no distingue "Factura de Compra" de "Documento Soporte" en los
+  // datos que sincronizamos hoy (/bills unico, sin ese campo) - se investigo
+  // si existia un endpoint separado para eso: si existe
+  // (e-provider-docs.alegra.com/reference/getsupportdocuments), pero es un
+  // modulo aparte (otra base URL, otra auth por Bearer token en vez de Basic
+  // Auth, credenciales propias) que ningun cliente Alegra tiene configurado
+  // hoy, y ademas no corresponde 1:1 a las compras ya sincronizadas via
+  // /bills. Tampoco sirve el regimen fiscal del proveedor como aproximacion:
+  // confirmado con datos reales 2026-07-21 que aparecen empresas como
+  // Bancolombia y Terpel marcadas "SIMPLIFIED_REGIME" en Alegra (dato mal
+  // configurado por el cliente, no confiable). Por eso este filtro y estos
+  // 4 KPIs se ocultan para clientes Alegra en vez de mostrar una
+  // clasificacion que no se puede sustentar.
+  const [proveedorDatos, setProveedorDatos] = useState<"siigo" | "alegra">("siigo");
+
+  useEffect(() => {
+    getWhoAmI().then((me) => {
+      if (me?.proveedor_datos) setProveedorDatos(me.proveedor_datos as "siigo" | "alegra");
+    });
+  }, []);
+
   const queryParams = useMemo(() => {
     const q: string[] = [];
     if (fechaDesde) q.push(`desde=${encodeURIComponent(fechaDesde)}`);
@@ -438,7 +470,9 @@ export default function ReporteFinancieroComprasGastosPage() {
   }, [fechaDesde, fechaHasta]);
 
   const kpiItems = useMemo<KpiInfo[]>(
-    () => [
+    () =>
+      (
+      [
       {
         id: "total_compras",
         label: "Compras",
@@ -535,8 +569,9 @@ export default function ReporteFinancieroComprasGastosPage() {
         tone: "purple",
         description: "Cantidad de cuentas de cobro o documentos soporte registrados.",
       },
-    ],
-    [kpis]
+      ] as KpiInfo[]
+      ).filter((item) => proveedorDatos === "siigo" || !KPIS_SOLO_SIIGO.has(item.id)),
+    [kpis, proveedorDatos]
   );
 
   const modalResumen = useMemo(() => {
@@ -1076,33 +1111,35 @@ export default function ReporteFinancieroComprasGastosPage() {
             <div className="flex-1 overflow-auto p-3">
               {modalMes && (
                 <div className="mb-4 space-y-3">
-                  <div>
-                    <div className="text-xs font-semibold text-gray-500 mb-1">
-                      Tipo de documento
-                    </div>
+                  {proveedorDatos === "siigo" && (
+                    <div>
+                      <div className="text-xs font-semibold text-gray-500 mb-1">
+                        Tipo de documento
+                      </div>
 
-                    <div className="flex flex-wrap gap-2">
-                      {(
-                        [
-                          ["todos", "Todos"],
-                          ["factura", "Facturas de compra"],
-                          ["documento_soporte", "Documento Soporte"],
-                        ] as const
-                      ).map(([tipo, label]) => (
-                        <button
-                          key={tipo}
-                          onClick={() => recargarModal(modalEstado, tipo)}
-                          className={`px-3 py-1 rounded-full text-sm border transition ${
-                            modalTipoDocumento === tipo
-                              ? "bg-slate-900 text-white border-slate-900"
-                              : "bg-white hover:bg-gray-100"
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      ))}
+                      <div className="flex flex-wrap gap-2">
+                        {(
+                          [
+                            ["todos", "Todos"],
+                            ["factura", "Facturas de compra"],
+                            ["documento_soporte", "Documento Soporte"],
+                          ] as const
+                        ).map(([tipo, label]) => (
+                          <button
+                            key={tipo}
+                            onClick={() => recargarModal(modalEstado, tipo)}
+                            className={`px-3 py-1 rounded-full text-sm border transition ${
+                              modalTipoDocumento === tipo
+                                ? "bg-slate-900 text-white border-slate-900"
+                                : "bg-white hover:bg-gray-100"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <div>
                     <div className="text-xs font-semibold text-gray-500 mb-1">Estado</div>

@@ -323,6 +323,7 @@ export default function ReporteFinancieroComprasGastosPage() {
 
   const [modalOpen, setModalOpen] = useState<boolean>(false);
   const [modalMes, setModalMes] = useState<string>("");
+  const [modalProveedorActual, setModalProveedorActual] = useState<string>("");
   const [modalEstado, setModalEstado] = useState<EstadoModal>("total");
   const [modalTipoDocumento, setModalTipoDocumento] =
     useState<TipoDocumentoModal>("todos");
@@ -650,6 +651,7 @@ export default function ReporteFinancieroComprasGastosPage() {
       const tipoDocumento: TipoDocumentoModal = "todos";
 
       setModalMes(mesYYYYMM);
+      setModalProveedorActual("");
       setModalEstado(estado);
       setModalTipoDocumento(tipoDocumento);
       setModalSortBy("fecha_desc");
@@ -716,12 +718,41 @@ export default function ReporteFinancieroComprasGastosPage() {
       setModalTitle(`Facturas de ${proveedor}`);
       setModalRows(rows);
       setModalMes("");
+      setModalProveedorActual(proveedor);
       setModalEstado("total");
       setModalTipoDocumento("todos");
       setModalSortBy("fecha_desc");
       setModalOpen(true);
     } catch (e) {
       console.error("Error cargando facturas de proveedor", e);
+      setModalRows([]);
+    } finally {
+      setModalLoading(false);
+    }
+  }
+
+  async function recargarModalProveedor(nuevoEstado: EstadoModal = modalEstado) {
+    try {
+      if (!modalProveedorActual) return;
+
+      setModalLoading(true);
+      setModalEstado(nuevoEstado);
+
+      const url = `/reportes/financiero/compras-gastos/detalle-proveedor${
+        queryParams ? queryParams + "&" : "?"
+      }proveedor=${encodeURIComponent(modalProveedorActual)}&tipo_documento=todos${
+        nuevoEstado !== "total" ? `&estado=${nuevoEstado}` : ""
+      }`;
+
+      const data = await authFetch(url);
+      const rows = normalizeArray<FacturaDetalle>(data);
+
+      setModalTitle(
+        `Facturas ${labelEstadoModal(nuevoEstado)} de ${modalProveedorActual}`
+      );
+      setModalRows(rows);
+    } catch (e) {
+      console.error("Error recargando modal de proveedor", e);
       setModalRows([]);
     } finally {
       setModalLoading(false);
@@ -791,7 +822,14 @@ export default function ReporteFinancieroComprasGastosPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-1.5 rounded-2xl border border-slate-200 bg-white/70 p-1.5 shadow-sm sm:grid-cols-3 md:grid-cols-6 xl:grid-cols-12">
+      {/* auto-fit en vez de un numero fijo de columnas: para clientes Alegra
+          (8 KPIs, sin los 4 de Factura/Cuenta de Cobro) un grid-cols-12 fijo
+          dejaba un tramo vacio a la derecha - auto-fit reparte el ancho
+          disponible entre las tarjetas que en verdad existen. */}
+      <div
+        className="grid gap-1.5 rounded-2xl border border-slate-200 bg-white/70 p-1.5 shadow-sm"
+        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(105px, 1fr))" }}
+      >
         {kpiItems.map((item) => (
           <KpiCard key={item.id} item={item} onSelect={setSelectedKpi} />
         ))}
@@ -1109,9 +1147,9 @@ export default function ReporteFinancieroComprasGastosPage() {
             </div>
 
             <div className="flex-1 overflow-auto p-3">
-              {modalMes && (
+              {(modalMes || modalProveedorActual) && (
                 <div className="mb-4 space-y-3">
-                  {proveedorDatos === "siigo" && (
+                  {modalMes && proveedorDatos === "siigo" && (
                     <div>
                       <div className="text-xs font-semibold text-gray-500 mb-1">
                         Tipo de documento
@@ -1148,7 +1186,11 @@ export default function ReporteFinancieroComprasGastosPage() {
                       {(["total", "pagado", "pendiente", "parcial"] as const).map((st) => (
                         <button
                           key={st}
-                          onClick={() => recargarModal(st, modalTipoDocumento)}
+                          onClick={() =>
+                            modalMes
+                              ? recargarModal(st, modalTipoDocumento)
+                              : recargarModalProveedor(st)
+                          }
                           className={`px-3 py-1 rounded-full text-sm border transition ${
                             modalEstado === st
                               ? "bg-blue-600 text-white border-blue-600"

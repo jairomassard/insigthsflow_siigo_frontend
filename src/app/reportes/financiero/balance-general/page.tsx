@@ -762,14 +762,29 @@ export default function BalanceGeneralPage() {
     setOpenAlertas(false);
   };
 
-  const cargarBalance = async (fechaCorteOverride?: string) => {
+  // Llamada "cruda" de regenerar (sin volver a llamar cargarBalance) - la
+  // usan tanto el boton manual "Regenerar snapshot" como el auto-reintento
+  // de cargarBalance de abajo. Separada para no encadenar dos llamados a
+  // cargarBalance() innecesariamente.
+  const rebuildSnapshotRaw = async (fecha: string) => {
+    const body: any = { fecha_corte: fecha };
+    if (usarComparacion && compararCon) {
+      body.comparar_con = compararCon;
+    }
+    await authFetch("/reportes/balance_general/rebuild_snapshot", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  };
+
+  const cargarBalance = async (fechaCorteOverride?: string, _reintentado = false) => {
+    const fecha = fechaCorteOverride || fechaCorte;
     try {
       setLoading(true);
       setError(null);
 
-      const params = new URLSearchParams({
-        fecha_corte: fechaCorteOverride || fechaCorte,
-      });
+      const params = new URLSearchParams({ fecha_corte: fecha });
 
       if (usarComparacion && compararCon) {
         params.append("comparar_con", compararCon);
@@ -779,6 +794,24 @@ export default function BalanceGeneralPage() {
       setData(json);
       resetCollapsedState();
     } catch (err: any) {
+      // Un corte que nunca se ha consultado (o que necesita datos mas
+      // recientes) no tiene snapshot calculado todavia - en vez de mostrar
+      // el error crudo y obligar al usuario a saber que debe presionar
+      // "Regenerar snapshot" aparte, se reconstruye solo una vez y se
+      // reintenta la consulta automaticamente.
+      const esFaltaSnapshot = (err.message || "").includes("No existe snapshot");
+      if (esFaltaSnapshot && !_reintentado) {
+        try {
+          await rebuildSnapshotRaw(fecha);
+          await cargarBalance(fechaCorteOverride, true);
+          return;
+        } catch (err2: any) {
+          setError(err2.message || "Error regenerando balance automáticamente");
+          setData(null);
+          setLoading(false);
+          return;
+        }
+      }
       setError(err.message || "Error cargando balance");
       setData(null);
     } finally {
@@ -790,23 +823,7 @@ export default function BalanceGeneralPage() {
     try {
       setRebuilding(true);
       setError(null);
-
-      const body: any = {
-        fecha_corte: fechaCorte,
-      };
-
-      if (usarComparacion && compararCon) {
-        body.comparar_con = compararCon;
-      }
-
-      await authFetch("/reportes/balance_general/rebuild_snapshot", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
-
+      await rebuildSnapshotRaw(fechaCorte);
       await cargarBalance();
     } catch (err: any) {
       setError(err.message || "Error regenerando snapshot");
@@ -838,6 +855,11 @@ export default function BalanceGeneralPage() {
         body: formData,
       });
 
+      // Reconstruye el snapshot del corte actual (no solo relee el cache
+      // viejo) - si ya existia un snapshot para esta fecha antes de subir
+      // el archivo, cargarBalance() por si solo habria mostrado los
+      // numeros de ANTES, sin reflejar lo recien cargado.
+      await rebuildSnapshotRaw(fechaCorte);
       await cargarBalance();
       alert("Éxito: se procesó el auxiliar contable y se actualizó el Balance General.");
     } catch (err: any) {
@@ -875,6 +897,9 @@ export default function BalanceGeneralPage() {
         body: formData,
       });
 
+      // Mismo motivo que en handleFileUpload: forzar reconstruccion, no
+      // solo releer un snapshot cacheado de antes de este cargue.
+      await rebuildSnapshotRaw(fechaCorte);
       await cargarBalance();
       alert(
         `Éxito: ${res?.cuentas_cargadas ?? 0} cuentas cargadas como saldo inicial al ${saldoInicialFecha} (columna usada: ${res?.columna_usada ?? "?"}).`
@@ -1343,6 +1368,26 @@ export default function BalanceGeneralPage() {
               {data?.meta?.explicacion_filtros?.comparar_con ||
                 "Permite comparar contra otro corte para analizar variaciones. Se recomienda usar cierres de mes."}
             </div>
+            {proveedorDatos === "alegra" && (
+              <>
+                <div className="mt-2 pt-2 border-t border-slate-200">
+                  <b>Sincronizar Auxiliar:</b> carga el Libro Diario (movimientos contables) — se sube
+                  cada vez que tengas un período nuevo (ej. cada trimestre).
+                </div>
+                <div>
+                  <b>Cargar Saldo Inicial:</b> carga el "Estado de situación financiera" nativo de
+                  Alegra al cierre del período ANTERIOR al primer Libro Diario cargado — es el punto de
+                  partida, se sube una sola vez por cliente (o de nuevo solo si quieres mover ese punto
+                  de partida más adelante en el tiempo).
+                </div>
+                <div>
+                  <b>Regenerar snapshot desde auxiliar:</b> recalcula el balance del corte seleccionado
+                  a partir de lo ya cargado. Normalmente no hace falta usarlo — el sistema lo hace solo
+                  cuando consultas un corte nuevo o subes un archivo — pero está disponible por si
+                  quieres forzar un refresco manual.
+                </div>
+              </>
+            )}
           </div>
 
           {comparacionSolicitada && !modoComparativo && (

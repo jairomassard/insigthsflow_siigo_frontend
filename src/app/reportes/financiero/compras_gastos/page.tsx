@@ -248,6 +248,33 @@ function formatMesYYYYMM(mesYYYYMM: string): string {
   }
 }
 
+function truncarNombreProveedor(nombre: string, max = 24): string {
+  const texto = String(nombre || "").trim();
+  if (texto.length <= max) return texto;
+  return `${texto.slice(0, max - 1).trimEnd()}…`;
+}
+
+// Tick propio para el eje Y del "Top 15 Proveedores": nombres de proveedor
+// largos desbordaban el <text> por defecto de Recharts y se superponian
+// entre filas. Se trunca a un largo fijo, dejando el nombre completo en el
+// tooltip nativo del navegador (title). Requiere ademas interval={0} en el
+// YAxis - sin eso, Recharts calcula su propio salto de filas midiendo el
+// nombre CRUDO (largo) en vez del ya truncado, y se saltaba una fila de
+// cada dos.
+function EjeYProveedor({ x, y, payload }: any) {
+  const nombreCompleto = String(payload?.value || "");
+  const nombreCorto = truncarNombreProveedor(nombreCompleto, 24);
+
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text x={-6} y={0} dy={4} textAnchor="end" fontSize={10} fill="#374151">
+        {nombreCorto}
+        <title>{nombreCompleto}</title>
+      </text>
+    </g>
+  );
+}
+
 function formatDateSafe(value?: string | null): string {
   if (!value) return "—";
 
@@ -1040,7 +1067,8 @@ export default function ReporteFinancieroComprasGastosPage() {
                       type="category"
                       dataKey="proveedor"
                       width={165}
-                      tick={{ fontSize: 10 }}
+                      interval={0}
+                      tick={<EjeYProveedor />}
                     />
                     <Tooltip formatter={(v: any) => formatCurrency(Number(v))} />
                     <Bar
@@ -1084,7 +1112,8 @@ export default function ReporteFinancieroComprasGastosPage() {
                     type="category"
                     dataKey="proveedor"
                     width={220}
-                    tick={{ fontSize: 12 }}
+                    interval={0}
+                    tick={<EjeYProveedor />}
                   />
                   <Tooltip
                     formatter={(v: any) => `${Number(v || 0).toLocaleString("es-CO")}`}

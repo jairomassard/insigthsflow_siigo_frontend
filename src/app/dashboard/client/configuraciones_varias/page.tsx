@@ -138,6 +138,13 @@ function TitleWithInfo({
   );
 }
 
+const MODO_RUNWAY_LABEL: Record<DashboardResumenConfig["modo_runway"], string> = {
+  sin_configurar: "Sin configurar",
+  egresos_promedio: "Egresos promedio",
+  burn_operativo: "Consumo operativo",
+  personalizado: "Personalizado",
+};
+
 const DEFAULT_CONFIG: DashboardResumenConfig = {
   activo: true,
   mostrar_caja: false,
@@ -531,9 +538,9 @@ export default function ConfiguracionesVariasPage() {
               </h1>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
                 Aquí defines cómo se comporta el Dashboard Ejecutivo: metas,
-                visibilidad de indicadores, fórmula de caja, runway, cantidad de tops
-                y otros parámetros. Esta base también servirá para futuras
-                configuraciones de otros módulos.
+                visibilidad de indicadores, fórmula de caja, autonomía de caja,
+                cantidad de tops y otros parámetros. Esta base también servirá
+                para futuras configuraciones de otros módulos.
               </p>
             </div>
 
@@ -549,9 +556,9 @@ export default function ConfiguracionesVariasPage() {
                 <div className="text-sm font-black text-slate-900">{resumenCaja}</div>
               </div>
               <div className="rounded-2xl border border-white/60 bg-white/80 px-3 py-2 shadow-sm backdrop-blur">
-                <div className="text-[11px] font-medium text-slate-500">Runway</div>
+                <div className="text-[11px] font-medium text-slate-500">Autonomía</div>
                 <div className="text-sm font-black text-slate-900">
-                  {config.modo_runway}
+                  {MODO_RUNWAY_LABEL[config.modo_runway] || config.modo_runway}
                 </div>
               </div>
             </div>
@@ -655,7 +662,7 @@ export default function ConfiguracionesVariasPage() {
                     <option value="ventas_netas">Ventas netas</option>
                     <option value="utilidad_operativa">Utilidad operativa</option>
                     <option value="caja_disponible">Caja disponible</option>
-                    <option value="cash_runway">Cash runway</option>
+                    <option value="cash_runway">Autonomía de caja</option>
                   </select>
                 </div>
               </div>
@@ -973,14 +980,14 @@ export default function ConfiguracionesVariasPage() {
 
           <SectionCard
             icon={<Activity size={18} />}
-            badge="Runway"
-            title="Parametrización de cash runway"
-            subtitle="Define cómo se calcula el runway del dashboard."
-            info="El runway depende de una caja válida y de una fórmula coherente de burn o egresos promedio. Aquí defines cómo se medirá."
+            badge="Autonomía"
+            title="Parametrización de autonomía de caja"
+            subtitle="Define cómo se calcula la autonomía de caja del dashboard."
+            info="La autonomía de caja depende de una caja válida y de una fórmula coherente de consumo operativo o egresos promedio. Aquí defines cómo se medirá."
           >
             <div className="space-y-4">
               <ToggleField
-                label="Mostrar cash runway"
+                label="Mostrar autonomía de caja"
                 description="Activa este KPI en el dashboard ejecutivo. Si está apagado, el sistema lo marcará como pendiente."
                 checked={config.mostrar_runway}
                 onChange={(value) => setConfig((prev) => ({ ...prev, mostrar_runway: value }))}
@@ -989,7 +996,7 @@ export default function ConfiguracionesVariasPage() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Modo runway
+                    Modo de cálculo
                   </label>
                   <select
                     value={config.modo_runway}
@@ -1003,14 +1010,14 @@ export default function ConfiguracionesVariasPage() {
                   >
                     <option value="sin_configurar">Sin configurar</option>
                     <option value="egresos_promedio">Egresos promedio</option>
-                    <option value="burn_operativo">Burn operativo</option>
+                    <option value="burn_operativo">Consumo operativo</option>
                     <option value="personalizado">Personalizado</option>
                   </select>
                 </div>
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Meses promedio runway
+                    Meses de referencia
                   </label>
                   <Input
                     type="number"
@@ -1031,7 +1038,7 @@ export default function ConfiguracionesVariasPage() {
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm leading-6 text-slate-600">
                 <span className="font-bold text-slate-800">Recomendación actual:</span>{" "}
                 mientras arrancamos, el modo más estable es{" "}
-                <span className="font-bold">egresos_promedio</span>, siempre y cuando la caja
+                <span className="font-bold">Egresos promedio</span>, siempre y cuando la caja
                 ya esté correctamente parametrizada.
               </div>
             </div>

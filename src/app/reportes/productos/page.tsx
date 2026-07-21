@@ -421,7 +421,13 @@ export default function ReporteProductosPage() {
                   type="number"
                   tickFormatter={(v) => (metric === "cantidad" ? abreviar(v) : abreviarMoneda(v))}
                 />
-                <YAxis type="category" dataKey="producto" width={165} tick={<EjeYProducto />} />
+                <YAxis
+                  type="category"
+                  dataKey="producto"
+                  width={165}
+                  interval={0}
+                  tick={<EjeYProducto />}
+                />
                 <Tooltip
                   formatter={(v: number) =>
                     metric === "cantidad"
@@ -468,7 +474,13 @@ export default function ReporteProductosPage() {
                   type="number"
                   tickFormatter={(v) => (metric === "cantidad" ? abreviar(v) : abreviarMoneda(v))}
                 />
-                <YAxis type="category" dataKey="producto" width={165} tick={<EjeYProducto />} />
+                <YAxis
+                  type="category"
+                  dataKey="producto"
+                  width={165}
+                  interval={0}
+                  tick={<EjeYProducto />}
+                />
                 <Tooltip
                   formatter={(v: number) =>
                     metric === "cantidad"

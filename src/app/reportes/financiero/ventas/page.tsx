@@ -150,6 +150,15 @@ function calcularPagadoPendiente(f: MovimientoVenta) {
   return { pagado, pendiente };
 }
 
+type EstadoFiltroVentas = "todas" | "pagado" | "pendiente";
+type SortByVentas = "fecha_desc" | "fecha_asc" | "nombre_asc" | "nombre_desc";
+
+function labelEstadoFiltro(estado: EstadoFiltroVentas): string {
+  if (estado === "pagado") return "Pagado";
+  if (estado === "pendiente") return "Pendiente";
+  return "Todas";
+}
+
 function fmtPct(n: any) {
   const value = Number(n || 0);
 
@@ -240,6 +249,14 @@ export default function DashboardFinanciero() {
   const [estadoEnModal, setEstadoEnModal] = useState("");
   const [facturasEstado, setFacturasEstado] = useState<MovimientoVenta[]>([]);
 
+  // Filtro Pagado/Pendiente y orden compartidos por los 3 modales que se
+  // abren desde las gráficas (Evolución Mensual, Top 5 Clientes y
+  // Distribución por Estado de Pago) - se aplican en el cliente sobre las
+  // filas ya cargadas, sin volver a consultar el backend al cambiarlos.
+  const [modalEstadoFiltro, setModalEstadoFiltro] =
+    useState<EstadoFiltroVentas>("todas");
+  const [modalSortBy, setModalSortBy] = useState<SortByVentas>("fecha_desc");
+
   const load = async () => {
     setLoading(true);
     setErr("");
@@ -317,6 +334,8 @@ export default function DashboardFinanciero() {
       setModalMovimientosOpen(true);
       setMovimientosDetalle([]);
       setResumenDetalle(null);
+      setModalEstadoFiltro("todas");
+      setModalSortBy("fecha_desc");
 
       const qs = qsBase();
 
@@ -371,13 +390,18 @@ export default function DashboardFinanciero() {
 
     setEstadoEnModal(item.estado);
     setModalEstadoOpen(true);
+    setFacturasEstado([]);
+    // Se preselecciona el filtro según la barra que el usuario clickeó, pero
+    // se trae el periodo completo (sin filtrar por estado en el backend)
+    // para poder alternar Pagado/Pendiente/Todas dentro del modal sin volver
+    // a consultar el servidor.
+    setModalEstadoFiltro(item.estado.toLowerCase() === "pagado" ? "pagado" : "pendiente");
+    setModalSortBy("fecha_desc");
 
     const qs = qsBase();
 
     if (desde) qs.set("desde", desde);
     if (hasta) qs.set("hasta", hasta);
-
-    qs.set("estado", item.estado);
 
     const res = await authFetch(`/reportes/facturas_por_estado?${qs.toString()}`);
     setFacturasEstado(res.rows || []);
@@ -597,16 +621,24 @@ export default function DashboardFinanciero() {
         rows={movimientosDetalle}
         resumen={resumenDetalle}
         incluyeImpuesto={incluyeImpuesto}
+        estadoFiltro={modalEstadoFiltro}
+        onEstadoFiltroChange={setModalEstadoFiltro}
+        sortBy={modalSortBy}
+        onSortByChange={setModalSortBy}
       />
 
       <MovimientosModal
         open={modalEstadoOpen}
-        title={`Facturas en estado: ${estadoEnModal}`}
-        subtitle={`Total de facturas: ${facturasEstado.length}`}
+        title="Facturas por estado de pago"
+        subtitle={`Punto de partida: ${estadoEnModal || "—"}. Puedes cambiar el filtro abajo.`}
         onClose={() => setModalEstadoOpen(false)}
         rows={facturasEstado}
         incluyeImpuesto={incluyeImpuesto}
         forceFacturas
+        estadoFiltro={modalEstadoFiltro}
+        onEstadoFiltroChange={setModalEstadoFiltro}
+        sortBy={modalSortBy}
+        onSortByChange={setModalSortBy}
       />
 
       <div className="rounded-2xl border border-slate-200 bg-gradient-to-r from-emerald-50 via-white to-slate-100 p-5 shadow-sm">
@@ -1139,6 +1171,10 @@ function MovimientosModal({
   onClose,
   incluyeImpuesto,
   forceFacturas = false,
+  estadoFiltro,
+  onEstadoFiltroChange,
+  sortBy,
+  onSortByChange,
 }: {
   open: boolean;
   title: string;
@@ -1148,7 +1184,39 @@ function MovimientosModal({
   onClose: () => void;
   incluyeImpuesto: boolean;
   forceFacturas?: boolean;
+  estadoFiltro: EstadoFiltroVentas;
+  onEstadoFiltroChange: (estado: EstadoFiltroVentas) => void;
+  sortBy: SortByVentas;
+  onSortByChange: (sort: SortByVentas) => void;
 }) {
+  const rowsFiltradas = useMemo(() => {
+    if (estadoFiltro === "todas") return rows;
+
+    return rows.filter((r) => {
+      const { pagado, pendiente } = calcularPagadoPendiente(r);
+      return estadoFiltro === "pagado" ? pagado > 0 : pendiente > 0;
+    });
+  }, [rows, estadoFiltro]);
+
+  const rowsOrdenadas = useMemo(() => {
+    const arr = [...rowsFiltradas];
+
+    arr.sort((a, b) => {
+      if (sortBy === "fecha_asc") {
+        return String(a.fecha || "").localeCompare(String(b.fecha || ""));
+      }
+      if (sortBy === "fecha_desc") {
+        return String(b.fecha || "").localeCompare(String(a.fecha || ""));
+      }
+      if (sortBy === "nombre_asc") {
+        return String(a.cliente_nombre || "").localeCompare(String(b.cliente_nombre || ""));
+      }
+      return String(b.cliente_nombre || "").localeCompare(String(a.cliente_nombre || ""));
+    });
+
+    return arr;
+  }, [rowsFiltradas, sortBy]);
+
   if (!open) return null;
 
   const totalMovimientos = resumen?.total_movimientos ?? rows.length;
@@ -1202,6 +1270,43 @@ function MovimientosModal({
         </div>
 
         <div className="flex-1 overflow-auto p-4">
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <div className="mb-1 text-xs font-semibold text-slate-500">Estado</div>
+              <div className="flex flex-wrap gap-2">
+                {(["todas", "pagado", "pendiente"] as const).map((st) => (
+                  <button
+                    key={st}
+                    onClick={() => onEstadoFiltroChange(st)}
+                    className={`rounded-full border px-3 py-1 text-sm transition ${
+                      estadoFiltro === st
+                        ? "border-blue-600 bg-blue-600 text-white"
+                        : "bg-white hover:bg-gray-100"
+                    }`}
+                  >
+                    {labelEstadoFiltro(st)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-end gap-3">
+              <div className="text-xs text-slate-500">
+                Mostrando <span className="font-semibold text-slate-700">{rowsOrdenadas.length}</span> de {rows.length}
+              </div>
+              <select
+                value={sortBy}
+                onChange={(e) => onSortByChange(e.target.value as SortByVentas)}
+                className="rounded-lg border bg-white px-3 py-2 text-sm"
+              >
+                <option value="fecha_desc">Fecha: más reciente primero</option>
+                <option value="fecha_asc">Fecha: más antigua primero</option>
+                <option value="nombre_asc">Cliente: A-Z</option>
+                <option value="nombre_desc">Cliente: Z-A</option>
+              </select>
+            </div>
+          </div>
+
           <div className="overflow-auto rounded-xl border border-slate-200">
             <table className="w-full min-w-[1280px] text-sm">
               <thead className="sticky top-0 z-10 bg-slate-100 text-slate-700">
@@ -1224,7 +1329,7 @@ function MovimientosModal({
               </thead>
 
               <tbody>
-                {rows.length === 0 && (
+                {rowsOrdenadas.length === 0 && (
                   <tr>
                     <td colSpan={14} className="p-8 text-center text-slate-500">
                       No hay movimientos para mostrar.
@@ -1232,7 +1337,7 @@ function MovimientosModal({
                   </tr>
                 )}
 
-                {rows.map((f: MovimientoVenta, idx: number) => {
+                {rowsOrdenadas.map((f: MovimientoVenta, idx: number) => {
                   const isNC = f.tipo_movimiento === "NOTA_CREDITO";
                   const { pagado, pendiente } = calcularPagadoPendiente(f);
                   const impuestos = Number(f.impuestos ?? f.impuestos_total ?? 0);

@@ -130,6 +130,14 @@ function formatDate(value: any) {
   return String(value);
 }
 
+// Tolerancia de redondeo: un saldo de $1 COP o menos (residuo típico de
+// impuestos/retenciones) se trata como pagado en su totalidad. Sin esto,
+// una factura con saldo de centavos se mostraba en rojo y podía aparecer
+// también bajo el filtro "Pendiente" aunque en pantalla mostrara $0 de
+// saldo. Mismo criterio de tolerancia ya usado en otra consulta de ventas
+// de app.py (estado_pago_real).
+const TOLERANCIA_SALDO_COP = 1;
+
 function calcularPagadoPendiente(f: MovimientoVenta) {
   if (f.tipo_movimiento === "NOTA_CREDITO") {
     return { pagado: 0, pendiente: 0 };
@@ -142,7 +150,7 @@ function calcularPagadoPendiente(f: MovimientoVenta) {
   let pendiente = f.pendiente !== undefined ? Number(f.pendiente) : saldo;
 
   if (saldo === total) pagado = 0;
-  if (saldo === 0) {
+  if (Math.abs(saldo) <= TOLERANCIA_SALDO_COP) {
     pagado = total;
     pendiente = 0;
   }
@@ -1352,7 +1360,7 @@ function MovimientosModal({
                     <tr
                       key={`${documento}-${idx}`}
                       className={`border-t hover:bg-slate-50 ${
-                        isNC ? "bg-rose-50/40 text-rose-700" : Number(f.saldo || f.pendiente || 0) > 0 ? "text-red-600" : "text-slate-700"
+                        isNC ? "bg-rose-50/40 text-rose-700" : pendiente > TOLERANCIA_SALDO_COP ? "text-red-600" : "text-slate-700"
                       }`}
                     >
                       <td className="p-2 whitespace-nowrap">

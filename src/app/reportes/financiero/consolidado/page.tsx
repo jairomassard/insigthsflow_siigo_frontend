@@ -21,6 +21,7 @@ import {
   LabelList,
 } from "recharts";
 import { formatInTimeZone } from "date-fns-tz";
+import { getWhoAmI } from "@/lib/authInfo";
 
 interface EvolucionMes {
   mes: string;
@@ -72,6 +73,35 @@ interface TopItem {
 }
 
 type ModalMode = "ingresos" | "egresos";
+type EstadoModal = "total" | "pagado" | "pendiente" | "parcial";
+type TipoDocumentoModal = "todos" | "factura" | "documento_soporte";
+type ModalSortBy = "fecha_desc" | "fecha_asc" | "nombre_asc" | "nombre_desc";
+type ModalContext =
+  | { kind: "mes"; mes: string }
+  | { kind: "proveedor"; nombre: string }
+  | { kind: "cliente"; nombre: string };
+
+function labelEstadoModal(estado: EstadoModal): string {
+  if (estado === "total") return "Todas";
+  if (estado === "pagado") return "Pagado";
+  if (estado === "pendiente") return "Pendiente";
+  return "Parcial";
+}
+
+function labelTipoDocumento(tipo: TipoDocumentoModal): string {
+  if (tipo === "factura") return "Facturas de compra";
+  if (tipo === "documento_soporte") return "Documento Soporte";
+  return "Todas";
+}
+
+// Traduce el estado interno (compartido con el modal de Egresos por
+// Compras/Gastos) al valor que espera /reportes/facturas_cliente del lado de
+// ingresos ("pagada", no "pagado"). "total" = sin filtro.
+function estadoParamIngresos(estado: EstadoModal): string {
+  if (estado === "total") return "";
+  if (estado === "pagado") return "pagada";
+  return estado;
+}
 
 function toNum(value: any) {
   return Number(value || 0);
@@ -86,48 +116,6 @@ function fmtPct(valor: any): string {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
   })}%`;
-}
-
-function getCompraEstadoTone(estado: any, saldo?: any) {
-  const estadoNorm = String(estado || "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "");
-
-  const saldoNum = Number(saldo || 0);
-
-  const isParcial = estadoNorm === "parcial";
-
-  const isPagada =
-    !isParcial &&
-    (estadoNorm === "pagada" ||
-      estadoNorm === "pagado" ||
-      estadoNorm === "paid");
-
-  const isNoPagada =
-    !isParcial &&
-    !isPagada &&
-    (estadoNorm === "no pagada" ||
-      estadoNorm === "no pagado" ||
-      estadoNorm === "pendiente" ||
-      estadoNorm === "vencida" ||
-      estadoNorm === "vencido" ||
-      saldoNum > 0);
-
-  if (isParcial) {
-    return "bg-amber-100 text-amber-700 border border-amber-200";
-  }
-
-  if (isNoPagada) {
-    return "bg-red-100 text-red-700 border border-red-200";
-  }
-
-  if (isPagada) {
-    return "bg-emerald-100 text-emerald-700 border border-emerald-200";
-  }
-
-  return "bg-amber-100 text-amber-700 border border-amber-200";
 }
 
 function abreviar(valor: number): string {
@@ -225,6 +213,26 @@ export default function ReporteFinancieroConsolidadoPage() {
   const [modalLoading, setModalLoading] = useState(false);
   const [selectedKpi, setSelectedKpi] = useState<any | null>(null);
 
+  const [modalContext, setModalContext] = useState<ModalContext | null>(null);
+  const [modalEstado, setModalEstado] = useState<EstadoModal>("total");
+  const [modalTipoDocumento, setModalTipoDocumento] =
+    useState<TipoDocumentoModal>("todos");
+  const [modalSortBy, setModalSortBy] = useState<ModalSortBy>("fecha_desc");
+
+  // Ver la misma nota en compras_gastos/page.tsx junto a este estado: Alegra
+  // no distingue Factura de Compra de Documento Soporte, por eso ese filtro
+  // se oculta para clientes Alegra.
+  const [proveedorDatos, setProveedorDatos] = useState<"siigo" | "alegra">(
+    "siigo",
+  );
+
+  useEffect(() => {
+    getWhoAmI().then((me) => {
+      if (me?.proveedor_datos)
+        setProveedorDatos(me.proveedor_datos as "siigo" | "alegra");
+    });
+  }, []);
+
   const queryParams = useMemo(() => {
     const q = new URLSearchParams();
     if (fechaDesde) q.set("desde", fechaDesde);
@@ -248,6 +256,10 @@ export default function ReporteFinancieroConsolidadoPage() {
     setModalResumen(null);
     setModalTitle("");
     setModalSubtitle("");
+    setModalContext(null);
+    setModalEstado("total");
+    setModalTipoDocumento("todos");
+    setModalSortBy("fecha_desc");
   };
 
   const loadConsolidado = async () => {
@@ -314,36 +326,124 @@ export default function ReporteFinancieroConsolidadoPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const abrirModal = async ({
-    mode,
-    title,
-    subtitle,
-    params,
-  }: {
-    mode: ModalMode;
-    title: string;
-    subtitle?: string;
-    params: URLSearchParams;
-  }) => {
+  // Trae las filas del modal según modo (ingresos/egresos) + contexto (mes,
+  // proveedor o cliente) + filtros (estado, tipo de documento). Para egresos
+  // reutiliza literalmente los mismos endpoints que ya usa el modal de
+  // "Egresos por Compras/Gastos" (con el cálculo correcto de pagado_calc/
+  // estado_calc que descuenta retención de Documento Soporte) en vez de
+  // /reportes/facturas_proveedor, que no tenía ese ajuste ni filtros.
+  async function cargarModal(
+    mode: ModalMode,
+    context: ModalContext,
+    estado: EstadoModal,
+    tipoDocumento: TipoDocumentoModal,
+  ): Promise<{ rows: any[]; resumen: any | null }> {
+    if (mode === "egresos") {
+      if (context.kind === "mes") {
+        const qs = new URLSearchParams({ mes: context.mes });
+        if (estado !== "total") qs.set("estado", estado);
+        if (tipoDocumento !== "todos") qs.set("tipo_documento", tipoDocumento);
+        if (centroCostos) qs.set("centro_costos", centroCostos);
+        const rows = await authFetch(
+          `/reportes/financiero/compras-gastos/detalle?${qs.toString()}`,
+        );
+        return { rows: Array.isArray(rows) ? rows : [], resumen: null };
+      }
+
+      const nombreProveedor =
+        context.kind === "proveedor" ? context.nombre : "";
+      const qs = new URLSearchParams();
+      if (fechaDesde) qs.set("desde", fechaDesde);
+      if (fechaHasta) qs.set("hasta", fechaHasta);
+      if (centroCostos) qs.set("centro_costos", centroCostos);
+      qs.set("proveedor", nombreProveedor);
+      if (estado !== "total") qs.set("estado", estado);
+      if (tipoDocumento !== "todos") qs.set("tipo_documento", tipoDocumento);
+      const rows = await authFetch(
+        `/reportes/financiero/compras-gastos/detalle-proveedor?${qs.toString()}`,
+      );
+      return { rows: Array.isArray(rows) ? rows : [], resumen: null };
+    }
+
+    // ingresos
+    const qs = new URLSearchParams();
+    if (context.kind === "mes") {
+      const periodo = getPeriodoSeguro(context.mes);
+      if (periodo) {
+        qs.set("desde", periodo.desdeMes);
+        qs.set("hasta", periodo.hastaMes);
+      }
+    } else {
+      if (fechaDesde) qs.set("desde", fechaDesde);
+      if (fechaHasta) qs.set("hasta", fechaHasta);
+    }
+    if (centroCostos) qs.set("centro_costos", centroCostos);
+    if (context.kind === "cliente") qs.set("cliente", context.nombre);
+    const estadoParam = estadoParamIngresos(estado);
+    if (estadoParam) qs.set("estado", estadoParam);
+
+    const result = await authFetch(`/reportes/facturas_cliente?${qs.toString()}`);
+    return {
+      rows: Array.isArray(result?.rows) ? result.rows : [],
+      resumen: result?.resumen || null,
+    };
+  }
+
+  const abrirModalConContexto = async (
+    mode: ModalMode,
+    context: ModalContext,
+    title: string,
+    subtitle: string,
+  ) => {
     setModalMode(mode);
+    setModalContext(context);
+    setModalEstado("total");
+    setModalTipoDocumento("todos");
+    setModalSortBy("fecha_desc");
     setModalTitle(title);
-    setModalSubtitle(subtitle || "");
+    setModalSubtitle(subtitle);
     setModalOpen(true);
     setModalLoading(true);
     setDetalleRows([]);
     setModalResumen(null);
     try {
-      const endpoint =
-        mode === "ingresos"
-          ? `/reportes/facturas_cliente?${params.toString()}`
-          : `/reportes/facturas_proveedor?${params.toString()}`;
-      const result = await authFetch(endpoint);
-      setDetalleRows(Array.isArray(result?.rows) ? result.rows : []);
-      setModalResumen(result?.resumen || null);
+      const { rows, resumen } = await cargarModal(
+        mode,
+        context,
+        "total",
+        "todos",
+      );
+      setDetalleRows(rows);
+      setModalResumen(resumen);
     } catch (error) {
       console.error("Error cargando detalle", error);
       setDetalleRows([]);
       setModalResumen(null);
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
+  const recargarModal = async (
+    nuevoEstado: EstadoModal = modalEstado,
+    nuevoTipoDocumento: TipoDocumentoModal = modalTipoDocumento,
+  ) => {
+    if (!modalContext) return;
+    setModalEstado(nuevoEstado);
+    setModalTipoDocumento(nuevoTipoDocumento);
+    setModalLoading(true);
+    try {
+      const { rows, resumen } = await cargarModal(
+        modalMode,
+        modalContext,
+        nuevoEstado,
+        nuevoTipoDocumento,
+      );
+      setDetalleRows(rows);
+      setModalResumen(resumen);
+    } catch (error) {
+      console.error("Error recargando detalle", error);
+      setDetalleRows([]);
     } finally {
       setModalLoading(false);
     }
@@ -355,51 +455,34 @@ export default function ReporteFinancieroConsolidadoPage() {
       console.error("handleBarClick: mes inválido recibido:", data?.mes, data);
       return;
     }
-    const qs = new URLSearchParams({
-      desde: periodo.desdeMes,
-      hasta: periodo.hastaMes,
-    });
-    if (centroCostos) qs.set("centro_costos", centroCostos);
-    await abrirModal({
-      mode: tipo,
-      title:
-        tipo === "ingresos"
-          ? `Movimientos de ingresos - ${periodo.mesLabel}`
-          : `Facturas de compra - ${periodo.mesLabel}`,
-      subtitle:
-        tipo === "ingresos"
-          ? "Incluye facturas y notas crédito del mes."
-          : "Detalle de compras y gastos del mes.",
-      params: qs,
-    });
+    await abrirModalConContexto(
+      tipo,
+      { kind: "mes", mes: periodo.mesLabel },
+      tipo === "ingresos"
+        ? `Movimientos de ingresos - ${periodo.mesLabel}`
+        : `Facturas de compra - ${periodo.mesLabel}`,
+      tipo === "ingresos"
+        ? "Incluye facturas y notas crédito del mes."
+        : "Detalle de compras y gastos del mes.",
+    );
   };
 
   const handleClienteClick = async (nombre: string) => {
-    const qs = new URLSearchParams();
-    if (fechaDesde) qs.set("desde", fechaDesde);
-    if (fechaHasta) qs.set("hasta", fechaHasta);
-    if (centroCostos) qs.set("centro_costos", centroCostos);
-    qs.set("cliente", nombre);
-    await abrirModal({
-      mode: "ingresos",
-      title: `Movimientos de ingresos - ${nombre}`,
-      subtitle: "Facturas y notas crédito del cliente según filtros.",
-      params: qs,
-    });
+    await abrirModalConContexto(
+      "ingresos",
+      { kind: "cliente", nombre },
+      `Movimientos de ingresos - ${nombre}`,
+      "Facturas y notas crédito del cliente según filtros.",
+    );
   };
 
   const handleProveedorClick = async (nombre: string) => {
-    const qs = new URLSearchParams();
-    if (fechaDesde) qs.set("desde", fechaDesde);
-    if (fechaHasta) qs.set("hasta", fechaHasta);
-    if (centroCostos) qs.set("centro_costos", centroCostos);
-    qs.set("proveedor", nombre);
-    await abrirModal({
-      mode: "egresos",
-      title: `Compras a proveedor - ${nombre}`,
-      subtitle: "Facturas de compra según filtros.",
-      params: qs,
-    });
+    await abrirModalConContexto(
+      "egresos",
+      { kind: "proveedor", nombre },
+      `Compras a proveedor - ${nombre}`,
+      "Facturas de compra según filtros.",
+    );
   };
 
   const ingresosNetos = toNum(kpis?.ingresos_netos ?? kpis?.ingresos);
@@ -883,6 +966,14 @@ export default function ReporteFinancieroConsolidadoPage() {
           resumen={modalResumen}
           loading={modalLoading}
           onClose={cerrarModal}
+          modalContext={modalContext}
+          proveedorDatos={proveedorDatos}
+          estado={modalEstado}
+          tipoDocumento={modalTipoDocumento}
+          sortBy={modalSortBy}
+          onEstadoChange={(st) => recargarModal(st, modalTipoDocumento)}
+          onTipoDocumentoChange={(tipo) => recargarModal(modalEstado, tipo)}
+          onSortByChange={setModalSortBy}
         />
       </div>
     </div>
@@ -1140,6 +1231,14 @@ function DetalleModal({
   resumen,
   loading,
   onClose,
+  modalContext,
+  proveedorDatos,
+  estado,
+  tipoDocumento,
+  sortBy,
+  onEstadoChange,
+  onTipoDocumentoChange,
+  onSortByChange,
 }: {
   open: boolean;
   mode: ModalMode;
@@ -1149,9 +1248,54 @@ function DetalleModal({
   resumen?: any;
   loading?: boolean;
   onClose: () => void;
+  modalContext: ModalContext | null;
+  proveedorDatos: "siigo" | "alegra";
+  estado: EstadoModal;
+  tipoDocumento: TipoDocumentoModal;
+  sortBy: ModalSortBy;
+  onEstadoChange: (st: EstadoModal) => void;
+  onTipoDocumentoChange: (tipo: TipoDocumentoModal) => void;
+  onSortByChange: (sort: ModalSortBy) => void;
 }) {
-  if (!open) return null;
   const isIngresos = mode === "ingresos";
+
+  const rowsOrdenadas = useMemo(() => {
+    const arr = [...rows];
+    const nombreDe = (r: any) =>
+      String((isIngresos ? r.cliente_nombre : r.proveedor_nombre) || "");
+
+    arr.sort((a, b) => {
+      if (sortBy === "fecha_asc") {
+        return String(a.fecha || "").localeCompare(String(b.fecha || ""));
+      }
+      if (sortBy === "fecha_desc") {
+        return String(b.fecha || "").localeCompare(String(a.fecha || ""));
+      }
+      if (sortBy === "nombre_asc") {
+        return nombreDe(a).localeCompare(nombreDe(b));
+      }
+      return nombreDe(b).localeCompare(nombreDe(a));
+    });
+
+    return arr;
+  }, [rows, sortBy, isIngresos]);
+
+  const resumenEgresos = useMemo(() => {
+    if (isIngresos) return null;
+    const cantidad = rows.length;
+    const total = rows.reduce((acc, r) => acc + toNum(r.total), 0);
+    const pagado = rows.reduce((acc, r) => {
+      const p = Number.isFinite(Number(r.pagado_calc))
+        ? toNum(r.pagado_calc)
+        : toNum(r.total) - toNum(r.saldo);
+      return acc + p;
+    }, 0);
+    const saldo = rows.reduce((acc, r) => acc + toNum(r.saldo), 0);
+    return { cantidad, total, pagado, saldo };
+  }, [rows, isIngresos]);
+
+  if (!open) return null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-3 backdrop-blur-sm">
       <div
@@ -1217,7 +1361,89 @@ function DetalleModal({
             />
           </div>
         )}
+        {!isIngresos && resumenEgresos && (
+          <div className="grid shrink-0 gap-3 border-b border-slate-100 bg-white px-5 py-3 sm:grid-cols-4">
+            <ModalMetric label="Cantidad" value={resumenEgresos.cantidad} tone="slate" />
+            <ModalMetric label="Total" value={formatCurrency(resumenEgresos.total)} tone="slate" />
+            <ModalMetric label="Pagado" value={formatCurrency(resumenEgresos.pagado)} tone="green" />
+            <ModalMetric label="Saldo" value={formatCurrency(resumenEgresos.saldo)} tone="red" />
+          </div>
+        )}
+
         <div className="flex-1 overflow-auto p-4">
+          {modalContext && (
+            <div className="mb-4 space-y-3">
+              {!isIngresos &&
+                modalContext.kind === "mes" &&
+                proveedorDatos === "siigo" && (
+                  <div>
+                    <div className="mb-1 text-xs font-semibold text-slate-500">
+                      Tipo de documento
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {(
+                        ["todos", "factura", "documento_soporte"] as const
+                      ).map((tipo) => (
+                        <button
+                          key={tipo}
+                          onClick={() => onTipoDocumentoChange(tipo)}
+                          className={cx(
+                            "rounded-full border px-3 py-1 text-sm transition",
+                            tipoDocumento === tipo
+                              ? "border-slate-900 bg-slate-900 text-white"
+                              : "bg-white hover:bg-gray-100",
+                          )}
+                        >
+                          {labelTipoDocumento(tipo)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              <div>
+                <div className="mb-1 text-xs font-semibold text-slate-500">
+                  Estado
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(["total", "pagado", "pendiente", "parcial"] as const).map(
+                    (st) => (
+                      <button
+                        key={st}
+                        onClick={() => onEstadoChange(st)}
+                        className={cx(
+                          "rounded-full border px-3 py-1 text-sm transition",
+                          estado === st
+                            ? "border-blue-600 bg-blue-600 text-white"
+                            : "bg-white hover:bg-gray-100",
+                        )}
+                      >
+                        {labelEstadoModal(st)}
+                      </button>
+                    ),
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="mb-3 flex justify-end">
+            <select
+              value={sortBy}
+              onChange={(e) => onSortByChange(e.target.value as ModalSortBy)}
+              className="rounded-lg border bg-white px-3 py-2 text-sm"
+            >
+              <option value="fecha_desc">Fecha: más reciente primero</option>
+              <option value="fecha_asc">Fecha: más antigua primero</option>
+              <option value="nombre_asc">
+                {isIngresos ? "Cliente: A-Z" : "Proveedor: A-Z"}
+              </option>
+              <option value="nombre_desc">
+                {isIngresos ? "Cliente: Z-A" : "Proveedor: Z-A"}
+              </option>
+            </select>
+          </div>
+
           {loading ? (
             <div className="flex h-48 items-center justify-center text-sm text-slate-500">
               Cargando detalle…
@@ -1225,9 +1451,9 @@ function DetalleModal({
           ) : (
             <div className="overflow-auto rounded-2xl border border-slate-200">
               {isIngresos ? (
-                <IngresosTable rows={rows} />
+                <IngresosTable rows={rowsOrdenadas} />
               ) : (
-                <EgresosTable rows={rows} />
+                <EgresosTable rows={rowsOrdenadas} />
               )}
             </div>
           )}
@@ -1276,6 +1502,7 @@ function IngresosTable({ rows }: { rows: any[] }) {
           <th className="border-b border-slate-200 px-3 py-3">
             Centro de costo
           </th>
+          <th className="border-b border-slate-200 px-3 py-3">Estado</th>
           <th className="border-b border-slate-200 px-3 py-3 text-right">
             Subtotal
           </th>
@@ -1298,7 +1525,7 @@ function IngresosTable({ rows }: { rows: any[] }) {
         {rows.length === 0 ? (
           <tr>
             <td
-              colSpan={13}
+              colSpan={14}
               className="px-4 py-8 text-center text-sm text-slate-500"
             >
               No hay movimientos encontrados.
@@ -1312,6 +1539,12 @@ function IngresosTable({ rows }: { rows: any[] }) {
             const total = toNum(f.total);
             const pagado = toNum(f.valor_pagado ?? f.pagado);
             const pendiente = toNum(f.valor_pendiente ?? f.saldo);
+            const estadoPago = f.estado_pago_calc as
+              | "pagada"
+              | "pendiente"
+              | "parcial"
+              | "no_aplica"
+              | undefined;
             return (
               <tr
                 key={`${f.tipo_movimiento}-${f.documento || f.idfactura}-${i}`}
@@ -1349,6 +1582,24 @@ function IngresosTable({ rows }: { rows: any[] }) {
                 </td>
                 <td className="border-b border-slate-100 px-3 py-3 text-slate-700">
                   {f.centro_costo_nombre || "—"}
+                </td>
+                <td
+                  className={cx(
+                    "border-b border-slate-100 px-3 py-3 font-semibold",
+                    estadoPago === "pendiente"
+                      ? "text-red-600"
+                      : estadoPago === "parcial"
+                        ? "text-orange-600"
+                        : "text-slate-600",
+                  )}
+                >
+                  {estadoPago === "pagada"
+                    ? "Pagada"
+                    : estadoPago === "pendiente"
+                      ? "Pendiente"
+                      : estadoPago === "parcial"
+                        ? "Parcial"
+                        : "—"}
                 </td>
                 <td
                   className={cx(
@@ -1405,7 +1656,7 @@ function IngresosTable({ rows }: { rows: any[] }) {
 
 function EgresosTable({ rows }: { rows: any[] }) {
   return (
-    <table className="w-full min-w-[1080px] border-separate border-spacing-0 text-sm">
+    <table className="w-full min-w-[1180px] border-separate border-spacing-0 text-sm">
       <thead className="sticky top-0 z-10 bg-slate-100">
         <tr className="text-left text-slate-700">
           <th className="border-b border-slate-200 px-3 py-3">Proveedor</th>
@@ -1423,6 +1674,9 @@ function EgresosTable({ rows }: { rows: any[] }) {
             Total
           </th>
           <th className="border-b border-slate-200 px-3 py-3 text-right">
+            Pagado
+          </th>
+          <th className="border-b border-slate-200 px-3 py-3 text-right">
             Saldo
           </th>
         </tr>
@@ -1431,54 +1685,76 @@ function EgresosTable({ rows }: { rows: any[] }) {
         {rows.length === 0 ? (
           <tr>
             <td
-              colSpan={9}
+              colSpan={10}
               className="px-4 py-8 text-center text-sm text-slate-500"
             >
               No hay compras encontradas.
             </td>
           </tr>
         ) : (
-          rows.map((c, i) => (
-            <tr
-              key={`${c.idcompra || c.id}-${i}`}
-              className="transition hover:bg-slate-50"
-            >
-              <td className="border-b border-slate-100 px-3 py-3 text-slate-700">
-                {c.proveedor_nombre || "Sin proveedor"}
-              </td>
-              <td className="border-b border-slate-100 px-3 py-3 font-medium text-slate-800">
-                {c.idcompra || c.id}
-              </td>
-              <td className="border-b border-slate-100 px-3 py-3 text-slate-700">
-                {c.factura_proveedor || "—"}
-              </td>
-              <td className="border-b border-slate-100 px-3 py-3 text-slate-700">
-                {formatDateSafe(c.fecha)}
-              </td>
-              <td className="border-b border-slate-100 px-3 py-3 text-slate-700">
-                {formatDateSafe(c.vencimiento)}
-              </td>
-              <td className="border-b border-slate-100 px-3 py-3">
-                <span
-                  className={cx(
-                    "rounded-full px-2.5 py-1 text-xs font-bold",
-                    getCompraEstadoTone(c.estado, c.saldo),
-                  )}
-                >
-                  {c.estado || "—"}
-                </span>
-              </td>
-              <td className="border-b border-slate-100 px-3 py-3 text-slate-700">
-                {c.centro_costo_nombre || "—"}
-              </td>
-              <td className="border-b border-slate-100 px-3 py-3 text-right font-semibold text-slate-800">
-                {formatCurrency(c.total)}
-              </td>
-              <td className="border-b border-slate-100 px-3 py-3 text-right text-slate-700">
-                {formatCurrency(c.saldo)}
-              </td>
-            </tr>
-          ))
+          rows.map((c, i) => {
+            const estado = (c.estado_calc || "pendiente") as
+              | "pagado"
+              | "pendiente"
+              | "parcial";
+            const esPendiente = estado === "pendiente";
+            const esParcial = estado === "parcial";
+            const esAnomalia = !!c.anomalia_saldo_mayor_total;
+            const pagadoCalc = Number.isFinite(Number(c.pagado_calc))
+              ? toNum(c.pagado_calc)
+              : toNum(c.total) - toNum(c.saldo);
+
+            return (
+              <tr
+                key={`${c.factura || c.idcompra || c.id}-${i}`}
+                className={cx(
+                  "transition hover:bg-slate-50",
+                  esPendiente
+                    ? "text-red-600"
+                    : esParcial
+                      ? "text-orange-600"
+                      : "text-slate-700",
+                  esAnomalia && "font-semibold",
+                )}
+              >
+                <td className="border-b border-slate-100 px-3 py-3">
+                  {c.proveedor_nombre || "Sin proveedor"}
+                </td>
+                <td className="border-b border-slate-100 px-3 py-3 font-medium">
+                  {c.factura || c.idcompra || c.id || "—"}
+                </td>
+                <td className="border-b border-slate-100 px-3 py-3">
+                  {c.factura_proveedor || "—"}
+                </td>
+                <td className="border-b border-slate-100 px-3 py-3">
+                  {formatDateSafe(c.fecha)}
+                </td>
+                <td className="border-b border-slate-100 px-3 py-3">
+                  {formatDateSafe(c.vencimiento)}
+                </td>
+                <td className="border-b border-slate-100 px-3 py-3">
+                  {estado === "pagado"
+                    ? "Pagada"
+                    : estado === "parcial"
+                      ? "Parcial"
+                      : "Pendiente"}
+                  {esAnomalia ? " ⚠️" : ""}
+                </td>
+                <td className="border-b border-slate-100 px-3 py-3">
+                  {c.centro_costo_nombre || "—"}
+                </td>
+                <td className="border-b border-slate-100 px-3 py-3 text-right font-semibold">
+                  {formatCurrency(c.total)}
+                </td>
+                <td className="border-b border-slate-100 px-3 py-3 text-right">
+                  {formatCurrency(pagadoCalc)}
+                </td>
+                <td className="border-b border-slate-100 px-3 py-3 text-right">
+                  {formatCurrency(c.saldo)}
+                </td>
+              </tr>
+            );
+          })
         )}
       </tbody>
     </table>

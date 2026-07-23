@@ -43,6 +43,8 @@ type MovimientoVenta = {
   pendiente?: number;
   saldo?: number;
   public_url?: string;
+  retenciones_total?: number;
+  retenciones?: { type?: string; percentage?: number | null; value?: number }[] | null;
 };
 
 type ResumenMovimientos = {
@@ -156,6 +158,28 @@ function calcularPagadoPendiente(f: MovimientoVenta) {
   }
 
   return { pagado, pendiente };
+}
+
+// Suma de retenciones ya calculada en el backend (retenciones_total, excluye
+// autorretención). Para Siigo esto explica Total = Subtotal+Impuestos-esto;
+// para Alegra el Total no se ve afectado (siempre bruto), esto explica por
+// qué Pagado/Saldo no coincide con el Total en vez de explicar el Total.
+function retencionesTotal(f: MovimientoVenta): number {
+  return Number(f.retenciones_total || 0);
+}
+
+function retencionesTooltip(f: MovimientoVenta): string {
+  if (!Array.isArray(f.retenciones) || f.retenciones.length === 0) {
+    return "Sin retenciones aplicadas";
+  }
+
+  return f.retenciones
+    .filter((r) => !String(r.type || "").toLowerCase().includes("autorretencion"))
+    .map((r) => {
+      const pct = r.percentage !== null && r.percentage !== undefined ? ` (${r.percentage}%)` : "";
+      return `${r.type || "Retención"}${pct}: ${fmtCOP(Number(r.value || 0))}`;
+    })
+    .join("\n") || "Sin retenciones aplicadas (solo autorretención)";
 }
 
 type EstadoFiltroVentas = "todas" | "pagado" | "pendiente";
@@ -1328,6 +1352,7 @@ function MovimientosModal({
                   <th className="p-2 text-left">Doc. afectado</th>
                   <th className="p-2 text-right">Subtotal</th>
                   <th className="p-2 text-right">Impuestos</th>
+                  <th className="p-2 text-right">Retenciones</th>
                   <th className="p-2 text-right">Total</th>
                   <th className="p-2 text-right">Valor reporte</th>
                   <th className="p-2 text-right">Pagado</th>
@@ -1339,7 +1364,7 @@ function MovimientosModal({
               <tbody>
                 {rowsOrdenadas.length === 0 && (
                   <tr>
-                    <td colSpan={14} className="p-8 text-center text-slate-500">
+                    <td colSpan={15} className="p-8 text-center text-slate-500">
                       No hay movimientos para mostrar.
                     </td>
                   </tr>
@@ -1385,6 +1410,12 @@ function MovimientosModal({
                       </td>
                       <td className="p-2 text-right whitespace-nowrap">
                         {fmtCOP(impuestos)}
+                      </td>
+                      <td
+                        className="p-2 text-right whitespace-nowrap text-orange-700"
+                        title={retencionesTooltip(f)}
+                      >
+                        {retencionesTotal(f) > 0 ? `- ${fmtCOP(retencionesTotal(f))}` : "—"}
                       </td>
                       <td className="p-2 text-right font-semibold whitespace-nowrap">
                         {fmtCOP(Number(f.total || 0))}

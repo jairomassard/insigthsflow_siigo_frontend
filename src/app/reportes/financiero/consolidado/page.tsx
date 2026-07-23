@@ -186,6 +186,29 @@ function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
+// Mismo criterio que en ventas/page.tsx: retenciones_total ya excluye
+// autorretencion (no reduce lo que el cliente paga). Para Siigo explica
+// Total = Subtotal+Impuestos-esto; para Alegra (Total siempre bruto)
+// explica por que Pagado no es el 100% del Total.
+function retencionesTooltip(f: any): string {
+  const lista = Array.isArray(f?.retenciones) ? f.retenciones : [];
+  const detalle = lista.filter(
+    (r: any) => !String(r?.type || "").toLowerCase().includes("autorretencion"),
+  );
+
+  if (detalle.length === 0) return "Sin retenciones aplicadas";
+
+  return detalle
+    .map((r: any) => {
+      const pct =
+        r?.percentage !== null && r?.percentage !== undefined
+          ? ` (${r.percentage}%)`
+          : "";
+      return `${r?.type || "Retención"}${pct}: ${formatCurrency(toNum(r?.value))}`;
+    })
+    .join("\n");
+}
+
 export default function ReporteFinancieroConsolidadoPage() {
   const { permisos } = usePermisos();
   const tieneNomina = permisos.includes("ver_reporte_nomina");
@@ -1510,6 +1533,9 @@ function IngresosTable({ rows }: { rows: any[] }) {
             Impuestos
           </th>
           <th className="border-b border-slate-200 px-3 py-3 text-right">
+            Retenciones
+          </th>
+          <th className="border-b border-slate-200 px-3 py-3 text-right">
             Total
           </th>
           <th className="border-b border-slate-200 px-3 py-3 text-right">
@@ -1525,7 +1551,7 @@ function IngresosTable({ rows }: { rows: any[] }) {
         {rows.length === 0 ? (
           <tr>
             <td
-              colSpan={14}
+              colSpan={15}
               className="px-4 py-8 text-center text-sm text-slate-500"
             >
               No hay movimientos encontrados.
@@ -1537,6 +1563,7 @@ function IngresosTable({ rows }: { rows: any[] }) {
             const subtotal = toNum(f.subtotal);
             const impuestos = toNum(f.impuestos_total ?? f.impuestos);
             const total = toNum(f.total);
+            const retenciones = toNum(f.retenciones_total);
             const pagado = toNum(f.valor_pagado ?? f.pagado);
             const pendiente = toNum(f.valor_pendiente ?? f.saldo);
             const estadoPago = f.estado_pago_calc as
@@ -1616,6 +1643,12 @@ function IngresosTable({ rows }: { rows: any[] }) {
                   )}
                 >
                   {formatCurrency(impuestos)}
+                </td>
+                <td
+                  className="border-b border-slate-100 px-3 py-3 text-right text-orange-700"
+                  title={retencionesTooltip(f)}
+                >
+                  {retenciones > 0 ? `- ${formatCurrency(retenciones)}` : "—"}
                 </td>
                 <td
                   className={cx(

@@ -211,7 +211,8 @@ export default function CruceIVAReportPage() {
         <StatCard title="IVA Ventas"    value={kpis.iva_ventas}    icon={<TrendingUp size={15}/>}   color="indigo" />
         <StatCard title="IVA Compras"   value={kpis.iva_compras}   icon={<TrendingDown size={15}/>} color="red" />
         <StatCard title="ReteIVA Favor" value={kpis.reteiva_favor} icon={<DollarSign size={15}/>}  color="orange" />
-        <StatCard title="Neto a Pagar"  value={kpis.saldo_iva}     icon={<ArrowUpRight size={15}/>} color="emerald" highlight />
+        <StatCard title="Neto a Pagar"  value={kpis.saldo_iva}     icon={<ArrowUpRight size={15}/>} color="emerald" highlight
+          subtitle={kpis.iva_declarado_contabilidad != null ? `Declarado: ${formatCurrency(kpis.iva_declarado_contabilidad)}` : undefined} />
       </div>
 
       {/* GRÁFICOS */}
@@ -307,7 +308,9 @@ export default function CruceIVAReportPage() {
                 <th className="px-5 py-3 text-right">Base Compras</th>
                 <th className="px-5 py-3 text-right">IVA Compras</th>
                 <th className="px-5 py-3 text-right">ReteIVA (135517)</th>
-                <th className="px-5 py-3 text-right">Saldo Neto</th>
+                <th className="px-5 py-3 text-right">Saldo Neto (calculado)</th>
+                <th className="px-5 py-3 text-right">Declarado Contabilidad</th>
+                <th className="px-5 py-3 text-center">Estado</th>
                 <th className="px-5 py-3 text-center">Mes Presentación</th>
               </tr>
             </thead>
@@ -325,6 +328,14 @@ export default function CruceIVAReportPage() {
                       {formatCurrency(f.saldo_iva)}
                     </span>
                   </td>
+                  <td className="px-5 py-3 text-right text-slate-600">
+                    {f.iva_declarado_contabilidad != null ? formatCurrency(f.iva_declarado_contabilidad) : (
+                      <span className="text-slate-300 italic font-semibold">Sin cerrar</span>
+                    )}
+                  </td>
+                  <td className="px-5 py-3 text-center">
+                    <EstadoDeclaradoBadge saldoCalculado={f.saldo_iva} declarado={f.iva_declarado_contabilidad} />
+                  </td>
                   <td className="px-5 py-3 text-center">
                     <span className="text-[10px] bg-slate-100 text-slate-500 px-3 py-1 rounded-full uppercase font-black">{f.mes_presentacion}</span>
                   </td>
@@ -338,8 +349,32 @@ export default function CruceIVAReportPage() {
   );
 }
 
-// KPI CARD — una sola línea: icono | label | valor
-const StatCard = ({ title, value, icon, color, highlight = false }: any) => {
+// Compara el calculo independiente (transaccional) contra lo que
+// contabilidad cerro oficialmente (cuenta "IVA por pagar" contra la DIAN).
+// No son el mismo numero por diseno - la diferencia es el hallazgo de
+// auditoria que este reporte existe para mostrar, no para esconder.
+const EstadoDeclaradoBadge = ({ saldoCalculado, declarado }: { saldoCalculado: number; declarado: number | null | undefined }) => {
+  if (declarado == null) {
+    return <span className="text-[10px] font-black px-2.5 py-1 rounded-full uppercase bg-slate-100 text-slate-500">Sin cerrar</span>;
+  }
+  const diferencia = saldoCalculado - declarado;
+  const tolerancia = Math.max(1000, Math.abs(declarado) * 0.01);
+  const coincide = Math.abs(diferencia) <= tolerancia;
+  if (coincide) {
+    return <span className="text-[10px] font-black px-2.5 py-1 rounded-full uppercase bg-emerald-100 text-emerald-700">Coincide</span>;
+  }
+  return (
+    <span
+      className="text-[10px] font-black px-2.5 py-1 rounded-full uppercase bg-orange-100 text-orange-700"
+      title={`Diferencia: ${formatCurrency(diferencia)}`}
+    >
+      Diferencia {formatCurrency(diferencia)}
+    </span>
+  );
+};
+
+// KPI CARD — una sola línea: icono | label | valor (+ subtitulo opcional)
+const StatCard = ({ title, value, icon, color, highlight = false, subtitle }: any) => {
   const themes: any = {
     indigo: "text-indigo-600 bg-white border-slate-100",
     red:    "text-red-600 bg-white border-slate-100",
@@ -357,9 +392,16 @@ const StatCard = ({ title, value, icon, color, highlight = false }: any) => {
             {title}
           </p>
         </div>
-        <p className="text-base font-black tracking-tighter whitespace-nowrap shrink-0">
-          {formatCurrency(value || 0)}
-        </p>
+        <div className="text-right shrink-0">
+          <p className="text-base font-black tracking-tighter whitespace-nowrap">
+            {formatCurrency(value || 0)}
+          </p>
+          {subtitle && (
+            <p className={`text-[9px] font-bold whitespace-nowrap ${highlight ? 'text-indigo-100' : 'text-slate-400'}`}>
+              {subtitle}
+            </p>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

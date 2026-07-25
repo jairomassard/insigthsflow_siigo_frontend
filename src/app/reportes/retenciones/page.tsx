@@ -186,6 +186,13 @@ type Metadata = {
   nota_alcance?: string;
 };
 
+type ComprobanteCierre = {
+  comprobante: string;
+  fecha: string | null;
+  neto: number;
+  n_lineas: number;
+};
+
 // ---------------- PAGE ----------------
 export default function RetencionesReportPage() {
   useAuthGuard();
@@ -200,6 +207,7 @@ export default function RetencionesReportPage() {
   const [kpis, setKpis] = useState<Kpis>({});
   const [referenciasContables, setReferenciasContables] = useState<ReferenciasContables>({});
   const [metadata, setMetadata] = useState<Metadata>({});
+  const [comprobantesCierre, setComprobantesCierre] = useState<ComprobanteCierre[]>([]);
   const [fechaDesde, setFechaDesde] = useState("2026-01-01");
   const [fechaHasta, setFechaHasta] = useState("2026-12-31");
   const [loading, setLoading] = useState(false);
@@ -224,6 +232,7 @@ export default function RetencionesReportPage() {
       setKpis(res.kpis ?? {});
       setReferenciasContables(res.referencias_contables ?? {});
       setMetadata(res.metadata ?? {});
+      setComprobantesCierre(res.comprobantes_cierre_detectados ?? []);
     } catch (err) {
       console.error("Error consultando reporte de retenciones:", err);
     } finally {
@@ -581,6 +590,9 @@ export default function RetencionesReportPage() {
         </Card>
       )}
 
+      {/* COMPROBANTES DE CIERRE EXCLUIDOS (transparencia) */}
+      <ComprobantesCierrePanel comprobantes={comprobantesCierre} />
+
       {/* TENDENCIA MENSUAL */}
       <Card className="rounded-[2rem] shadow-xl border-none bg-white p-2">
         <CardHeader className="pb-0">
@@ -913,6 +925,60 @@ export default function RetencionesReportPage() {
 }
 
 // ---------------- SUBCOMPONENTES ----------------
+
+// InsightsFlow es una guia para el usuario, no la liquidacion tributaria
+// oficial: cuando el sistema detecta (por estructura, no por adivinar quien
+// es la DIAN o la tesoreria de cada ciudad) que un comprobante parece ser un
+// cierre/ajuste contable y lo excluye del calculo, se lo mostramos aqui para
+// que el usuario o su contador puedan revisarlo en vez de confiar a ciegas.
+const ComprobantesCierrePanel = ({ comprobantes }: { comprobantes: ComprobanteCierre[] }) => {
+  if (!comprobantes || comprobantes.length === 0) return null;
+
+  return (
+    <Card className="rounded-[2rem] shadow-lg border-none bg-white">
+      <CardContent className="p-5">
+        <div className="flex items-start gap-3 mb-3">
+          <div className="p-2 rounded-xl bg-amber-50 text-amber-600 mt-0.5">
+            <Info size={18} />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-black text-slate-800">
+              Comprobantes de cierre detectados y excluidos del cálculo
+            </p>
+            <p className="text-xs text-slate-500 mt-1">
+              El sistema identificó estos comprobantes como asientos de cierre/ajuste contable (no movimiento real del período)
+              y los excluyó de ReteFuente/ReteICA para que no distorsionen el total. Revísalos con tu contador — InsightsFlow
+              es una guía, no reemplaza la liquidación oficial.
+            </p>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="text-slate-400 font-black uppercase text-[10px] border-b">
+              <tr>
+                <th className="py-2 text-left">Comprobante</th>
+                <th className="py-2 text-left">Fecha</th>
+                <th className="py-2 text-right">Líneas</th>
+                <th className="py-2 text-right">Monto neto</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 font-bold">
+              {comprobantes.map((c, i) => (
+                <tr key={`${c.comprobante}-${i}`}>
+                  <td className="py-2 text-slate-700 font-mono">{c.comprobante}</td>
+                  <td className="py-2 text-slate-500">{c.fecha}</td>
+                  <td className="py-2 text-right text-slate-500">{c.n_lineas}</td>
+                  <td className="py-2 text-right text-slate-800">{formatCurrency(c.neto)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
 const TipoBadge = ({ tipo }: { tipo: string }) => {
   const map: Record<string, string> = {
     ReteFuente: "bg-indigo-100 text-indigo-700",

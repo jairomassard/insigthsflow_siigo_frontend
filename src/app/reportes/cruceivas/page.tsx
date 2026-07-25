@@ -19,7 +19,7 @@ import {
   Pie,
   LabelList
 } from "recharts";
-import { TrendingUp, TrendingDown, DollarSign, FileText, ArrowUpRight, RefreshCcw, Search, CheckCircle2 } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, FileText, ArrowUpRight, RefreshCcw, Search, CheckCircle2, Info } from "lucide-react";
 
 // --- HELPERS DE FORMATO ---
 function abreviar(valor: number): string {
@@ -94,6 +94,7 @@ export default function CruceIVAReportPage() {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [proveedorDatos, setProveedorDatos] = useState<"siigo" | "alegra">("siigo");
+  const [comprobantesCierre, setComprobantesCierre] = useState<any[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = async () => {
@@ -103,6 +104,7 @@ export default function CruceIVAReportPage() {
       setSeries(res.series ?? []);
       setKpis(res.kpis ?? {});
       setAgrupadas(res.series_agrupadas?.[modo] ?? []);
+      setComprobantesCierre(res.comprobantes_cierre_detectados ?? []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -292,6 +294,9 @@ export default function CruceIVAReportPage() {
         </Card>
       </div>
 
+      {/* COMPROBANTES DE CIERRE EXCLUIDOS (transparencia) */}
+      <ComprobantesCierrePanel comprobantes={comprobantesCierre} />
+
       {/* TABLA DE LIQUIDACIÓN */}
       <Card className="rounded-[1.5rem] shadow-2xl border-none overflow-hidden bg-white">
         <div className="bg-slate-900 text-white px-5 py-3 flex justify-between items-center">
@@ -370,6 +375,59 @@ const EstadoDeclaradoBadge = ({ saldoCalculado, declarado }: { saldoCalculado: n
     >
       Diferencia {formatCurrency(diferencia)}
     </span>
+  );
+};
+
+// InsightsFlow es una guia para el usuario, no la liquidacion tributaria
+// oficial: cuando el sistema detecta (por estructura, no por adivinar quien
+// es la DIAN de cada cliente) que un comprobante parece ser un cierre/ajuste
+// contable y lo excluye del calculo, se lo mostramos aqui para que el
+// usuario o su contador puedan revisarlo en vez de confiar a ciegas.
+const ComprobantesCierrePanel = ({ comprobantes }: { comprobantes: any[] }) => {
+  if (!comprobantes || comprobantes.length === 0) return null;
+
+  return (
+    <Card className="rounded-[1.5rem] shadow-lg border-none bg-white">
+      <CardContent className="p-5">
+        <div className="flex items-start gap-3 mb-3">
+          <div className="p-2 rounded-xl bg-amber-50 text-amber-600 mt-0.5">
+            <Info size={18} />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-black text-slate-800">
+              Comprobantes de cierre detectados y excluidos del cálculo
+            </p>
+            <p className="text-xs text-slate-500 mt-1">
+              El sistema identificó estos comprobantes como asientos de cierre/ajuste contable (no movimiento real del período)
+              y los excluyó de IVA Ventas/Compras/ReteIVA para que no distorsionen el total. Revísalos con tu contador —
+              InsightsFlow es una guía, no reemplaza la liquidación oficial.
+            </p>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="text-slate-400 font-black uppercase text-[10px] border-b">
+              <tr>
+                <th className="py-2 text-left">Comprobante</th>
+                <th className="py-2 text-left">Fecha</th>
+                <th className="py-2 text-right">Líneas</th>
+                <th className="py-2 text-right">Monto neto</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 font-bold">
+              {comprobantes.map((c, i) => (
+                <tr key={`${c.comprobante}-${i}`}>
+                  <td className="py-2 text-slate-700 font-mono">{c.comprobante}</td>
+                  <td className="py-2 text-slate-500">{c.fecha}</td>
+                  <td className="py-2 text-right text-slate-500">{c.n_lineas}</td>
+                  <td className="py-2 text-right text-slate-800">{formatCurrency(c.neto)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 

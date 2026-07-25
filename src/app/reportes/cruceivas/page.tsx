@@ -95,6 +95,7 @@ export default function CruceIVAReportPage() {
   const [uploading, setUploading] = useState(false);
   const [proveedorDatos, setProveedorDatos] = useState<"siigo" | "alegra">("siigo");
   const [comprobantesCierre, setComprobantesCierre] = useState<any[]>([]);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = async () => {
@@ -105,8 +106,13 @@ export default function CruceIVAReportPage() {
       setKpis(res.kpis ?? {});
       setAgrupadas(res.series_agrupadas?.[modo] ?? []);
       setComprobantesCierre(res.comprobantes_cierre_detectados ?? []);
+      setFetchError(null);
     } catch (err) {
       console.error(err);
+      // No borramos los datos anteriores (evita que la pantalla quede vacía),
+      // pero SI avisamos que lo que se ve puede estar desactualizado -
+      // antes fallaba en silencio y parecia que el filtro de fecha no servia.
+      setFetchError("No se pudo actualizar el reporte con los filtros actuales. Los datos mostrados pueden estar desactualizados.");
     } finally {
       setLoading(false);
     }
@@ -173,6 +179,13 @@ export default function CruceIVAReportPage() {
           </p>
         </div>
       </div>
+
+      {/* ERROR DE CARGA */}
+      {fetchError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-5 py-3 rounded-2xl text-xs font-bold">
+          {fetchError}
+        </div>
+      )}
 
       {/* FILTROS */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-white px-5 py-3 rounded-[1.5rem] border shadow-sm">

@@ -213,6 +213,7 @@ export default function RetencionesReportPage() {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [proveedorDatos, setProveedorDatos] = useState<"siigo" | "alegra">("siigo");
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = async () => {
@@ -233,8 +234,12 @@ export default function RetencionesReportPage() {
       setReferenciasContables(res.referencias_contables ?? {});
       setMetadata(res.metadata ?? {});
       setComprobantesCierre(res.comprobantes_cierre_detectados ?? []);
+      setFetchError(null);
     } catch (err) {
       console.error("Error consultando reporte de retenciones:", err);
+      // No borramos los datos anteriores, pero avisamos - antes fallaba en
+      // silencio y la pantalla se veia vacia sin explicar por que.
+      setFetchError("No se pudo actualizar el reporte con los filtros actuales. Los datos mostrados pueden estar desactualizados.");
     } finally {
       setLoading(false);
     }
@@ -457,6 +462,13 @@ export default function RetencionesReportPage() {
           </p>
         </div>
       </div>
+
+      {/* ERROR DE CARGA */}
+      {fetchError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-5 py-3 rounded-2xl text-xs font-bold">
+          {fetchError}
+        </div>
+      )}
 
       {/* FILTROS */}
       <div className="flex flex-wrap gap-4 bg-white p-4 rounded-[2rem] border shadow-sm items-end">

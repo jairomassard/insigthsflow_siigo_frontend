@@ -77,6 +77,71 @@ function abreviar(valor: number): string {
   return `${Math.round(n)}`;
 }
 
+// Para barras horizontales: si el texto del valor cabe dentro de la barra
+// (barra grande/cercana al maximo), se dibuja adentro alineado a la derecha
+// en blanco; si no cabe (barra chica), se dibuja afuera como antes. Evita
+// que las barras mas grandes se vean con el numero flotando fuera del
+// grafico. El ancho de texto se estima por cantidad de caracteres (no hay
+// medicion real de canvas disponible aqui), con margen suficiente para no
+// recortar el texto.
+function SmartBarLabel({
+  x,
+  y,
+  width,
+  height,
+  value,
+  formatter,
+}: {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  value?: any;
+  formatter: (v: any) => string;
+}) {
+  if (value === undefined || value === null) return null;
+  if (x === undefined || y === undefined || width === undefined || height === undefined) {
+    return null;
+  }
+
+  const texto = formatter(value);
+  const fontSize = 11;
+  const padding = 8;
+  const anchoEstimado = String(texto).length * fontSize * 0.62 + padding * 2;
+  const cabeAdentro = width >= anchoEstimado;
+  const cy = y + height / 2;
+
+  if (cabeAdentro) {
+    return (
+      <text
+        x={x + width - padding}
+        y={cy}
+        textAnchor="end"
+        dominantBaseline="central"
+        fill="#ffffff"
+        fontSize={fontSize}
+        fontWeight={700}
+      >
+        {texto}
+      </text>
+    );
+  }
+
+  return (
+    <text
+      x={x + width + 6}
+      y={cy}
+      textAnchor="start"
+      dominantBaseline="central"
+      fill="#475569"
+      fontSize={fontSize}
+      fontWeight={600}
+    >
+      {texto}
+    </text>
+  );
+}
+
 function getClienteNombre(cliente: Cliente): string {
   return String(cliente?.nombre || cliente?.cliente || cliente?.label || "").trim();
 }
@@ -460,8 +525,9 @@ export default function ReporteVendedoresPage() {
                 >
                   <LabelList
                     dataKey="total"
-                    position="right"
-                    formatter={(v: any) => abreviar(Number(v || 0))}
+                    content={(props: any) => (
+                      <SmartBarLabel {...props} formatter={(v: any) => abreviar(Number(v || 0))} />
+                    )}
                   />
                 </Bar>
               </BarChart>

@@ -298,7 +298,7 @@ export default function ReporteCxCPage() {
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-9">
             <KpiCard
               title="Facturas vivas"
-              value={resumen.facturas_vivas ?? 0}
+              value={String(resumen.facturas_vivas ?? 0)}
               tone="slate"
               helper="Facturas con saldo pendiente."
               onSelect={() =>

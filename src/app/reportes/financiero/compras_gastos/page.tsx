@@ -64,6 +64,12 @@ interface CentroCosto {
   nombre: string;
 }
 
+interface RetencionDetalle {
+  type?: string;
+  percentage?: number | null;
+  value?: number;
+}
+
 interface FacturaDetalle {
   id?: number;
   proveedor_nombre: string;
@@ -79,6 +85,10 @@ interface FacturaDetalle {
   anomalia_saldo_mayor_total?: boolean;
   centro_costo_nombre?: string;
   tipo_documento?: TipoDocumentoModal | "otro";
+  subtotal?: number;
+  impuestos?: number;
+  retencion_total?: number;
+  retenciones?: RetencionDetalle[] | null;
 }
 
 interface TopProveedorValor {
@@ -144,6 +154,33 @@ function nombreProveedorSafe(value: unknown): string {
 
 function formatCurrency(valor: number): string {
   return `$ ${Math.round(Number(valor || 0)).toLocaleString("es-CO")}`;
+}
+
+// Desglose informativo (Subtotal/Impuestos/Retenciones): puramente para que el
+// usuario vea qué retenciones se le practicaron a cada factura de compra. NO
+// participa en el cálculo de saldo/pagado/pendiente, que sigue usando
+// total/retencion_total tal cual el backend ya los calculaba antes de esto.
+function retencionesTotalCompra(f: FacturaDetalle): number {
+  if (Array.isArray(f.retenciones) && f.retenciones.length > 0) {
+    return f.retenciones.reduce((acc, r) => acc + Number(r.value || 0), 0);
+  }
+  return Number(f.retencion_total || 0);
+}
+
+function retencionesTooltipCompra(f: FacturaDetalle): string {
+  if (!Array.isArray(f.retenciones) || f.retenciones.length === 0) {
+    return "Sin retenciones aplicadas";
+  }
+
+  return (
+    f.retenciones
+      .map((r) => {
+        const pct =
+          r.percentage !== null && r.percentage !== undefined ? ` (${r.percentage}%)` : "";
+        return `${r.type || "Retención"}${pct}: ${formatCurrency(Number(r.value || 0))}`;
+      })
+      .join("\n") || "Sin retenciones aplicadas"
+  );
 }
 
 function abreviar(valor: number): string {
@@ -1293,6 +1330,9 @@ export default function ReporteFinancieroComprasGastosPage() {
                         "Vencimiento",
                         "Estado",
                         "Centro de Costo",
+                        "Subtotal",
+                        "Impuestos",
+                        "Retenciones",
                         "Total",
                         "Pagado",
                         "Saldo",
@@ -1336,6 +1376,20 @@ export default function ReporteFinancieroComprasGastosPage() {
                             {esAnomalia ? " ⚠️" : ""}
                           </td>
                           <td className="p-2">{r.centro_costo_nombre || "—"}</td>
+                          <td className="p-2 text-right whitespace-nowrap">
+                            {formatCurrency(safeNumber(r.subtotal))}
+                          </td>
+                          <td className="p-2 text-right whitespace-nowrap">
+                            {formatCurrency(safeNumber(r.impuestos))}
+                          </td>
+                          <td
+                            className="p-2 text-right whitespace-nowrap text-orange-600"
+                            title={retencionesTooltipCompra(r)}
+                          >
+                            {retencionesTotalCompra(r) > 0
+                              ? `- ${formatCurrency(retencionesTotalCompra(r))}`
+                              : "—"}
+                          </td>
                           <td className="p-2 text-right">{formatCurrency(safeNumber(r.total))}</td>
                           <td className="p-2 text-right">{formatCurrency(pagadoCalc)}</td>
                           <td className="p-2 text-right">{formatCurrency(safeNumber(r.saldo))}</td>

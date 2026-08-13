@@ -642,6 +642,9 @@ export default function ReporteFinancieroComprasGastosPage() {
   const modalResumen = useMemo(() => {
     const cantidad = modalRows.length;
     const total = modalRows.reduce((acc, r) => acc + safeNumber(r.total), 0);
+    const subtotal = modalRows.reduce((acc, r) => acc + safeNumber(r.subtotal), 0);
+    const impuestos = modalRows.reduce((acc, r) => acc + safeNumber(r.impuestos), 0);
+    const retenciones = modalRows.reduce((acc, r) => acc + retencionesTotalCompra(r), 0);
 
     const pagado = modalRows.reduce((acc, r) => {
       const pagadoCalc = Number.isFinite(Number(r.pagado_calc))
@@ -653,7 +656,7 @@ export default function ReporteFinancieroComprasGastosPage() {
 
     const saldo = modalRows.reduce((acc, r) => acc + safeNumber(r.saldo), 0);
 
-    return { cantidad, total, pagado, saldo };
+    return { cantidad, total, subtotal, impuestos, retenciones, pagado, saldo };
   }, [modalRows]);
 
   const modalRowsOrdenadas = useMemo(() => {
@@ -1271,11 +1274,32 @@ export default function ReporteFinancieroComprasGastosPage() {
                 </div>
               )}
 
-              <div className="mb-3 grid grid-cols-4 gap-2">
+              <div className="mb-3 grid grid-cols-4 gap-2 lg:grid-cols-7">
                 <div className="rounded-xl border bg-gray-50 p-2">
                   <div className="text-xs text-gray-500">Cantidad</div>
                   <div className="text-base font-bold">
                     {modalResumen.cantidad.toLocaleString("es-CO")}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border bg-gray-50 p-2">
+                  <div className="text-xs text-gray-500">Subtotal</div>
+                  <div className="text-base font-bold text-slate-700">
+                    {formatCurrency(modalResumen.subtotal)}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border bg-gray-50 p-2">
+                  <div className="text-xs text-gray-500">Impuestos</div>
+                  <div className="text-base font-bold text-slate-700">
+                    {formatCurrency(modalResumen.impuestos)}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border bg-gray-50 p-2">
+                  <div className="text-xs text-gray-500">Retenciones</div>
+                  <div className="text-base font-bold text-orange-600">
+                    {modalResumen.retenciones > 0 ? `- ${formatCurrency(modalResumen.retenciones)}` : "$ 0"}
                   </div>
                 </div>
 

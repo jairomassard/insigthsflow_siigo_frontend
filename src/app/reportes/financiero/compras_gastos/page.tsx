@@ -183,6 +183,34 @@ function retencionesTooltipCompra(f: FacturaDetalle): string {
   );
 }
 
+// Agrupa por familia de retención en vez de por etiqueta exacta (que varía
+// mucho: "ReteICA 9.66" vs "RTEICA (12,5X1.000)" vs "Reteica" son la misma
+// familia). Confirmado con los datos reales de Siigo y Alegra: todo lo que
+// no es ReteICA/ReteIVA cae en la categoría Retefuente - Alegra la nombra
+// por concepto ("Honorarios", "Servicios en general", "Arrendamiento...")
+// en vez de decir literalmente "Retefuente", pero es la misma familia.
+type FamiliaRetencion = "reteica" | "reteiva" | "retefuente";
+
+function familiaRetencion(tipo: string | undefined | null): FamiliaRetencion {
+  const t = String(tipo || "").toUpperCase();
+  if (t.includes("ICA")) return "reteica";
+  if (t.includes("IVA")) return "reteiva";
+  return "retefuente";
+}
+
+function sumaRetencionesPorFamilia(rows: FacturaDetalle[]) {
+  const totales = { reteica: 0, reteiva: 0, retefuente: 0 };
+
+  for (const r of rows) {
+    if (!Array.isArray(r.retenciones)) continue;
+    for (const item of r.retenciones) {
+      totales[familiaRetencion(item.type)] += Number(item.value || 0);
+    }
+  }
+
+  return totales;
+}
+
 function abreviar(valor: number): string {
   const n = Number(valor || 0);
   const abs = Math.abs(n);
@@ -645,6 +673,7 @@ export default function ReporteFinancieroComprasGastosPage() {
     const subtotal = modalRows.reduce((acc, r) => acc + safeNumber(r.subtotal), 0);
     const impuestos = modalRows.reduce((acc, r) => acc + safeNumber(r.impuestos), 0);
     const retenciones = modalRows.reduce((acc, r) => acc + retencionesTotalCompra(r), 0);
+    const retencionesPorFamilia = sumaRetencionesPorFamilia(modalRows);
 
     const pagado = modalRows.reduce((acc, r) => {
       const pagadoCalc = Number.isFinite(Number(r.pagado_calc))
@@ -656,7 +685,7 @@ export default function ReporteFinancieroComprasGastosPage() {
 
     const saldo = modalRows.reduce((acc, r) => acc + safeNumber(r.saldo), 0);
 
-    return { cantidad, total, subtotal, impuestos, retenciones, pagado, saldo };
+    return { cantidad, total, subtotal, impuestos, retenciones, retencionesPorFamilia, pagado, saldo };
   }, [modalRows]);
 
   const modalRowsOrdenadas = useMemo(() => {
@@ -1324,6 +1353,37 @@ export default function ReporteFinancieroComprasGastosPage() {
                   </div>
                 </div>
               </div>
+
+              {modalResumen.retenciones > 0 && (
+                <div className="mb-3 grid grid-cols-3 gap-2">
+                  <div className="rounded-xl border border-orange-100 bg-orange-50/40 p-2">
+                    <div className="text-xs text-gray-500">ReteICA</div>
+                    <div className="text-base font-bold text-orange-600">
+                      {modalResumen.retencionesPorFamilia.reteica > 0
+                        ? `- ${formatCurrency(modalResumen.retencionesPorFamilia.reteica)}`
+                        : "$ 0"}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-orange-100 bg-orange-50/40 p-2">
+                    <div className="text-xs text-gray-500">Retefuente</div>
+                    <div className="text-base font-bold text-orange-600">
+                      {modalResumen.retencionesPorFamilia.retefuente > 0
+                        ? `- ${formatCurrency(modalResumen.retencionesPorFamilia.retefuente)}`
+                        : "$ 0"}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-orange-100 bg-orange-50/40 p-2">
+                    <div className="text-xs text-gray-500">ReteIVA</div>
+                    <div className="text-base font-bold text-orange-600">
+                      {modalResumen.retencionesPorFamilia.reteiva > 0
+                        ? `- ${formatCurrency(modalResumen.retencionesPorFamilia.reteiva)}`
+                        : "$ 0"}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="mb-3 flex justify-end">
                 <select

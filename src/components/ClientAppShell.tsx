@@ -32,7 +32,15 @@ const SIDEBAR_PINNED_KEY = "insightflow_sidebar_pinned";
 function leerPinnedInicial(): boolean {
   if (typeof window === "undefined") return true;
   const saved = window.localStorage.getItem(SIDEBAR_PINNED_KEY);
-  return saved === null ? true : saved === "true";
+  if (saved !== null) return saved === "true";
+
+  // Sin preferencia guardada (primera visita): en celular el sidebar fijo
+  // apila el menu completo ARRIBA del reporte (la rejilla usa col-span-12
+  // para ambos por debajo del breakpoint md de Tailwind, 768px) - medido en
+  // un iPhone 13 real: ~1348px de menu antes de llegar al contenido. Por
+  // eso ahi arranca oculto por defecto; en tablet/desktop sigue fijo como
+  // siempre.
+  return window.innerWidth >= 768;
 }
 
 export default function ClientAppShell({ children }: { children: React.ReactNode }) {
@@ -411,22 +419,34 @@ export default function ClientAppShell({ children }: { children: React.ReactNode
   // flotante sobre el reporte, sin empujar el contenido. z-40 se deja por
   // debajo de los modales de los reportes (varios usan z-50 / z-[100]),
   // para que un modal abierto siempre gane sobre este overlay.
+  //
+  // onClick ademas de onMouseEnter: en tablet/touch no existe "hover", asi
+  // que sin esto, una vez oculto el sidebar no habia forma de volver a
+  // abrirlo con el dedo (bug reportado). El backdrop invisible es el cierre
+  // equivalente al "mouse leave" para touch (tocar fuera del sidebar).
   return (
     <div className="min-h-screen bg-white">
       <div
-        className="fixed left-0 top-0 z-30 flex h-screen w-3 items-center justify-center bg-black/10 transition-colors hover:bg-black/20"
+        className="fixed left-0 top-0 z-30 flex h-screen w-5 items-center justify-center bg-black/10 transition-colors hover:bg-black/20"
         onMouseEnter={() => setHovering(true)}
+        onClick={() => setHovering(true)}
       >
         <ChevronRight className="w-3 h-3 text-gray-500" />
       </div>
 
       {hovering && (
-        <aside
-          onMouseLeave={() => setHovering(false)}
-          className="fixed left-0 top-0 z-40 h-screen w-64 overflow-y-auto bg-black text-white shadow-2xl"
-        >
-          {sidebarContent}
-        </aside>
+        <>
+          <div
+            className="fixed inset-0 z-30"
+            onClick={() => setHovering(false)}
+          />
+          <aside
+            onMouseLeave={() => setHovering(false)}
+            className="fixed left-0 top-0 z-40 h-screen w-64 overflow-y-auto bg-black text-white shadow-2xl"
+          >
+            {sidebarContent}
+          </aside>
+        </>
       )}
 
       <section className="p-6 overflow-x-auto">{children}</section>

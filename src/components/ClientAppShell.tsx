@@ -353,8 +353,15 @@ export default function ClientAppShell({ children }: { children: React.ReactNode
   );
 
   const sidebarContent = (
-    <>
-      <div className="bg-white p-4 text-center flex items-center justify-between gap-2">
+    // flex-col + h-full: el nav del medio es lo unico que scrollea
+    // (flex-1 overflow-y-auto). Header y "Salir" quedan SIEMPRE visibles,
+    // sin importar cuantas secciones de reportes tenga el menu - antes
+    // "Salir" estaba al final de esa lista larga (~25 items incluyendo
+    // Reportes Especiales) dentro de un contenedor fixed en movil/tablet,
+    // y el usuario reporto no poder llegar a el (scroll poco confiable en
+    // touch real dentro de position:fixed + backdrop de cierre).
+    <div className="flex h-full flex-col">
+      <div className="shrink-0 bg-white p-4 text-center flex items-center justify-between gap-2">
         <div className="flex-1 min-w-0">
           {cliente?.logo_url ? (
             <img src={cliente.logo_url} alt="Logo" className="mx-auto max-h-16 object-contain" />
@@ -371,7 +378,7 @@ export default function ClientAppShell({ children }: { children: React.ReactNode
           {pinned ? <Pin className="w-4 h-4" /> : <PinOff className="w-4 h-4" />}
         </button>
       </div>
-      <nav className="space-y-6 p-4">
+      <nav className="flex-1 overflow-y-auto space-y-6 p-4">
         {visibleNavSections.map((section, sectionIndex) => (
           <div key={sectionIndex}>
             {section.title && (
@@ -393,17 +400,17 @@ export default function ClientAppShell({ children }: { children: React.ReactNode
             </div>
           </div>
         ))}
-        <div className="pt-6 px-3">
-          <LogoutButton />
-        </div>
       </nav>
-    </>
+      <div className="shrink-0 border-t border-gray-800 p-4">
+        <LogoutButton />
+      </div>
+    </div>
   );
 
   if (pinned) {
     return (
       <div className="min-h-screen grid grid-cols-12 bg-white">
-        <aside className="col-span-12 md:col-span-3 lg:col-span-2 bg-black text-white">
+        <aside className="col-span-12 md:col-span-3 lg:col-span-2 h-screen sticky top-0 bg-black text-white">
           {sidebarContent}
         </aside>
         <section className="col-span-12 md:col-span-9 lg:col-span-10 p-6 overflow-x-auto">
@@ -442,7 +449,7 @@ export default function ClientAppShell({ children }: { children: React.ReactNode
           />
           <aside
             onMouseLeave={() => setHovering(false)}
-            className="fixed left-0 top-0 z-40 h-screen w-64 overflow-y-auto bg-black text-white shadow-2xl"
+            className="fixed left-0 top-0 z-40 h-screen w-64 bg-black text-white shadow-2xl"
           >
             {sidebarContent}
           </aside>

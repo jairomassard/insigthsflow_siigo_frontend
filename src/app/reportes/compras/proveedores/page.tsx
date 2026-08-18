@@ -150,6 +150,14 @@ function sumaRetencionesPorFamilia(facturas: FacturaDetalle[]) {
   return totales;
 }
 
+// Pagado por factura: no viene precalculado del backend en este endpoint
+// (a diferencia de compras-gastos, que si trae pagado_calc) - se deriva
+// igual que el KPI de proveedor ya hace (total - saldo), asi el usuario
+// puede ver de donde sale un saldo parcial factura por factura.
+function pagadoCompra(f: FacturaDetalle): number {
+  return Math.max(Number(f.total || 0) - Number(f.saldo || 0), 0);
+}
+
 function resumenFinanciero(facturas: FacturaDetalle[]) {
   return {
     subtotal: facturas.reduce((acc, f) => acc + Number(f.subtotal || 0), 0),
@@ -770,6 +778,7 @@ export default function ReporteComprasProveedoresPage() {
                               <th className="px-2 py-1 text-right">Impuestos</th>
                               <th className="px-2 py-1 text-right">Retenciones</th>
                               <th className="px-2 py-1 text-right">Total</th>
+                              <th className="px-2 py-1 text-right">Pagado</th>
                               <th className="px-2 py-1 text-right">Saldo</th>
                             </tr>
                           </thead>
@@ -821,6 +830,9 @@ export default function ReporteComprasProveedoresPage() {
                                 </td>
                                 <td className="px-2 py-1 text-right">
                                   {formatMiles(f.total)}
+                                </td>
+                                <td className="px-2 py-1 text-right text-green-700">
+                                  {formatMiles(pagadoCompra(f))}
                                 </td>
                                 <td className="px-2 py-1 text-right">
                                   {formatMiles(f.saldo)}

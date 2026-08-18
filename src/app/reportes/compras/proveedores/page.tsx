@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { authFetch } from "@/lib/api";
 import { getDefaultYearToDateRange } from "@/lib/dateDefaults";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,6 +29,12 @@ interface ProveedorResumen {
   ultima_fecha: string;
 }
 
+interface RetencionDetalle {
+  type?: string;
+  percentage?: number | null;
+  value?: number;
+}
+
 interface FacturaDetalle {
   proveedor_identificacion: string;
   proveedor_nombre: string;
@@ -41,6 +47,9 @@ interface FacturaDetalle {
   factura_proveedor: string;
   estado: "pagado" | "pendiente" | "parcial";
   centro_costo_nombre?: string;
+  subtotal?: number;
+  impuestos?: number;
+  retenciones?: RetencionDetalle[] | null;
 }
 
 interface CentroCosto {
@@ -90,6 +99,64 @@ function abreviarNumero(valor: number): string {
 function formatMiles(valor: number | string): string {
   const n = typeof valor === "number" ? valor : parseFloat(valor || "0");
   return `$ ${n.toLocaleString("es-CO", { maximumFractionDigits: 0 })}`;
+}
+
+// Desglose informativo (Subtotal/Impuestos/Retenciones): mismo criterio ya
+// usado en compras_gastos/page.tsx. Puramente para mostrarle al usuario en
+// que se compone cada factura - no participa en total/saldo/estado, que
+// siguen calculandose igual que antes.
+function retencionesTotalCompra(f: FacturaDetalle): number {
+  if (!Array.isArray(f.retenciones)) return 0;
+  return f.retenciones.reduce((acc, r) => acc + Number(r.value || 0), 0);
+}
+
+function retencionesTooltipCompra(f: FacturaDetalle): string {
+  if (!Array.isArray(f.retenciones) || f.retenciones.length === 0) {
+    return "Sin retenciones aplicadas";
+  }
+
+  return (
+    f.retenciones
+      .map((r) => {
+        const pct =
+          r.percentage !== null && r.percentage !== undefined ? ` (${r.percentage}%)` : "";
+        return `${r.type || "Retención"}${pct}: ${formatMiles(Number(r.value || 0))}`;
+      })
+      .join("\n") || "Sin retenciones aplicadas"
+  );
+}
+
+// Agrupa por familia de retención (ReteICA/Retefuente/ReteIVA) en vez de por
+// etiqueta exacta - mismo criterio ya usado en compras_gastos/page.tsx.
+type FamiliaRetencion = "reteica" | "reteiva" | "retefuente";
+
+function familiaRetencion(tipo: string | undefined | null): FamiliaRetencion {
+  const t = String(tipo || "").toUpperCase();
+  if (t.includes("ICA")) return "reteica";
+  if (t.includes("IVA")) return "reteiva";
+  return "retefuente";
+}
+
+function sumaRetencionesPorFamilia(facturas: FacturaDetalle[]) {
+  const totales = { reteica: 0, reteiva: 0, retefuente: 0 };
+
+  for (const f of facturas) {
+    if (!Array.isArray(f.retenciones)) continue;
+    for (const r of f.retenciones) {
+      totales[familiaRetencion(r.type)] += Number(r.value || 0);
+    }
+  }
+
+  return totales;
+}
+
+function resumenFinanciero(facturas: FacturaDetalle[]) {
+  return {
+    subtotal: facturas.reduce((acc, f) => acc + Number(f.subtotal || 0), 0),
+    impuestos: facturas.reduce((acc, f) => acc + Number(f.impuestos || 0), 0),
+    retenciones: facturas.reduce((acc, f) => acc + retencionesTotalCompra(f), 0),
+    porFamilia: sumaRetencionesPorFamilia(facturas),
+  };
 }
 
 function formatCantidad(valor: number): string {
@@ -256,9 +323,21 @@ export default function ReporteComprasProveedoresPage() {
     )
     .sort((a, b) => b.total_compras - a.total_compras);
 
-  const facturasFiltradas = detalle.filter(
-    (f) => f.proveedor_identificacion === proveedorSeleccionado
-  );
+  // Agrupado una sola vez por proveedor - el endpoint ya trae subtotal/
+  // impuestos/retenciones por factura para TODOS los proveedores del
+  // periodo (no solo el top 15 del grafico), asi que cada tarjeta puede
+  // mostrar su propio desglose sin pedir nada adicional al backend.
+  const detallePorProveedor = useMemo(() => {
+    const map: Record<string, FacturaDetalle[]> = {};
+    for (const f of detalle) {
+      const key = f.proveedor_identificacion || "";
+      if (!map[key]) map[key] = [];
+      map[key].push(f);
+    }
+    return map;
+  }, [detalle]);
+
+  const facturasFiltradas = detallePorProveedor[proveedorSeleccionado] || [];
 
   if (loading) {
     return (
@@ -596,23 +675,75 @@ export default function ReporteComprasProveedoresPage() {
             </CardHeader>
 
             <CardContent>
-              <div className="space-y-1">
-                <p>
-                  Total Compras: <b>{formatMiles(p.total_compras)}</b>
-                </p>
-                <p>
-                  Total Pagado:{" "}
-                  <span className="text-green-700">
-                    {formatMiles(p.total_pagado)}
-                  </span>
-                </p>
-                <p>
-                  Saldo Pendiente:{" "}
-                  <span className="text-red-600">{formatMiles(p.total_saldo)}</span>
-                </p>
-                <p># Compras: {formatCantidad(p.num_compras)}</p>
-                <p>Última compra: {formatFecha(p.ultima_fecha)}</p>
-              </div>
+              {(() => {
+                const facturasProveedor = detallePorProveedor[p.proveedor_identificacion] || [];
+                const resumen = resumenFinanciero(facturasProveedor);
+                const seleccionado = proveedorSeleccionado === p.proveedor_identificacion;
+
+                return (
+                  <div className="space-y-1">
+                    <p>
+                      Subtotal: <b>{formatMiles(resumen.subtotal)}</b>
+                    </p>
+                    <p>Impuestos: {formatMiles(resumen.impuestos)}</p>
+                    <p
+                      className="text-orange-700"
+                      title={
+                        facturasProveedor.length === 1
+                          ? retencionesTooltipCompra(facturasProveedor[0])
+                          : undefined
+                      }
+                    >
+                      Retenciones:{" "}
+                      {resumen.retenciones > 0 ? `- ${formatMiles(resumen.retenciones)}` : "—"}
+                    </p>
+                    <p>
+                      Total Compras: <b>{formatMiles(p.total_compras)}</b>
+                    </p>
+                    <p>
+                      Total Pagado:{" "}
+                      <span className="text-green-700">
+                        {formatMiles(p.total_pagado)}
+                      </span>
+                    </p>
+                    <p>
+                      Saldo Pendiente:{" "}
+                      <span className="text-red-600">{formatMiles(p.total_saldo)}</span>
+                    </p>
+                    <p># Compras: {formatCantidad(p.num_compras)}</p>
+                    <p>Última compra: {formatFecha(p.ultima_fecha)}</p>
+
+                    {seleccionado && resumen.retenciones > 0 && (
+                      <div className="mt-2 grid grid-cols-3 gap-2 border-t pt-2 text-xs">
+                        <div>
+                          <div className="text-gray-500">ReteICA</div>
+                          <div className="font-semibold text-orange-700">
+                            {resumen.porFamilia.reteica > 0
+                              ? `- ${formatMiles(resumen.porFamilia.reteica)}`
+                              : "$ 0"}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-gray-500">Retefuente</div>
+                          <div className="font-semibold text-orange-700">
+                            {resumen.porFamilia.retefuente > 0
+                              ? `- ${formatMiles(resumen.porFamilia.retefuente)}`
+                              : "$ 0"}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-gray-500">ReteIVA</div>
+                          <div className="font-semibold text-orange-700">
+                            {resumen.porFamilia.reteiva > 0
+                              ? `- ${formatMiles(resumen.porFamilia.reteiva)}`
+                              : "$ 0"}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {proveedorSeleccionado === p.proveedor_identificacion &&
                 facturasFiltradas.length > 0 && (
@@ -635,6 +766,9 @@ export default function ReporteComprasProveedoresPage() {
                               <th className="px-2 py-1 text-left">Vencimiento</th>
                               <th className="px-2 py-1 text-left">Estado</th>
                               <th className="px-2 py-1 text-left">Centro de Costo</th>
+                              <th className="px-2 py-1 text-right">Subtotal</th>
+                              <th className="px-2 py-1 text-right">Impuestos</th>
+                              <th className="px-2 py-1 text-right">Retenciones</th>
                               <th className="px-2 py-1 text-right">Total</th>
                               <th className="px-2 py-1 text-right">Saldo</th>
                             </tr>
@@ -670,6 +804,20 @@ export default function ReporteComprasProveedoresPage() {
                                 </td>
                                 <td className="px-2 py-1">
                                   {f.centro_costo_nombre || "—"}
+                                </td>
+                                <td className="px-2 py-1 text-right">
+                                  {formatMiles(f.subtotal || 0)}
+                                </td>
+                                <td className="px-2 py-1 text-right">
+                                  {formatMiles(f.impuestos || 0)}
+                                </td>
+                                <td
+                                  className="px-2 py-1 text-right text-orange-700"
+                                  title={retencionesTooltipCompra(f)}
+                                >
+                                  {retencionesTotalCompra(f) > 0
+                                    ? `- ${formatMiles(retencionesTotalCompra(f))}`
+                                    : "—"}
                                 </td>
                                 <td className="px-2 py-1 text-right">
                                   {formatMiles(f.total)}

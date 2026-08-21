@@ -441,20 +441,25 @@ export default function ClientAppShell({ children }: { children: React.ReactNode
         <ChevronRight className="w-3 h-3 text-gray-500" />
       </div>
 
-      {hovering && (
-        <>
-          <div
-            className="fixed inset-0 z-30"
-            onClick={() => setHovering(false)}
-          />
-          <aside
-            onMouseLeave={() => setHovering(false)}
-            className="fixed left-0 top-0 z-40 h-screen w-64 bg-black text-white shadow-2xl"
-          >
-            {sidebarContent}
-          </aside>
-        </>
-      )}
+      {/* El aside queda siempre montado (a diferencia de antes, que se
+          montaba/desmontaba con `{hovering && ...}`) para poder animar la
+          entrada/salida con transform en vez de un aparecer/desaparecer
+          instantáneo. pointer-events-none en el backdrop cuando está oculto
+          evita que bloquee clicks sobre el reporte de fondo. */}
+      <div
+        className={`fixed inset-0 z-30 transition-opacity duration-300 ${
+          hovering ? "opacity-100" : "pointer-events-none opacity-0"
+        }`}
+        onClick={() => setHovering(false)}
+      />
+      <aside
+        onMouseLeave={() => setHovering(false)}
+        className={`fixed left-0 top-0 z-40 h-screen w-64 bg-black text-white shadow-2xl transition-transform duration-300 ease-in-out ${
+          hovering ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        {sidebarContent}
+      </aside>
 
       <section className="p-6 overflow-x-auto">{children}</section>
     </div>

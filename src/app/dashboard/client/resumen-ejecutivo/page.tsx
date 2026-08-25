@@ -3,9 +3,12 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { authFetch } from "@/lib/api";
+import { authFetch, API, getToken } from "@/lib/api";
+import { getWhoAmI } from "@/lib/authInfo";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   ResponsiveContainer,
   LineChart,
@@ -37,6 +40,7 @@ import {
   Receipt,
   ArrowRight,
   CalendarClock,
+  PiggyBank,
 } from "lucide-react";
 
 /* =========================================================
@@ -78,7 +82,9 @@ type KPIRunway = {
 
 type Kpis = {
   ventas_netas: Variacion;
+  egresos_totales: Variacion;
   ebitda: Variacion;
+  utilidad_neta: Variacion;
   utilidad_operativa: Variacion;
   eficiencia_operativa: KPIEficiencia;
   caja_disponible: KPICaja;
@@ -89,8 +95,12 @@ type SerieMensual = {
   label: string;
   ventas: number;
   ebitda: number;
+  utilidad_neta: number;
   eficiencia_operativa: number;
+  costos_venta: number;
   gastos_operacionales: number;
+  gastos_no_operacionales: number;
+  egresos_totales: number;
   dep_amort: number;
 };
 
@@ -165,7 +175,9 @@ type DashboardMetadata = {
 type IndicadorVista =
   | "eficiencia_operativa"
   | "ebitda"
+  | "utilidad_neta"
   | "ventas_netas"
+  | "egresos_totales"
   | "caja_disponible"
   | "autonomia_caja";
 
@@ -186,6 +198,10 @@ type DetalleIndicador = {
   chartColor?: string;
   chartTipo?: "dinero" | "porcentaje";
   emptyChartText?: string;
+  // Aclaración de dónde sale el número, solo cuando puede confundirse con
+  // otro reporte que mide algo distinto (ej. Egresos totales vs. el
+  // reporte de Compras y Gastos - misma "palabra", fuente distinta).
+  notaFuente?: string;
 };
 
 type KpiCardItem = {
@@ -597,6 +613,145 @@ export default function DashboardResumenEjecutivoPage() {
   const [cxpPendienteAntiguo, setCxpPendienteAntiguo] =
     useState<PendienteAntiguo>(null);
 
+  // "Diagnóstico Integral con IA" - combina PyG + Balance + Indicadores +
+  // el panel operativo de esta misma página en un solo análisis (mismo
+  // patrón de cache/tope/modal que los otros 3, backend:
+  // analisis_ia.py, tipo_reporte "diagnostico_integral").
+  const [nombreCliente, setNombreCliente] = useState<string>("");
+  const [analisisIAOpen, setAnalisisIAOpen] = useState(false);
+  const [analisisIALoading, setAnalisisIALoading] = useState(false);
+  const [analisisIAError, setAnalisisIAError] = useState<string | null>(null);
+  const [analisisIATexto, setAnalisisIATexto] = useState<string | null>(null);
+  const [analisisIAFuente, setAnalisisIAFuente] = useState<"cache" | "nuevo" | null>(null);
+  const [analisisIAUso, setAnalisisIAUso] = useState<{ actual: number; tope: number } | null>(null);
+  const [analisisIAPeriodoLabel, setAnalisisIAPeriodoLabel] = useState<string>("");
+  const [exportandoWord, setExportandoWord] = useState(false);
+  const [analisisIAUsoGlobal, setAnalisisIAUsoGlobal] = useState<{ actual: number; tope: number } | null>(null);
+  const [analisisIAHistorial, setAnalisisIAHistorial] = useState<
+    { periodo_desde: string; periodo_hasta: string; generado_en: string | null }[]
+  >([]);
+  const [historialOpen, setHistorialOpen] = useState(false);
+  const [confirmGasto, setConfirmGasto] = useState<{ mensaje: string; forzar: boolean } | null>(null);
+
+  const cargarEstadoAnalisisIA = async () => {
+    try {
+      const [estado, hist] = await Promise.all([
+        authFetch("/dashboard/resumen-ejecutivo/analisis-ia/estado"),
+        authFetch("/dashboard/resumen-ejecutivo/analisis-ia/historial"),
+      ]);
+      if (typeof estado?.uso_mensual === "number" && typeof estado?.tope_mensual === "number") {
+        setAnalisisIAUsoGlobal({ actual: estado.uso_mensual, tope: estado.tope_mensual });
+      }
+      setAnalisisIAHistorial(Array.isArray(hist?.historial) ? hist.historial : []);
+    } catch {
+      // silencioso a propósito - no rompe el resto del panel
+    }
+  };
+
+  // fechaDesdeParam/fechaHastaParam: se usan solo al reabrir un análisis
+  // desde "Ver análisis anteriores" (mismo motivo que en los otros 3
+  // reportes - evita depender de un estado que aún no se re-renderizó).
+  const ejecutarAnalisisIA = async (
+    forzar: boolean,
+    fechaDesdeParam?: string,
+    fechaHastaParam?: string
+  ) => {
+    const fd = fechaDesdeParam ?? fechaDesde;
+    const fh = fechaHastaParam ?? fechaHasta;
+
+    setAnalisisIAOpen(true);
+    setAnalisisIALoading(true);
+    setAnalisisIAError(null);
+
+    try {
+      const res = await authFetch("/dashboard/resumen-ejecutivo/analisis-ia", {
+        method: "POST",
+        body: JSON.stringify({
+          desde: fd,
+          hasta: fh,
+          centro_costos: centroCostos || undefined,
+          modo_periodo: modoPeriodo,
+          forzar,
+        }),
+      });
+      setAnalisisIATexto(res.analisis ?? "");
+      setAnalisisIAFuente(res.fuente ?? null);
+      setAnalisisIAPeriodoLabel(`${formatDateSafe(fd)} a ${formatDateSafe(fh)}`);
+      setAnalisisIAUso(
+        typeof res.uso_mensual === "number" && typeof res.tope_mensual === "number"
+          ? { actual: res.uso_mensual, tope: res.tope_mensual }
+          : null
+      );
+      cargarEstadoAnalisisIA();
+    } catch (err) {
+      const mensaje = err instanceof Error ? err.message : "No fue posible generar el diagnóstico con IA.";
+      setAnalisisIAError(mensaje);
+    } finally {
+      setAnalisisIALoading(false);
+    }
+  };
+
+  const solicitarAnalisisIA = (
+    forzar = false,
+    fechaDesdeParam?: string,
+    fechaHastaParam?: string
+  ) => {
+    const fd = fechaDesdeParam ?? fechaDesde;
+    const fh = fechaHastaParam ?? fechaHasta;
+
+    const yaExiste = analisisIAHistorial.some(
+      (h) => h.periodo_desde === fd && h.periodo_hasta === fh
+    );
+    if (!forzar && yaExiste) {
+      ejecutarAnalisisIA(forzar, fd, fh);
+      return;
+    }
+
+    const restante = analisisIAUsoGlobal
+      ? Math.max(analisisIAUsoGlobal.tope - analisisIAUsoGlobal.actual, 0)
+      : null;
+    const mensaje = forzar
+      ? `Regenerar vuelve a redactar el diagnóstico desde cero con IA (combina PyG, Balance, Indicadores y este panel) y consume 1 de tus análisis del mes${restante !== null ? ` (te quedan ${restante})` : ""}.`
+      : `Este período todavía no se ha analizado de forma integral. Se va a generar un diagnóstico nuevo combinando 4 fuentes y va a consumir 1 de tus análisis del mes${restante !== null ? ` (te quedan ${restante})` : ""}.`;
+    setConfirmGasto({ mensaje, forzar });
+  };
+
+  const handleExportarWord = async () => {
+    if (!analisisIATexto) return;
+    setExportandoWord(true);
+    try {
+      const res = await fetch(`${API}/dashboard/resumen-ejecutivo/analisis-ia/word`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({
+          analisis_markdown: analisisIATexto,
+          nombre_cliente: nombreCliente || "Cliente InsightsFlow",
+          periodo: analisisIAPeriodoLabel,
+        }),
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `diagnostico_integral_IA_${(nombreCliente || "cliente").replace(/\s+/g, "_")}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert("No fue posible generar el Word del diagnóstico.");
+    } finally {
+      setExportandoWord(false);
+    }
+  };
+
   async function cargarFechasSugeridas() {
     try {
       const meta: DashboardMetadata = await authFetch(
@@ -766,6 +921,11 @@ export default function DashboardResumenEjecutivoPage() {
       await cargarCentros();
     }
     init();
+    getWhoAmI().then((me) => {
+      if (me?.cliente?.nombre) setNombreCliente(me.cliente.nombre);
+    });
+    cargarEstadoAnalisisIA();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -820,8 +980,19 @@ export default function DashboardResumenEjecutivoPage() {
   const kpiCards = useMemo<KpiCardItem[]>(() => {
     if (!data?.kpis) return [];
 
+    // Mismo período EFECTIVO que se muestra en el modal de detalle del KPI
+    // (data.periodo, ya ajustado por "vista de corte cerrado" si aplica) -
+    // se agrega como query param a los enlaces de "Ver [reporte]" para que
+    // el usuario no pierda coherencia al saltar a otro reporte (antes
+    // abrían siempre con las fechas por defecto de esa página, mostrando
+    // un número distinto al que el usuario acababa de ver acá).
+    const periodoDesdeEfectivo = data?.periodo?.desde || fechaDesde;
+    const periodoHastaEfectivo = data?.periodo?.hasta || fechaHasta;
+    const queryPeriodo = `?desde=${periodoDesdeEfectivo}&hasta=${periodoHastaEfectivo}`;
+
     const ef = data.kpis.eficiencia_operativa;
     const ebitda = data.kpis.ebitda;
+    const utilidadNeta = data.kpis.utilidad_neta;
     const ventas = data.kpis.ventas_netas;
     const caja = data.kpis.caja_disponible;
     const runway = data.kpis.cash_runway;
@@ -848,7 +1019,7 @@ export default function DashboardResumenEjecutivoPage() {
           "Mide qué porcentaje de las ventas se convierte en EBITDA. Ayuda a saber si el negocio está transformando las ventas en resultado operativo.",
         helpAlign: "right" as const,
         link: {
-          href: "/reportes/estado-resultados",
+          href: `/reportes/estado-resultados${queryPeriodo}`,
           label: "Ver Estado de Resultados (PyG)",
         },
       },
@@ -869,7 +1040,28 @@ export default function DashboardResumenEjecutivoPage() {
           "Representa la utilidad operativa del negocio antes de considerar intereses, impuestos, depreciaciones y amortizaciones.",
         helpAlign: "center" as const,
         link: {
-          href: "/reportes/estado-resultados",
+          href: `/reportes/estado-resultados${queryPeriodo}`,
+          label: "Ver Estado de Resultados (PyG)",
+        },
+      },
+      {
+        label: "Utilidad neta",
+        value: hayAuxiliar ? formatCurrencyShort(utilidadNeta.actual) : "Sin datos",
+        valueFull: hayAuxiliar ? formatCurrency(utilidadNeta.actual) : "Sin datos",
+        description: hayAuxiliar
+          ? "Resultado final del período después de costos, gastos, impuestos y demás partidas - lo que realmente queda para la empresa."
+          : "El auxiliar contable no tiene datos para este período.",
+        delta: hayAuxiliar ? `${diffLabel(utilidadNeta.pct, "%")} vs anterior` : "Pendiente",
+        accent: "from-teal-100 via-emerald-50 to-white",
+        chip: "bg-teal-50 text-teal-700 border-teal-200",
+        bar: "bg-teal-600",
+        glow: "bg-teal-300/60",
+        icon: <PiggyBank size={16} />,
+        helpText:
+          "Es la línea de fondo: lo que realmente le queda a la empresa después de todos los costos, gastos e impuestos del período - no solo el resultado operativo (EBITDA).",
+        helpAlign: "center" as const,
+        link: {
+          href: `/reportes/estado-resultados${queryPeriodo}`,
           label: "Ver Estado de Resultados (PyG)",
         },
       },
@@ -890,7 +1082,7 @@ export default function DashboardResumenEjecutivoPage() {
           "Corresponde a los ingresos operacionales del período. Sirve para monitorear el tamaño real de la operación y su evolución mensual.",
         helpAlign: "center" as const,
         link: {
-          href: "/reportes/estado-resultados",
+          href: `/reportes/estado-resultados${queryPeriodo}`,
           label: "Ver Estado de Resultados (PyG)",
         },
       },
@@ -977,19 +1169,21 @@ export default function DashboardResumenEjecutivoPage() {
           ? `El documento pendiente más antiguo es del ${formatDateSafe(cxpPendienteAntiguo.fecha)}: N.° ${cxpPendienteAntiguo.numero}, proveedor ${cxpPendienteAntiguo.nombre} — si es anterior al 1 de enero, amplía el filtro "Fecha desde" en Compras/Gastos para verlo (esa página abre por defecto desde el 1 de enero)`
           : undefined,
         link: {
-          href: "/reportes/financiero/compras_gastos",
+          href: `/reportes/financiero/compras_gastos${queryPeriodo}`,
           label: "Ver Compras y Gastos / Cuentas por Pagar",
         },
       },
     ];
-  }, [data, hayAuxiliar, cxcTotal, cxpTotal, cxcPendienteAntiguo, cxpPendienteAntiguo]);
+  }, [data, hayAuxiliar, cxcTotal, cxpTotal, cxcPendienteAntiguo, cxpPendienteAntiguo, fechaDesde, fechaHasta]);
 
   const detalleIndicador = useMemo<DetalleIndicador | null>(() => {
     if (!data?.kpis) return null;
 
     const ef = data.kpis.eficiencia_operativa;
     const ebitda = data.kpis.ebitda;
+    const utilidadNeta = data.kpis.utilidad_neta;
     const ventas = data.kpis.ventas_netas;
+    const egresos = data.kpis.egresos_totales;
     const caja = data.kpis.caja_disponible;
     const runway = data.kpis.cash_runway;
 
@@ -1036,6 +1230,27 @@ export default function DashboardResumenEjecutivoPage() {
           chartTipo: "dinero",
         };
 
+      case "utilidad_neta":
+        return {
+          nombre: "Utilidad neta",
+          subtitulo:
+            "Resultado final del período después de costos, gastos, impuestos y demás partidas - lo que realmente queda para la empresa.",
+          lectura: hayAuxiliar ? formatCurrency(utilidadNeta.actual) : "Sin datos",
+          interpretacion: hayAuxiliar
+            ? `La utilidad neta del período fue ${formatCurrency(utilidadNeta.actual)} y cambió ${diffLabel(utilidadNeta.pct, "%")} frente al período anterior.`
+            : "No hay información del auxiliar para calcular la utilidad neta del período seleccionado.",
+          tarjetas: [
+            { label: "Período actual", value: hayAuxiliar ? formatCurrency(utilidadNeta.actual) : "Sin datos", accent: "bg-emerald-50 text-emerald-700 border-emerald-100" },
+            { label: "Período anterior", value: formatCurrency(utilidadNeta.anterior), accent: "bg-slate-50 text-slate-700 border-slate-200" },
+            { label: "Variación absoluta", value: formatCurrency(utilidadNeta.diff), accent: "bg-sky-50 text-sky-700 border-sky-100" },
+            { label: "Variación %", value: formatPercent(utilidadNeta.pct), accent: "bg-indigo-50 text-indigo-700 border-indigo-100" },
+          ],
+          chartKey: "utilidad_neta",
+          chartName: "Utilidad neta",
+          chartColor: "#059669",
+          chartTipo: "dinero",
+        };
+
       case "ventas_netas":
         return {
           nombre: "Ventas netas",
@@ -1055,6 +1270,29 @@ export default function DashboardResumenEjecutivoPage() {
           chartName: "Ventas netas",
           chartColor: "#0f172a",
           chartTipo: "dinero",
+        };
+
+      case "egresos_totales":
+        return {
+          nombre: "Egresos totales",
+          subtitulo:
+            "Costos de venta más gastos operacionales y no operacionales del período. Es la contraparte directa de las ventas netas.",
+          lectura: hayAuxiliar ? formatCurrency(egresos.actual) : "Sin datos",
+          interpretacion: hayAuxiliar
+            ? `Los egresos totales del período fueron ${formatCurrency(egresos.actual)} y variaron ${diffLabel(egresos.pct, "%")} frente al período anterior.`
+            : "No hay información del auxiliar para calcular los egresos del período seleccionado.",
+          tarjetas: [
+            { label: "Período actual", value: hayAuxiliar ? formatCurrency(egresos.actual) : "Sin datos", accent: "bg-rose-50 text-rose-700 border-rose-100" },
+            { label: "Período anterior", value: formatCurrency(egresos.anterior), accent: "bg-slate-50 text-slate-700 border-slate-200" },
+            { label: "Variación absoluta", value: formatCurrency(egresos.diff), accent: "bg-amber-50 text-amber-700 border-amber-100" },
+            { label: "Variación %", value: formatPercent(egresos.pct), accent: "bg-indigo-50 text-indigo-700 border-indigo-100" },
+          ],
+          chartKey: "egresos_totales",
+          chartName: "Egresos totales",
+          chartColor: "#f43f5e",
+          chartTipo: "dinero",
+          notaFuente:
+            "Viene del auxiliar contable (costos y gastos reconocidos contablemente: incluye nómina, depreciación, gastos financieros, etc.) - no es lo mismo que las facturas de compra a proveedores. Para ver compras por documento y estado de pago, revisá el reporte de Egresos por Compras y Gastos.",
         };
 
       case "caja_disponible":
@@ -1097,7 +1335,9 @@ export default function DashboardResumenEjecutivoPage() {
   const opcionesIndicador = [
     { value: "eficiencia_operativa", label: "Eficiencia operativa" },
     { value: "ebitda", label: "EBITDA" },
+    { value: "utilidad_neta", label: "Utilidad neta" },
     { value: "ventas_netas", label: "Ventas netas" },
+    { value: "egresos_totales", label: "Egresos totales" },
     { value: "caja_disponible", label: "Caja disponible" },
     { value: "autonomia_caja", label: "Autonomía de caja" },
   ] as const;
@@ -1109,7 +1349,7 @@ export default function DashboardResumenEjecutivoPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div id="pagina-resumen-ejecutivo" className="min-h-screen bg-slate-50">
       <div className="space-y-2.5 p-2 md:p-3">
         {/* ENCABEZADO COMPACTO */}
         <div className="relative overflow-hidden rounded-[1.35rem] border border-slate-200 bg-white shadow-sm">
@@ -1134,6 +1374,80 @@ export default function DashboardResumenEjecutivoPage() {
               <HeaderMiniMetric label="Proveedores" value={data?.top_proveedores?.length || 0} />
             </div>
           </div>
+        </div>
+
+        {/* Fuera de la tarjeta de encabezado a propósito: esa tarjeta tiene
+            overflow-hidden (para recortar el degradado decorativo), y el
+            desplegable de historial de abajo necesita "salirse" del
+            contenedor con position:absolute - dentro del overflow-hidden
+            quedaba cortado (bug reportado). */}
+        <div className="relative flex flex-col gap-2 rounded-[1.35rem] border border-slate-200 bg-white px-3 py-2.5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <button
+              onClick={() => solicitarAnalisisIA(false)}
+              disabled={!data}
+              className="inline-flex items-center gap-2 rounded-2xl bg-violet-700 px-4 py-2.5 text-xs font-black text-white shadow-lg transition hover:bg-violet-800 active:scale-95 disabled:opacity-50"
+            >
+              <Sparkles size={16} />
+              Diagnóstico Integral con IA
+            </button>
+            <p className="mt-1 text-[10px] font-semibold text-slate-500">
+              Combina Estado de Resultados, Balance General, Indicadores y este panel en un solo diagnóstico.
+            </p>
+          </div>
+
+          {(analisisIAUsoGlobal || analisisIAHistorial.length > 0) && (
+            <div className="relative flex shrink-0 items-center gap-3">
+              {analisisIAUsoGlobal && (
+                <span className="text-[10px] font-bold text-violet-500">
+                  <Sparkles size={10} className="inline -mt-0.5 mr-1" />
+                  {Math.max(analisisIAUsoGlobal.tope - analisisIAUsoGlobal.actual, 0)}/{analisisIAUsoGlobal.tope} análisis con IA disponibles este mes
+                </span>
+              )}
+
+              {analisisIAHistorial.length > 0 && (
+                <button
+                  onClick={() => setHistorialOpen((v) => !v)}
+                  className="text-[10px] font-black text-violet-600 hover:text-violet-800 underline decoration-dotted"
+                >
+                  Ver análisis anteriores ({analisisIAHistorial.length})
+                </button>
+              )}
+
+              {historialOpen && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setHistorialOpen(false)} />
+                  <div className="absolute top-full right-0 mt-2 z-40 w-72 bg-white rounded-2xl border border-slate-100 shadow-2xl overflow-hidden">
+                    <div className="px-4 py-3 border-b border-slate-100">
+                      <p className="text-xs font-black text-slate-700">Diagnósticos ya generados</p>
+                      <p className="text-[10px] text-slate-400">Volver a ver uno de estos no gasta cupo del mes.</p>
+                    </div>
+                    <div className="max-h-64 overflow-y-auto">
+                      {analisisIAHistorial.map((h) => (
+                        <button
+                          key={`${h.periodo_desde}_${h.periodo_hasta}`}
+                          onClick={() => {
+                            setFechaDesde(h.periodo_desde);
+                            setFechaHasta(h.periodo_hasta);
+                            setHistorialOpen(false);
+                            solicitarAnalisisIA(false, h.periodo_desde, h.periodo_hasta);
+                          }}
+                          className="w-full text-left px-4 py-2.5 text-xs hover:bg-violet-50 border-b border-slate-50 last:border-0"
+                        >
+                          <div className="font-bold text-slate-700">{h.periodo_desde} a {h.periodo_hasta}</div>
+                          {h.generado_en && (
+                            <div className="text-[10px] text-slate-400">
+                              Generado el {new Date(h.generado_en).toLocaleDateString("es-CO")}
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* FILTROS COMPACTOS */}
@@ -1258,7 +1572,7 @@ export default function DashboardResumenEjecutivoPage() {
 
         {/* KPIs EN UNA FILA PARA 1366PX */}
         {!!kpiCards.length && (
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
             {kpiCards.map((item, i) => (
               <KpiCard key={i} item={item} onOpen={setSelectedKpi} />
             ))}
@@ -1310,6 +1624,13 @@ export default function DashboardResumenEjecutivoPage() {
                   <p className="mt-2 text-sm font-medium leading-6 text-slate-700">
                     {detalleIndicador.interpretacion}
                   </p>
+
+                  {detalleIndicador.notaFuente && (
+                    <div className="mt-2 flex items-start gap-2 rounded-2xl border border-amber-100 bg-amber-50 p-2.5 text-[11px] font-semibold leading-5 text-amber-800">
+                      <CircleHelp size={13} className="mt-0.5 shrink-0" />
+                      <span>{detalleIndicador.notaFuente}</span>
+                    </div>
+                  )}
 
                   <div className="mt-3 grid grid-cols-2 gap-2">
                     {detalleIndicador.tarjetas.map((card, idx) => (
@@ -1381,7 +1702,7 @@ export default function DashboardResumenEjecutivoPage() {
               <SectionTitle
                 badge="Análisis"
                 title="Qué cambió y por qué"
-                subtitle="Evolución de ventas, EBITDA y eficiencia operativa en los últimos meses."
+                subtitle="Evolución de ventas, egresos, EBITDA y eficiencia operativa en los últimos meses."
               />
 
               <div className="h-[218px]">
@@ -1418,6 +1739,15 @@ export default function DashboardResumenEjecutivoPage() {
                       dataKey="ventas"
                       name="Ventas"
                       stroke="#0f172a"
+                      strokeWidth={4}
+                      dot={{ r: 3 }}
+                    />
+                    <Line
+                      yAxisId="money"
+                      type="monotone"
+                      dataKey="egresos_totales"
+                      name="Egresos"
+                      stroke="#f43f5e"
                       strokeWidth={4}
                       dot={{ r: 3 }}
                     />
@@ -1580,6 +1910,197 @@ export default function DashboardResumenEjecutivoPage() {
         centroCostos={centroCostos}
         onClose={() => setSelectedKpi(null)}
       />
+
+      {analisisIAOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/50 flex items-center justify-center p-4 print:hidden">
+          {/* Sin cierre por clic afuera a propósito - mismo motivo que en
+              los otros 3 reportes: con resize:both, soltar un arrastre de
+              redimensionado se puede interpretar como clic sobre el fondo
+              y cerrar el modal al agrandarlo. */}
+          <div
+            className="relative flex flex-col rounded-[2rem] bg-white shadow-2xl overflow-auto"
+            style={{
+              width: "min(96vw, 1100px)",
+              height: "min(92vh, 900px)",
+              minWidth: "480px",
+              minHeight: "420px",
+              maxWidth: "98vw",
+              maxHeight: "96vh",
+              resize: "both",
+            }}
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-4 px-6 py-4 border-b border-slate-100 bg-white rounded-t-[2rem]">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center">
+                  <Sparkles size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">Diagnóstico Integral con IA</h3>
+                  <p className="text-[11px] text-slate-400 font-medium">
+                    {analisisIAPeriodoLabel}
+                    {analisisIAFuente === "cache" && " · desde caché (sin cambios desde el último análisis)"}
+                    {analisisIAFuente === "nuevo" && " · análisis nuevo"}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setAnalisisIAOpen(false)}
+                className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 flex-1">
+              {analisisIALoading && (
+                <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-400">
+                  <RefreshCcw className="animate-spin" size={24} />
+                  <p className="text-xs font-bold">Combinando PyG, Balance, Indicadores y este panel…</p>
+                </div>
+              )}
+
+              {!analisisIALoading && analisisIAError && (
+                <div className="border border-rose-200 bg-rose-50 rounded-2xl p-4 text-sm text-rose-700 font-medium">
+                  {analisisIAError}
+                </div>
+              )}
+
+              {!analisisIALoading && !analisisIAError && analisisIATexto && (
+                <div className="prose prose-sm prose-slate max-w-none prose-headings:font-black prose-h2:text-base prose-h3:text-sm prose-table:text-xs prose-th:whitespace-nowrap prose-td:whitespace-nowrap">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      table: ({ children }) => (
+                        <div className="overflow-x-auto">
+                          <table>{children}</table>
+                        </div>
+                      ),
+                    }}
+                  >
+                    {analisisIATexto}
+                  </ReactMarkdown>
+                </div>
+              )}
+            </div>
+
+            <div className="sticky bottom-0 flex items-center justify-between gap-3 px-6 py-4 border-t border-slate-100 bg-white rounded-b-[2rem]">
+              <p className="text-[11px] text-slate-400 font-medium">
+                {analisisIAUso
+                  ? `${analisisIAUso.actual}/${analisisIAUso.tope} análisis usados este mes`
+                  : ""}
+              </p>
+              {!analisisIALoading && !analisisIAError && analisisIATexto && (
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => {
+                      const tituloOriginal = document.title;
+                      document.title = `diagnostico_integral_IA_${(nombreCliente || "cliente").replace(/\s+/g, "_")}`;
+                      window.print();
+                      document.title = tituloOriginal;
+                    }}
+                    className="text-xs font-black text-slate-500 hover:text-slate-700"
+                  >
+                    Imprimir
+                  </button>
+                  <button
+                    onClick={handleExportarWord}
+                    disabled={exportandoWord}
+                    className="text-xs font-black text-slate-500 hover:text-slate-700 disabled:opacity-50"
+                  >
+                    {exportandoWord ? "Generando…" : "Exportar a Word"}
+                  </button>
+                  <button
+                    onClick={() => solicitarAnalisisIA(true)}
+                    className="text-xs font-black text-violet-700 hover:text-violet-900"
+                  >
+                    Regenerar análisis
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmGasto && (
+        <div
+          className="fixed inset-0 z-[110] bg-slate-900/50 flex items-center justify-center p-4"
+          onClick={() => setConfirmGasto(null)}
+        >
+          <div
+            className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-10 h-10 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center mb-3">
+              <Sparkles size={18} />
+            </div>
+            <h3 className="text-sm font-black text-slate-900 mb-1">Vas a generar un diagnóstico nuevo</h3>
+            <p className="text-xs text-slate-500 leading-relaxed mb-5">{confirmGasto.mensaje}</p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setConfirmGasto(null)}
+                className="px-4 py-2 text-xs font-black text-slate-500 hover:text-slate-700"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  const { forzar } = confirmGasto;
+                  setConfirmGasto(null);
+                  ejecutarAnalisisIA(forzar);
+                }}
+                className="px-4 py-2 bg-violet-700 text-white rounded-xl text-xs font-black hover:bg-violet-800"
+              >
+                Continuar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Área imprimible: vive fuera del resto del contenido a propósito -
+          mismo motivo que en los otros 3 reportes (el modal tiene
+          overflow/resize propio que rompe la paginación de impresión). */}
+      {analisisIATexto && (
+        <div id="analisis-ia-print-area" style={{ position: "absolute", top: "-9999px", left: 0, width: "800px" }}>
+          <div className="mb-4 pb-3 border-b border-slate-200">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/branding/insightsflow-logo.png" alt="InsightsFlow" className="h-8 w-auto mb-2" />
+            <div className="text-sm font-bold text-slate-700">{nombreCliente || "Cliente InsightsFlow"}</div>
+            <div className="text-xs text-slate-400">Diagnóstico Integral · {analisisIAPeriodoLabel}</div>
+          </div>
+
+          <div className="prose prose-sm prose-slate max-w-none">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{analisisIATexto}</ReactMarkdown>
+          </div>
+
+          <div className="mt-3 pt-2 border-t border-slate-200 text-center text-[10px] text-slate-400 italic">
+            Reporte generado por la IA de InsightsFlow {new Date().getFullYear()}
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @media print {
+          /* display:none (no visibility:hidden) en todo lo demás - un
+             elemento visibility:hidden sigue ocupando su espacio en el
+             flujo del documento y genera páginas en blanco extra. */
+          #pagina-resumen-ejecutivo > *:not(#analisis-ia-print-area) {
+            display: none !important;
+          }
+          #analisis-ia-print-area {
+            position: static !important;
+            width: 100% !important;
+          }
+          #analisis-ia-print-area table thead {
+            display: table-header-group;
+          }
+          #analisis-ia-print-area table tr {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+        }
+      `}</style>
     </div>
   );
 }

@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { authFetch } from "@/lib/api";
 import { getDefaultYearToDateRange } from "@/lib/dateDefaults";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -396,13 +397,19 @@ function EmptyState({
 }
 
 export default function ReporteFinancieroComprasGastosPage() {
+  // Si se llega desde otro reporte (ej. "Ver Compras y Gastos" del Resumen
+  // Ejecutivo) con ?desde=&hasta= en la URL, arranca con ESE período en
+  // vez del default, para no perder coherencia con el número que el
+  // usuario acababa de ver en el reporte de origen.
+  const searchParams = useSearchParams();
+
   const [evolucion, setEvolucion] = useState<EvolucionMes[]>([]);
   const [kpis, setKpis] = useState<KPIs>(KPIS_EMPTY);
 
   const [defaultDates] = useState(() => getDefaultYearToDateRange());
 
-  const [fechaDesde, setFechaDesde] = useState<string>(defaultDates.desde);
-  const [fechaHasta, setFechaHasta] = useState<string>(defaultDates.hasta);
+  const [fechaDesde, setFechaDesde] = useState<string>(() => searchParams.get("desde") || defaultDates.desde);
+  const [fechaHasta, setFechaHasta] = useState<string>(() => searchParams.get("hasta") || defaultDates.hasta);
   const [centroCostos, setCentroCostos] = useState<string>("");
 
   const [centros, setCentros] = useState<CentroCosto[]>([]);

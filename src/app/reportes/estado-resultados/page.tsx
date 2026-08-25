@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { authFetch } from "@/lib/api";
+import { useSearchParams } from "next/navigation";
+import { authFetch, API, getToken } from "@/lib/api";
 import { getWhoAmI } from "@/lib/authInfo";
 import useAuthGuard from "@/hooks/useAuthGuard";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -30,8 +31,12 @@ import {
   Plus,
   Minus,
   HelpCircle,
+  Sparkles,
+  X,
 } from "lucide-react";
 import * as XLSX from "xlsx";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 // =========================================================
 // TIPOS
@@ -298,15 +303,35 @@ const KPI_INFO = {
 export default function EstadoResultadosPage() {
   useAuthGuard();
 
+  // Si se llega desde otro reporte (ej. "Ver Estado de Resultados" del
+  // Resumen Ejecutivo) con ?desde=&hasta= en la URL, arranca con ESE
+  // período en vez del default - así el usuario no pierde coherencia
+  // viendo un número distinto al que acababa de mirar en el reporte de
+  // origen.
+  const searchParams = useSearchParams();
+
   const [evolucionApi, setEvolucionApi] = useState<EvolucionItem[]>([]);
   const [composicion, setComposicion] = useState<CuentaItem[]>([]);
   const [kpisApi, setKpisApi] = useState<Kpis>({});
   const [cobertura, setCobertura] = useState<Cobertura | null>(null);
   const [mostrarDetalleCobertura, setMostrarDetalleCobertura] = useState(false);
-  const [fechaDesde, setFechaDesde] = useState("2026-01-01");
-  const [fechaHasta, setFechaHasta] = useState("2026-12-31");
+  const [fechaDesde, setFechaDesde] = useState(() => searchParams.get("desde") || "2026-01-01");
+  const [fechaHasta, setFechaHasta] = useState(() => searchParams.get("hasta") || "2026-12-31");
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [analisisIAOpen, setAnalisisIAOpen] = useState(false);
+  const [analisisIALoading, setAnalisisIALoading] = useState(false);
+  const [analisisIAError, setAnalisisIAError] = useState<string | null>(null);
+  const [analisisIATexto, setAnalisisIATexto] = useState<string | null>(null);
+  const [analisisIAFuente, setAnalisisIAFuente] = useState<"cache" | "nuevo" | null>(null);
+  const [analisisIAUso, setAnalisisIAUso] = useState<{ actual: number; tope: number } | null>(null);
+  const [nombreCliente, setNombreCliente] = useState<string>("");
+  const [exportandoWord, setExportandoWord] = useState(false);
+  const [analisisIAUsoGlobal, setAnalisisIAUsoGlobal] = useState<{ actual: number; tope: number } | null>(null);
+  const [analisisIAHistorial, setAnalisisIAHistorial] = useState<
+    { periodo_desde: string; periodo_hasta: string; generado_en: string | null }[]
+  >([]);
+  const [historialOpen, setHistorialOpen] = useState(false);
   const [proveedorDatos, setProveedorDatos] = useState<"siigo" | "alegra">("siigo");
   // Solo aplica para clientes Alegra: Alegra agrupa "Gastos por Impuestos"
   // (ICA/Industria y Comercio, cuenta PUC 5115) despues de "Utilidad Antes
@@ -372,6 +397,148 @@ export default function EstadoResultadosPage() {
     }
   };
 
+  // Se consulta apenas se entra al reporte (no solo después de generar) -
+  // para que el usuario sepa cuántos análisis le quedan y qué períodos ya
+  // tiene guardados en caché ANTES de decidir si generar uno nuevo.
+  // Falla en silencio si el cliente no tiene el permiso (403) - simplemente
+  // no se muestra el badge, no rompe el resto del reporte.
+  const cargarEstadoAnalisisIA = async () => {
+    try {
+      const [estado, hist] = await Promise.all([
+        authFetch("/reportes/pnl_v1/analisis-ia/estado"),
+        authFetch("/reportes/pnl_v1/analisis-ia/historial"),
+      ]);
+      if (typeof estado?.uso_mensual === "number" && typeof estado?.tope_mensual === "number") {
+        setAnalisisIAUsoGlobal({ actual: estado.uso_mensual, tope: estado.tope_mensual });
+      }
+      setAnalisisIAHistorial(Array.isArray(hist?.historial) ? hist.historial : []);
+    } catch {
+      // silencioso a propósito - ver comentario arriba
+    }
+  };
+
+  // Modal propio de confirmación (en vez de window.confirm, que no se
+  // puede estilizar y se ve como un cuadro del navegador). Se dispara
+  // ANTES de gastar cupo, en los dos casos donde ya sabemos con certeza
+  // que la llamada va a costar: "Regenerar" (siempre salta el caché, ver
+  // comentario en analisis_ia.py) y un período que todavía no aparece en
+  // el historial (nunca se generó, así que no puede salir del caché). Si
+  // el período SÍ está en el historial, no se pregunta nada - lo normal
+  // es que salga gratis del caché, y si algo cambió por dentro el
+  // usuario lo ve igual reflejado como "análisis nuevo" en el modal.
+  const [confirmGasto, setConfirmGasto] = useState<{ mensaje: string; forzar: boolean } | null>(null);
+
+  // fechaDesdeParam/fechaHastaParam: se usan solo al reabrir un análisis
+  // desde "Ver análisis anteriores". Sin esto, el click dispara
+  // setFechaDesde/setFechaHasta (que no aplican hasta el próximo render)
+  // y de inmediato lee fechaDesde/fechaHasta del closure actual - que
+  // todavía tiene el período VIEJO. Resultado: se re-analizaba el período
+  // que estaba en pantalla antes del click, no el que se acababa de
+  // clickear en el historial. Pasar el override explícito evita depender
+  // de un estado que aún no se re-renderizó.
+  const ejecutarAnalisisIA = async (
+    forzar: boolean,
+    fechaDesdeParam?: string,
+    fechaHastaParam?: string
+  ) => {
+    const fd = fechaDesdeParam ?? fechaDesde;
+    const fh = fechaHastaParam ?? fechaHasta;
+
+    setAnalisisIAOpen(true);
+    setAnalisisIALoading(true);
+    setAnalisisIAError(null);
+
+    try {
+      const res = await authFetch("/reportes/pnl_v1/analisis-ia", {
+        method: "POST",
+        body: JSON.stringify({ desde: fd, hasta: fh, forzar }),
+      });
+      setAnalisisIATexto(res.analisis ?? "");
+      setAnalisisIAFuente(res.fuente ?? null);
+      setAnalisisIAUso(
+        typeof res.uso_mensual === "number" && typeof res.tope_mensual === "number"
+          ? { actual: res.uso_mensual, tope: res.tope_mensual }
+          : null
+      );
+      // El resultado pudo haber cambiado el cupo usado y/o agregar un
+      // período nuevo al historial - se refresca para que el badge y la
+      // lista queden al día sin que el usuario tenga que recargar.
+      cargarEstadoAnalisisIA();
+    } catch (err) {
+      const mensaje = err instanceof Error ? err.message : "No fue posible generar el análisis con IA.";
+      setAnalisisIAError(mensaje);
+    } finally {
+      setAnalisisIALoading(false);
+    }
+  };
+
+  const solicitarAnalisisIA = (
+    forzar = false,
+    fechaDesdeParam?: string,
+    fechaHastaParam?: string
+  ) => {
+    const fd = fechaDesdeParam ?? fechaDesde;
+    const fh = fechaHastaParam ?? fechaHasta;
+
+    const yaExiste = analisisIAHistorial.some(
+      (h) => h.periodo_desde === fd && h.periodo_hasta === fh
+    );
+    if (!forzar && yaExiste) {
+      ejecutarAnalisisIA(forzar, fd, fh);
+      return;
+    }
+
+    const restante = analisisIAUsoGlobal
+      ? Math.max(analisisIAUsoGlobal.tope - analisisIAUsoGlobal.actual, 0)
+      : null;
+    const mensaje = forzar
+      ? `Regenerar vuelve a redactar el análisis desde cero con IA y consume 1 de tus análisis del mes${restante !== null ? ` (te quedan ${restante})` : ""}.`
+      : `Este período todavía no se ha analizado. Se va a generar un análisis nuevo con IA y va a consumir 1 de tus análisis del mes${restante !== null ? ` (te quedan ${restante})` : ""}.`;
+    setConfirmGasto({ mensaje, forzar });
+  };
+
+  const handleExportarWord = async () => {
+    if (!analisisIATexto) return;
+    setExportandoWord(true);
+    try {
+      // El .docx se genera en el backend (python-docx), no en el
+      // navegador: la librería JS "docx" resultó incompatible con el
+      // bundler de Next.js (Turbopack) - su propio código empaquetado
+      // rompía el chunk entero. Generarlo server-side evita eso de raíz.
+      const res = await fetch(`${API}/reportes/pnl_v1/analisis-ia/word`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({
+          analisis_markdown: analisisIATexto,
+          nombre_cliente: nombreCliente || "Cliente InsightsFlow",
+          periodo: `${fechaDesde} a ${fechaHasta}`,
+          desde: fechaDesde,
+          hasta: fechaHasta,
+        }),
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `analisis_ia_PyG_${(nombreCliente || "cliente").replace(/\s+/g, "_")}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert("No fue posible generar el Word del análisis.");
+    } finally {
+      setExportandoWord(false);
+    }
+  };
+
   const handleFileUpload = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -412,7 +579,9 @@ export default function EstadoResultadosPage() {
         // pueden cambiar a la vista PUC/NIIF con el boton "Ver segun PUC/NIIF".
         if (me.proveedor_datos === "alegra") setModoAlegraNativo(true);
       }
+      if (me?.cliente?.nombre) setNombreCliente(me.cliente.nombre);
     });
+    cargarEstadoAnalisisIA();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -899,8 +1068,30 @@ export default function EstadoResultadosPage() {
     XLSX.writeFile(wb, `pnl_${fechaDesde}_a_${fechaHasta}.xlsx`);
   };
 
+  // Reusado tal cual en el modal (pantalla) y en el área imprimible, para
+  // no duplicar el markup del gráfico en dos lugares.
+  const renderTendenciaChart = (height: number) => (
+    <ResponsiveContainer width="100%" height={height}>
+      <ComposedChart data={evolucionChart} margin={{ top: 30, right: 10, left: 0, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+        <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: "bold" }} />
+        <YAxis hide />
+        <Tooltip content={<CustomTooltip />} cursor={{ fill: "#f1f5f9" }} />
+        <Bar dataKey="ingresos_chart" name="Ingresos" fill="#10b981" radius={[4, 4, 0, 0]} barSize={24}>
+          <LabelList dataKey="ingresos_chart" content={<BarLabel />} />
+        </Bar>
+        <Bar dataKey="costos_gastos" name="Costos y Gastos" fill="#f43f5e" radius={[4, 4, 0, 0]} barSize={24}>
+          <LabelList dataKey="costos_gastos" content={<BarLabel />} />
+        </Bar>
+        <Line type="monotone" dataKey="ebitda" name="EBITDA" stroke="#4f46e5" strokeWidth={3} dot={{ r: 3, fill: "#4f46e5", strokeWidth: 2, stroke: "#fff" }}>
+          <LabelList dataKey="ebitda" content={<LineLabel />} />
+        </Line>
+      </ComposedChart>
+    </ResponsiveContainer>
+  );
+
   return (
-    <div className="space-y-4 p-5 bg-slate-50 min-h-screen">
+    <div id="pagina-estado-resultados" className="space-y-4 p-5 bg-slate-50 min-h-screen">
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-[2rem] border shadow-sm">
         <div>
@@ -934,6 +1125,14 @@ export default function EstadoResultadosPage() {
             </button>
 
             <button
+              onClick={() => solicitarAnalisisIA(false)}
+              className="flex items-center gap-2 px-4 py-3 bg-violet-50 text-violet-700 rounded-2xl text-xs font-black hover:bg-violet-100 transition-all border border-violet-100"
+            >
+              <Sparkles size={16} />
+              Analizar con IA
+            </button>
+
+            <button
               onClick={() => fileInputRef.current?.click()}
               className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-2xl text-xs font-black hover:bg-black transition-all shadow-lg active:scale-95"
             >
@@ -951,6 +1150,59 @@ export default function EstadoResultadosPage() {
               ? "Ruta Alegra: Contabilidad > Libro Diario > Exportar Excel"
               : <>Ruta Siigo: Contabilidad {" > "} Comprobantes {" > "} Informe auxiliar contable</>}
           </p>
+
+          {(analisisIAUsoGlobal || analisisIAHistorial.length > 0) && (
+            <div className="relative flex items-center gap-3">
+              {analisisIAUsoGlobal && (
+                <span className="text-[10px] font-bold text-violet-400">
+                  <Sparkles size={10} className="inline -mt-0.5 mr-1" />
+                  {Math.max(analisisIAUsoGlobal.tope - analisisIAUsoGlobal.actual, 0)}/{analisisIAUsoGlobal.tope} análisis con IA disponibles este mes
+                </span>
+              )}
+
+              {analisisIAHistorial.length > 0 && (
+                <button
+                  onClick={() => setHistorialOpen((v) => !v)}
+                  className="text-[10px] font-black text-violet-600 hover:text-violet-800 underline decoration-dotted"
+                >
+                  Ver análisis anteriores ({analisisIAHistorial.length})
+                </button>
+              )}
+
+              {historialOpen && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setHistorialOpen(false)} />
+                  <div className="absolute top-full right-0 mt-2 z-40 w-72 bg-white rounded-2xl border border-slate-100 shadow-2xl overflow-hidden">
+                    <div className="px-4 py-3 border-b border-slate-100">
+                      <p className="text-xs font-black text-slate-700">Análisis ya generados</p>
+                      <p className="text-[10px] text-slate-400">Volver a ver uno de estos no gasta cupo del mes.</p>
+                    </div>
+                    <div className="max-h-64 overflow-y-auto">
+                      {analisisIAHistorial.map((h) => (
+                        <button
+                          key={`${h.periodo_desde}_${h.periodo_hasta}`}
+                          onClick={() => {
+                            setFechaDesde(h.periodo_desde);
+                            setFechaHasta(h.periodo_hasta);
+                            setHistorialOpen(false);
+                            solicitarAnalisisIA(false, h.periodo_desde, h.periodo_hasta);
+                          }}
+                          className="w-full text-left px-4 py-2.5 text-xs hover:bg-violet-50 border-b border-slate-50 last:border-0"
+                        >
+                          <div className="font-bold text-slate-700">{h.periodo_desde} a {h.periodo_hasta}</div>
+                          {h.generado_en && (
+                            <div className="text-[10px] text-slate-400">
+                              Generado el {new Date(h.generado_en).toLocaleDateString("es-CO")}
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1638,6 +1890,244 @@ export default function EstadoResultadosPage() {
           </Card>
         </>
       )}
+
+      {analisisIAOpen && (
+        <div
+          className="fixed inset-0 z-[100] bg-slate-900/50 flex items-center justify-center p-4 print:hidden"
+        >
+          {/* Sin cierre por clic afuera a propósito: con resize:both, el
+              navegador puede interpretar el "soltar" de un arrastre de
+              redimensionado como un clic sobre el fondo (el modal, al
+              estar centrado con flexbox, se recalcula durante el
+              arrastre), cerrando el modal justo al agrandarlo. Mismo
+              patrón que el modal de Ventas: se cierra solo con la X. */}
+          <div
+            className="relative flex flex-col rounded-[2rem] bg-white shadow-2xl overflow-auto"
+            style={{
+              width: "min(96vw, 1100px)",
+              height: "min(92vh, 900px)",
+              minWidth: "480px",
+              minHeight: "420px",
+              maxWidth: "98vw",
+              maxHeight: "96vh",
+              resize: "both",
+            }}
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-4 px-6 py-4 border-b border-slate-100 bg-white rounded-t-[2rem]">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center">
+                  <Sparkles size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">Análisis con IA</h3>
+                  <p className="text-[11px] text-slate-400 font-medium">
+                    {fechaDesde} a {fechaHasta}
+                    {analisisIAFuente === "cache" && " · desde caché (sin cambios desde el último análisis)"}
+                    {analisisIAFuente === "nuevo" && " · análisis nuevo"}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setAnalisisIAOpen(false)}
+                className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 flex-1">
+              {analisisIALoading && (
+                <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-400">
+                  <RefreshCcw className="animate-spin" size={24} />
+                  <p className="text-xs font-bold">Analizando el período seleccionado…</p>
+                </div>
+              )}
+
+              {!analisisIALoading && analisisIAError && (
+                <div className="border border-rose-200 bg-rose-50 rounded-2xl p-4 text-sm text-rose-700 font-medium">
+                  {analisisIAError}
+                </div>
+              )}
+
+              {!analisisIALoading && !analisisIAError && analisisIATexto && (
+                <>
+                  <div className="mb-5 rounded-2xl border border-slate-100 bg-slate-50/60 p-3">
+                    <div className="flex items-center justify-between px-1 mb-1">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        Tendencia del período
+                      </p>
+                      <div className="flex gap-3 text-[10px] text-slate-500 font-semibold">
+                        <span className="flex items-center gap-1">
+                          <div className="w-2 h-2 rounded-full bg-emerald-500"></div> Ingresos
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <div className="w-2 h-2 rounded-full bg-rose-500"></div> Costos/Gastos
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <div className="w-2 h-2 rounded-full bg-indigo-600"></div> EBITDA
+                        </span>
+                      </div>
+                    </div>
+                    {renderTendenciaChart(200)}
+                  </div>
+
+                  <div className="prose prose-sm prose-slate max-w-none prose-headings:font-black prose-h2:text-base prose-h3:text-sm prose-table:text-xs prose-th:whitespace-nowrap prose-td:whitespace-nowrap">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        table: ({ children }) => (
+                          <div className="overflow-x-auto">
+                            <table>{children}</table>
+                          </div>
+                        ),
+                      }}
+                    >
+                      {analisisIATexto}
+                    </ReactMarkdown>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="sticky bottom-0 flex items-center justify-between gap-3 px-6 py-4 border-t border-slate-100 bg-white rounded-b-[2rem]">
+              <p className="text-[11px] text-slate-400 font-medium">
+                {analisisIAUso
+                  ? `${analisisIAUso.actual}/${analisisIAUso.tope} análisis usados este mes`
+                  : ""}
+              </p>
+              {!analisisIALoading && !analisisIAError && analisisIATexto && (
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => {
+                      // Chrome sugiere el <title> de la página como nombre
+                      // de archivo al "Guardar como PDF" - se cambia justo
+                      // antes de imprimir (window.print() bloquea hasta
+                      // que se cierra el diálogo) y se restaura después.
+                      const tituloOriginal = document.title;
+                      document.title = `analisis_ia_PyG_${(nombreCliente || "cliente").replace(/\s+/g, "_")}`;
+                      window.print();
+                      document.title = tituloOriginal;
+                    }}
+                    className="text-xs font-black text-slate-500 hover:text-slate-700"
+                  >
+                    Imprimir
+                  </button>
+                  <button
+                    onClick={handleExportarWord}
+                    disabled={exportandoWord}
+                    className="text-xs font-black text-slate-500 hover:text-slate-700 disabled:opacity-50"
+                  >
+                    {exportandoWord ? "Generando…" : "Exportar a Word"}
+                  </button>
+                  <button
+                    onClick={() => solicitarAnalisisIA(true)}
+                    className="text-xs font-black text-violet-700 hover:text-violet-900"
+                  >
+                    Regenerar análisis
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmGasto && (
+        <div
+          className="fixed inset-0 z-[110] bg-slate-900/50 flex items-center justify-center p-4"
+          onClick={() => setConfirmGasto(null)}
+        >
+          <div
+            className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-10 h-10 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center mb-3">
+              <Sparkles size={18} />
+            </div>
+            <h3 className="text-sm font-black text-slate-900 mb-1">Vas a generar un análisis nuevo</h3>
+            <p className="text-xs text-slate-500 leading-relaxed mb-5">{confirmGasto.mensaje}</p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setConfirmGasto(null)}
+                className="px-4 py-2 text-xs font-black text-slate-500 hover:text-slate-700"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  const { forzar } = confirmGasto;
+                  setConfirmGasto(null);
+                  ejecutarAnalisisIA(forzar);
+                }}
+                className="px-4 py-2 bg-violet-700 text-white rounded-xl text-xs font-black hover:bg-violet-800"
+              >
+                Continuar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Área imprimible: vive fuera del modal a propósito. El modal tiene
+          altura fija + overflow para poder redimensionarse en pantalla, lo
+          cual rompe la paginación al imprimir (y un ancestro con
+          print:hidden esconde también a sus hijos, sin importar su propia
+          visibility). Este bloque, siendo hermano del modal y sin
+          restricciones de tamaño, permite que el contenido pagine
+          normalmente a varias hojas. */}
+      {/* Siempre montado (nunca display:none) a propósito: el gráfico de
+          recharts necesita medir su contenedor al montarse, y si el
+          contenedor arranca en display:none nunca llega a medir nada y
+          queda en blanco. En vez de ocultarlo, se posiciona fuera de la
+          pantalla (renderizado normal, con ancho real) y solo se trae a
+          la vista con CSS cuando se imprime. */}
+      {analisisIATexto && (
+        <div id="analisis-ia-print-area" style={{ position: "absolute", top: "-9999px", left: 0, width: "800px" }}>
+          <div className="mb-4 pb-3 border-b border-slate-200">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/branding/insightsflow-logo.png" alt="InsightsFlow" className="h-8 w-auto mb-2" />
+            <div className="text-sm font-bold text-slate-700">{nombreCliente || "Cliente InsightsFlow"}</div>
+            <div className="text-xs text-slate-400">Estado de Resultados · {fechaDesde} a {fechaHasta}</div>
+          </div>
+
+          <div className="mb-4">{renderTendenciaChart(220)}</div>
+
+          <div className="prose prose-sm prose-slate max-w-none">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{analisisIATexto}</ReactMarkdown>
+          </div>
+
+          <div className="mt-6 pt-3 border-t border-slate-200 text-center text-[10px] text-slate-400 italic">
+            Reporte generado por la IA de InsightsFlow {new Date().getFullYear()}
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @media print {
+          /* display:none (no visibility:hidden) en todo lo demás - un
+             elemento visibility:hidden sigue ocupando su espacio en el
+             flujo del documento, lo que generaba páginas en blanco extra
+             después del contenido real del análisis. */
+          #pagina-estado-resultados > *:not(#analisis-ia-print-area) {
+            display: none !important;
+          }
+          #analisis-ia-print-area {
+            position: static !important;
+            width: 100% !important;
+          }
+          /* Cuando una tabla del análisis se parte entre dos hojas, que
+             el encabezado se repita en la hoja siguiente - sin esto, la
+             continuación de una tabla larga arranca con solo números, sin
+             decir qué es cada columna. */
+          #analisis-ia-print-area table thead {
+            display: table-header-group;
+          }
+          #analisis-ia-print-area table tr {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+        }
+      `}</style>
     </div>
   );
 }

@@ -409,11 +409,15 @@ export default function ClientAppShell({ children }: { children: React.ReactNode
 
   if (pinned) {
     return (
-      <div className="min-h-screen grid grid-cols-12 bg-white">
-        <aside className="col-span-12 md:col-span-3 lg:col-span-2 h-screen sticky top-0 bg-black text-white">
+      // print:block - al imprimir un reporte, el aside se oculta (abajo)
+      // pero sigue reservando sus columnas de grid si el padre sigue
+      // siendo grid; pasar a block evita esa franja vacía y deja que la
+      // sección de contenido use el ancho completo de la hoja.
+      <div className="min-h-screen grid grid-cols-12 bg-white print:block">
+        <aside className="col-span-12 md:col-span-3 lg:col-span-2 h-screen sticky top-0 bg-black text-white print:hidden">
           {sidebarContent}
         </aside>
-        <section className="col-span-12 md:col-span-9 lg:col-span-10 p-6 overflow-x-auto">
+        <section className="col-span-12 md:col-span-9 lg:col-span-10 p-6 overflow-x-auto print:p-0">
           {children}
         </section>
       </div>
@@ -434,7 +438,7 @@ export default function ClientAppShell({ children }: { children: React.ReactNode
   return (
     <div className="min-h-screen bg-white">
       <div
-        className="fixed left-0 top-0 z-30 flex h-screen w-5 items-center justify-center bg-black/10 transition-colors hover:bg-black/20"
+        className="fixed left-0 top-0 z-30 flex h-screen w-5 items-center justify-center bg-black/10 transition-colors hover:bg-black/20 print:hidden"
         onMouseEnter={() => setHovering(true)}
         onClick={() => setHovering(true)}
       >
@@ -445,16 +449,18 @@ export default function ClientAppShell({ children }: { children: React.ReactNode
           montaba/desmontaba con `{hovering && ...}`) para poder animar la
           entrada/salida con transform en vez de un aparecer/desaparecer
           instantáneo. pointer-events-none en el backdrop cuando está oculto
-          evita que bloquee clicks sobre el reporte de fondo. */}
+          evita que bloquee clicks sobre el reporte de fondo. print:hidden
+          en ambos - un elemento position:fixed puede repetirse en cada
+          hoja al imprimir, incluso si está fuera de pantalla en patalla. */}
       <div
-        className={`fixed inset-0 z-30 transition-opacity duration-300 ${
+        className={`fixed inset-0 z-30 transition-opacity duration-300 print:hidden ${
           hovering ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
         onClick={() => setHovering(false)}
       />
       <aside
         onMouseLeave={() => setHovering(false)}
-        className={`fixed left-0 top-0 z-40 h-screen w-64 bg-black text-white shadow-2xl transition-transform duration-300 ease-in-out ${
+        className={`fixed left-0 top-0 z-40 h-screen w-64 bg-black text-white shadow-2xl transition-transform duration-300 ease-in-out print:hidden ${
           hovering ? "translate-x-0" : "-translate-x-full"
         }`}
       >

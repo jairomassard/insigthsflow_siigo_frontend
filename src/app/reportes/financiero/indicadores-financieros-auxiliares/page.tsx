@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { authFetch } from "@/lib/api";
+import { authFetch, API, getToken } from "@/lib/api";
+import { getWhoAmI } from "@/lib/authInfo";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   ResponsiveContainer,
   LineChart,
@@ -33,6 +36,7 @@ import {
   SlidersHorizontal,
   CheckCircle2,
   AlertTriangle,
+  Sparkles,
 } from "lucide-react";
 
 /* ---------------------- Helpers ---------------------- */
@@ -758,6 +762,153 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
   const [savingConfig, setSavingConfig] = useState(false);
   const [configForm, setConfigForm] = useState<Record<string, string>>({});
 
+  // "Analizar con IA" - mismo patron de cache/tope/modal que Balance
+  // General y Estado de Resultados (backend: analisis_ia.py, tipo_reporte
+  // "indicadores_financieros"). El tope mensual es compartido entre
+  // reportes (uno solo por cliente al mes).
+  const [nombreCliente, setNombreCliente] = useState<string>("");
+  const [analisisIAOpen, setAnalisisIAOpen] = useState(false);
+  const [analisisIALoading, setAnalisisIALoading] = useState(false);
+  const [analisisIAError, setAnalisisIAError] = useState<string | null>(null);
+  const [analisisIATexto, setAnalisisIATexto] = useState<string | null>(null);
+  const [analisisIAFuente, setAnalisisIAFuente] = useState<"cache" | "nuevo" | null>(null);
+  const [analisisIAUso, setAnalisisIAUso] = useState<{ actual: number; tope: number } | null>(null);
+  const [analisisIAPeriodoLabel, setAnalisisIAPeriodoLabel] = useState<string>("");
+  const [exportandoWord, setExportandoWord] = useState(false);
+  const [analisisIAUsoGlobal, setAnalisisIAUsoGlobal] = useState<{ actual: number; tope: number } | null>(null);
+  const [analisisIAHistorial, setAnalisisIAHistorial] = useState<
+    { periodo_desde: string; periodo_hasta: string; generado_en: string | null }[]
+  >([]);
+  const [historialOpen, setHistorialOpen] = useState(false);
+  const [confirmGasto, setConfirmGasto] = useState<{ mensaje: string; forzar: boolean } | null>(null);
+
+  // anio/mes_inicio/mes_fin -> fecha_desde/fecha_hasta ISO, con la misma
+  // regla que usa el backend (date(anio, mes_inicio, 1) y último día del
+  // mes_fin) - se necesita para comparar contra analisisIAHistorial (que
+  // guarda fechas ISO, no año/mes sueltos).
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  const ultimoDiaMes = (a: number, m: number) => new Date(a, m, 0).getDate();
+  const fechaDesdeCalculada = (a: number, mi: number) => `${a}-${pad2(mi)}-01`;
+  const fechaHastaCalculada = (a: number, mf: number) => `${a}-${pad2(mf)}-${pad2(ultimoDiaMes(a, mf))}`;
+
+  const cargarEstadoAnalisisIA = async () => {
+    try {
+      const [estado, hist] = await Promise.all([
+        authFetch("/reportes/auxiliares/indicadores-financieros/analisis-ia/estado"),
+        authFetch("/reportes/auxiliares/indicadores-financieros/analisis-ia/historial"),
+      ]);
+      if (typeof estado?.uso_mensual === "number" && typeof estado?.tope_mensual === "number") {
+        setAnalisisIAUsoGlobal({ actual: estado.uso_mensual, tope: estado.tope_mensual });
+      }
+      setAnalisisIAHistorial(Array.isArray(hist?.historial) ? hist.historial : []);
+    } catch {
+      // silencioso a propósito - no rompe el resto del reporte
+    }
+  };
+
+  // anioParam/mesInicioParam/mesFinParam: se usan solo al reabrir un
+  // análisis desde "Ver análisis anteriores", para no depender de
+  // anio/mesInicio/mesFin del estado (que en ese momento todavía no se
+  // re-renderizó con el período clickeado).
+  const ejecutarAnalisisIA = async (
+    forzar: boolean,
+    anioParam?: number,
+    mesInicioParam?: number,
+    mesFinParam?: number
+  ) => {
+    const a = anioParam ?? anio;
+    const mi = mesInicioParam ?? mesInicio;
+    const mf = mesFinParam ?? mesFin;
+
+    setAnalisisIAOpen(true);
+    setAnalisisIALoading(true);
+    setAnalisisIAError(null);
+
+    try {
+      const res = await authFetch("/reportes/auxiliares/indicadores-financieros/analisis-ia", {
+        method: "POST",
+        body: JSON.stringify({ anio: a, mes_inicio: mi, mes_fin: mf, forzar }),
+      });
+      setAnalisisIATexto(res.analisis ?? "");
+      setAnalisisIAFuente(res.fuente ?? null);
+      setAnalisisIAPeriodoLabel(`${fechaDesdeCalculada(a, mi)} a ${fechaHastaCalculada(a, mf)}`);
+      setAnalisisIAUso(
+        typeof res.uso_mensual === "number" && typeof res.tope_mensual === "number"
+          ? { actual: res.uso_mensual, tope: res.tope_mensual }
+          : null
+      );
+      cargarEstadoAnalisisIA();
+    } catch (err) {
+      const mensaje = err instanceof Error ? err.message : "No fue posible generar el análisis con IA.";
+      setAnalisisIAError(mensaje);
+    } finally {
+      setAnalisisIALoading(false);
+    }
+  };
+
+  const solicitarAnalisisIA = (
+    forzar = false,
+    anioParam?: number,
+    mesInicioParam?: number,
+    mesFinParam?: number
+  ) => {
+    const a = anioParam ?? anio;
+    const mi = mesInicioParam ?? mesInicio;
+    const mf = mesFinParam ?? mesFin;
+    const fd = fechaDesdeCalculada(a, mi);
+    const fh = fechaHastaCalculada(a, mf);
+
+    const yaExiste = analisisIAHistorial.some((h) => h.periodo_desde === fd && h.periodo_hasta === fh);
+    if (!forzar && yaExiste) {
+      ejecutarAnalisisIA(forzar, a, mi, mf);
+      return;
+    }
+
+    const restante = analisisIAUsoGlobal
+      ? Math.max(analisisIAUsoGlobal.tope - analisisIAUsoGlobal.actual, 0)
+      : null;
+    const mensaje = forzar
+      ? `Regenerar vuelve a redactar el análisis desde cero con IA y consume 1 de tus análisis del mes${restante !== null ? ` (te quedan ${restante})` : ""}.`
+      : `Este período todavía no se ha analizado. Se va a generar un análisis nuevo con IA y va a consumir 1 de tus análisis del mes${restante !== null ? ` (te quedan ${restante})` : ""}.`;
+    setConfirmGasto({ mensaje, forzar });
+  };
+
+  const handleExportarWord = async () => {
+    if (!analisisIATexto) return;
+    setExportandoWord(true);
+    try {
+      const res = await fetch(`${API}/reportes/auxiliares/indicadores-financieros/analisis-ia/word`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({
+          analisis_markdown: analisisIATexto,
+          nombre_cliente: nombreCliente || "Cliente InsightsFlow",
+          periodo: analisisIAPeriodoLabel,
+        }),
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `analisis_ia_Indicadores_${(nombreCliente || "cliente").replace(/\s+/g, "_")}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert("No fue posible generar el Word del análisis.");
+    } finally {
+      setExportandoWord(false);
+    }
+  };
+
   const cargar = async () => {
     setLoading(true);
     try {
@@ -837,6 +988,10 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
 
   useEffect(() => {
     cargar();
+    getWhoAmI().then((me) => {
+      if (me?.cliente?.nombre) setNombreCliente(me.cliente.nombre);
+    });
+    cargarEstadoAnalisisIA();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -987,7 +1142,7 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
   );
 
   return (
-    <div className="space-y-4 p-5 bg-slate-50 min-h-screen">
+    <div id="pagina-indicadores-financieros" className="space-y-4 p-5 bg-slate-50 min-h-screen">
       <ConfigModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
@@ -1031,6 +1186,15 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
             </button>
 
             <button
+              onClick={() => solicitarAnalisisIA(false)}
+              disabled={!resumen.length}
+              className="flex items-center gap-2 px-4 py-3 bg-violet-50 text-violet-700 rounded-2xl text-xs font-black hover:bg-violet-100 transition-all border border-violet-100 disabled:opacity-50"
+            >
+              <Sparkles size={16} />
+              Analizar con IA
+            </button>
+
+            <button
               onClick={cargar}
               disabled={loading}
               className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-2xl text-xs font-black hover:bg-black transition-all shadow-lg active:scale-95 disabled:opacity-70"
@@ -1043,6 +1207,65 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
           <p className="text-slate-400 text-[10px] font-semibold italic text-right">
             Balance al corte final + Estado de resultados del período seleccionado
           </p>
+
+          {(analisisIAUsoGlobal || analisisIAHistorial.length > 0) && (
+            <div className="relative flex items-center gap-3">
+              {analisisIAUsoGlobal && (
+                <span className="text-[10px] font-bold text-violet-400">
+                  <Sparkles size={10} className="inline -mt-0.5 mr-1" />
+                  {Math.max(analisisIAUsoGlobal.tope - analisisIAUsoGlobal.actual, 0)}/{analisisIAUsoGlobal.tope} análisis con IA disponibles este mes
+                </span>
+              )}
+
+              {analisisIAHistorial.length > 0 && (
+                <button
+                  onClick={() => setHistorialOpen((v) => !v)}
+                  className="text-[10px] font-black text-violet-600 hover:text-violet-800 underline decoration-dotted"
+                >
+                  Ver análisis anteriores ({analisisIAHistorial.length})
+                </button>
+              )}
+
+              {historialOpen && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setHistorialOpen(false)} />
+                  <div className="absolute top-full right-0 mt-2 z-40 w-72 bg-white rounded-2xl border border-slate-100 shadow-2xl overflow-hidden">
+                    <div className="px-4 py-3 border-b border-slate-100">
+                      <p className="text-xs font-black text-slate-700">Análisis ya generados</p>
+                      <p className="text-[10px] text-slate-400">Volver a ver uno de estos no gasta cupo del mes.</p>
+                    </div>
+                    <div className="max-h-64 overflow-y-auto">
+                      {analisisIAHistorial.map((h) => (
+                        <button
+                          key={`${h.periodo_desde}_${h.periodo_hasta}`}
+                          onClick={() => {
+                            const a = Number(h.periodo_desde.slice(0, 4));
+                            const mi = Number(h.periodo_desde.slice(5, 7));
+                            const mf = Number(h.periodo_hasta.slice(5, 7));
+                            setAnio(a);
+                            setMesInicio(mi);
+                            setMesFin(mf);
+                            setHistorialOpen(false);
+                            solicitarAnalisisIA(false, a, mi, mf);
+                          }}
+                          className="w-full text-left px-4 py-2.5 text-xs hover:bg-violet-50 border-b border-slate-50 last:border-0"
+                        >
+                          <div className="font-bold text-slate-700">
+                            {h.periodo_desde} a {h.periodo_hasta}
+                          </div>
+                          {h.generado_en && (
+                            <div className="text-[10px] text-slate-400">
+                              Generado el {new Date(h.generado_en).toLocaleDateString("es-CO")}
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1489,6 +1712,220 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
           </CardContent>
         </Card>
       )}
+
+      {analisisIAOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/50 flex items-center justify-center p-4 print:hidden">
+          {/* Sin cierre por clic afuera a propósito - mismo motivo que en
+              Estado de Resultados/Balance General: con resize:both,
+              soltar un arrastre de redimensionado se puede interpretar
+              como clic sobre el fondo y cerrar el modal al agrandarlo. */}
+          <div
+            className="relative flex flex-col rounded-[2rem] bg-white shadow-2xl overflow-auto"
+            style={{
+              width: "min(96vw, 1100px)",
+              height: "min(92vh, 900px)",
+              minWidth: "480px",
+              minHeight: "420px",
+              maxWidth: "98vw",
+              maxHeight: "96vh",
+              resize: "both",
+            }}
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-4 px-6 py-4 border-b border-slate-100 bg-white rounded-t-[2rem]">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center">
+                  <Sparkles size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">Análisis con IA</h3>
+                  <p className="text-[11px] text-slate-400 font-medium">
+                    {analisisIAPeriodoLabel}
+                    {analisisIAFuente === "cache" && " · desde caché (sin cambios desde el último análisis)"}
+                    {analisisIAFuente === "nuevo" && " · análisis nuevo"}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setAnalisisIAOpen(false)}
+                className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 flex-1">
+              {analisisIALoading && (
+                <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-400">
+                  <RefreshCcw className="animate-spin" size={24} />
+                  <p className="text-xs font-bold">Analizando el período seleccionado…</p>
+                </div>
+              )}
+
+              {!analisisIALoading && analisisIAError && (
+                <div className="border border-rose-200 bg-rose-50 rounded-2xl p-4 text-sm text-rose-700 font-medium">
+                  {analisisIAError}
+                </div>
+              )}
+
+              {!analisisIALoading && !analisisIAError && analisisIATexto && (
+                <div className="prose prose-sm prose-slate max-w-none prose-headings:font-black prose-h2:text-base prose-h3:text-sm prose-table:text-xs prose-th:whitespace-nowrap prose-td:whitespace-nowrap">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      table: ({ children }) => (
+                        <div className="overflow-x-auto">
+                          <table>{children}</table>
+                        </div>
+                      ),
+                    }}
+                  >
+                    {analisisIATexto}
+                  </ReactMarkdown>
+                </div>
+              )}
+            </div>
+
+            <div className="sticky bottom-0 flex items-center justify-between gap-3 px-6 py-4 border-t border-slate-100 bg-white rounded-b-[2rem]">
+              <p className="text-[11px] text-slate-400 font-medium">
+                {analisisIAUso
+                  ? `${analisisIAUso.actual}/${analisisIAUso.tope} análisis usados este mes`
+                  : ""}
+              </p>
+              {!analisisIALoading && !analisisIAError && analisisIATexto && (
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => {
+                      const tituloOriginal = document.title;
+                      document.title = `analisis_ia_Indicadores_${(nombreCliente || "cliente").replace(/\s+/g, "_")}`;
+                      window.print();
+                      document.title = tituloOriginal;
+                    }}
+                    className="text-xs font-black text-slate-500 hover:text-slate-700"
+                  >
+                    Imprimir
+                  </button>
+                  <button
+                    onClick={handleExportarWord}
+                    disabled={exportandoWord}
+                    className="text-xs font-black text-slate-500 hover:text-slate-700 disabled:opacity-50"
+                  >
+                    {exportandoWord ? "Generando…" : "Exportar a Word"}
+                  </button>
+                  <button
+                    onClick={() => solicitarAnalisisIA(true)}
+                    className="text-xs font-black text-violet-700 hover:text-violet-900"
+                  >
+                    Regenerar análisis
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmGasto && (
+        <div
+          className="fixed inset-0 z-[110] bg-slate-900/50 flex items-center justify-center p-4"
+          onClick={() => setConfirmGasto(null)}
+        >
+          <div
+            className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-10 h-10 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center mb-3">
+              <Sparkles size={18} />
+            </div>
+            <h3 className="text-sm font-black text-slate-900 mb-1">Vas a generar un análisis nuevo</h3>
+            <p className="text-xs text-slate-500 leading-relaxed mb-5">{confirmGasto.mensaje}</p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setConfirmGasto(null)}
+                className="px-4 py-2 text-xs font-black text-slate-500 hover:text-slate-700"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  const { forzar } = confirmGasto;
+                  setConfirmGasto(null);
+                  ejecutarAnalisisIA(forzar);
+                }}
+                className="px-4 py-2 bg-violet-700 text-white rounded-xl text-xs font-black hover:bg-violet-800"
+              >
+                Continuar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Área imprimible: vive fuera del modal a propósito - mismo motivo
+          que en Estado de Resultados/Balance General (el modal tiene
+          overflow/resize propio que rompe la paginación de impresión). */}
+      {analisisIATexto && (
+        <div id="analisis-ia-print-area" style={{ position: "absolute", top: "-9999px", left: 0, width: "800px" }}>
+          <div className="mb-4 pb-3 border-b border-slate-200">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/branding/insightsflow-logo.png" alt="InsightsFlow" className="h-8 w-auto mb-2" />
+            <div className="text-sm font-bold text-slate-700">{nombreCliente || "Cliente InsightsFlow"}</div>
+            <div className="text-xs text-slate-400">Indicadores Financieros · {analisisIAPeriodoLabel}</div>
+          </div>
+
+          <div className="prose prose-sm prose-slate max-w-none">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{analisisIATexto}</ReactMarkdown>
+          </div>
+
+          <div className="mt-6 pt-3 border-t border-slate-200 text-center text-[10px] text-slate-400 italic">
+            Reporte generado por la IA de InsightsFlow {new Date().getFullYear()}
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @media print {
+          /* display:none (no visibility:hidden) en TODO lo demás - un
+             elemento visibility:hidden sigue ocupando su espacio en el
+             flujo del documento, así que el resto del reporte (muy largo
+             en esta página) generaba páginas en blanco extra después del
+             contenido real del análisis. Como #analisis-ia-print-area es
+             hermano directo de estos elementos (no un descendiente), se
+             puede ocultar todo lo demás sin afectarlo. */
+          #pagina-indicadores-financieros > *:not(#analisis-ia-print-area) {
+            display: none !important;
+          }
+          #analisis-ia-print-area {
+            position: static !important;
+            width: 100% !important;
+          }
+          /* Este reporte trae bastantes más tablas de 3 columnas con texto
+             largo (ej. "Cuenta / Saldo / Observación") que PyG o Balance -
+             sin esto, una tabla ancha se sale del margen de la hoja y el
+             texto de la derecha queda cortado en el PDF impreso. */
+          #analisis-ia-print-area table {
+            width: 100% !important;
+            table-layout: fixed !important;
+          }
+          #analisis-ia-print-area th,
+          #analisis-ia-print-area td {
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            white-space: normal !important;
+          }
+          /* Cuando una tabla del análisis se parte entre dos hojas, que
+             el encabezado se repita en la hoja siguiente - sin esto, la
+             continuación de una tabla larga arranca con solo números, sin
+             decir qué es cada columna. Este reporte es el que más tablas
+             trae de los tres, así que es donde más se nota. */
+          #analisis-ia-print-area table thead {
+            display: table-header-group;
+          }
+          #analisis-ia-print-area table tr {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+        }
+      `}</style>
     </div>
   );
 }

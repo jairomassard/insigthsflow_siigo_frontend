@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { authFetch } from "@/lib/api";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { authFetch, API, getToken } from "@/lib/api";
 import { getWhoAmI } from "@/lib/authInfo";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   Landmark,
   Wallet,
@@ -30,6 +32,8 @@ import {
   BarChart3,
   HelpCircle,
   Download,
+  Sparkles,
+  X,
 } from "lucide-react";
 
 type BalanceItem = {
@@ -175,6 +179,48 @@ const BALANCE_INFO: Record<string, string> = {
   patrimonio_total_mix:
     "Es la suma del patrimonio explícito reportado y el patrimonio calculado por el sistema cuando aplica.",
 };
+
+// Nombres de grupo del PUC colombiano (Decreto 2650 de 1993) a nivel de
+// "cuenta mayor" (4 dígitos) - catálogo público estándar, no algo
+// específico de un cliente. Se usa para agrupar la cascada del balance
+// igual a como lo hace un contador (ej. "Deudores" en vez de listar cada
+// subcuenta de clientes por separado). Si un cuenta_padre no aparece acá
+// (plan de cuentas personalizado), se usa un fallback con el código.
+const PUC_GRUPOS: Record<string, string> = {
+  "1105": "Caja", "1110": "Bancos", "1120": "Cuentas de ahorro", "1125": "Fondos",
+  "1205": "Acciones", "1215": "Cuotas o partes de interés social",
+  "1305": "Clientes", "1310": "Cuentas corrientes comerciales", "1330": "Anticipos y avances",
+  "1355": "Anticipo de impuestos y contribuciones", "1360": "Reclamaciones",
+  "1365": "Cuentas por cobrar a trabajadores", "1380": "Deudores varios",
+  "1405": "Materias primas", "1435": "Mercancías no fabricadas por la empresa", "1440": "Inventario",
+  "1504": "Terrenos", "1516": "Construcciones y edificaciones", "1520": "Maquinaria y equipo",
+  "1524": "Equipo de oficina", "1528": "Equipo de computación y comunicación",
+  "1540": "Flota y equipo de transporte", "1592": "Depreciación acumulada",
+  "1605": "Marcas", "1610": "Patentes", "1705": "Gastos pagados por anticipado",
+  "1710": "Cargos diferidos", "1905": "Valorizaciones",
+  "2105": "Bancos nacionales", "2110": "Bancos del exterior", "2120": "Corporaciones financieras",
+  "2195": "Otras obligaciones financieras",
+  "2205": "Proveedores nacionales", "2210": "Proveedores del exterior",
+  "2335": "Costos y gastos por pagar", "2355": "Deudas con accionistas o socios",
+  "2360": "Dividendos o participaciones por pagar", "2365": "Retención en la fuente por pagar",
+  "2367": "Impuesto a las ventas retenido", "2368": "Impuesto de industria y comercio retenido",
+  "2370": "Acreedores varios / aportes de nómina", "2380": "Acreedores varios",
+  "2404": "Impuesto de renta y complementarios por pagar", "2408": "IVA por pagar",
+  "2412": "Impuesto de industria y comercio por pagar",
+  "2505": "Salarios por pagar", "2510": "Cesantías consolidadas", "2515": "Intereses sobre cesantías",
+  "2520": "Prima de servicios", "2525": "Vacaciones consolidadas",
+  "2605": "Provisión para obligaciones fiscales", "2610": "Provisión para obligaciones laborales",
+  "2705": "Ingresos recibidos por anticipado",
+  "2805": "Anticipos y avances recibidos", "2815": "Depósitos recibidos",
+  "2820": "Ingresos recibidos para terceros",
+  "3105": "Capital suscrito y pagado", "3115": "Aportes sociales",
+  "3305": "Reserva legal", "3605": "Utilidad del ejercicio", "3610": "Pérdida del ejercicio",
+  "3705": "Utilidades acumuladas", "3710": "Pérdidas acumuladas", "3805": "Superávit por valorizaciones",
+};
+
+function nombreGrupoPuc(codigo: string): string {
+  return PUC_GRUPOS[codigo] || `Grupo ${codigo}`;
+}
 
 function autoFitColumns(ws: XLSX.WorkSheet, rows: any[]) {
   const widths: number[] = [];
@@ -574,6 +620,316 @@ function SectionTable({
   );
 }
 
+// Vista principal: una sola tabla en cascada (Activo Corriente + No
+// Corriente = Total Activo; Pasivo Corriente + No Corriente = Total
+// Pasivo; Patrimonio; Total Pasivo + Patrimonio), igual al formato
+// estándar de un estado de situación financiera preparado por un
+// contador. Antes esta misma información vivía repartida en 7 tarjetas
+// separadas (ver SECCIONES más abajo) - quedan disponibles como detalle
+// técnico, pero esta es la lectura principal para un usuario normal.
+// Consume exactamente los mismos data.balance / data.kpis que ya usan
+// esas 7 tarjetas - funciona igual para clientes Siigo y Alegra, no hay
+// nada específico de proveedor acá.
+function CascadaBalanceGeneral({
+  data,
+  cards,
+  showComparison,
+  fechaActualLabel,
+  fechaAnteriorLabel,
+}: {
+  data: BalanceResponse;
+  cards: BalanceResponse["kpis"];
+  showComparison: boolean;
+  fechaActualLabel?: string;
+  fechaAnteriorLabel?: string;
+}) {
+  const labelActual = fechaActualLabel || "Actual";
+  const labelAnterior = fechaAnteriorLabel || "Anterior";
+
+  // Qué grupos PUC están expandidos (clave: "seccion:codigo_grupo"), para
+  // poder ver el detalle de cuentas de un grupo puntual sin abrir todos -
+  // mismo patrón de botón +/- que ya usamos en Cartera de Clientes.
+  const [gruposAbiertos, setGruposAbiertos] = useState<Record<string, boolean>>({});
+  const toggleGrupo = (key: string) =>
+    setGruposAbiertos((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  const sum = (items: BalanceItem[], key: "saldo_actual" | "saldo_anterior") =>
+    items.reduce((acc, it) => acc + (Number(it[key]) || 0), 0);
+
+  // Celda de variación con el valor en $ y, debajo, el % - así se lee de
+  // un vistazo qué tan grande fue el cambio, no solo en cuánto sino en qué
+  // proporción (lo que muestra cualquier estado comparativo de contador).
+  const renderVariacionCelda = (
+    valorAbs: number | null | undefined,
+    valorPct: number | null | undefined
+  ) => {
+    if (valorAbs == null) {
+      return <span className="text-slate-400">—</span>;
+    }
+    return (
+      <div className="flex flex-col items-end gap-0.5">
+        <ValueCell value={valorAbs} emphasizeNegative />
+        {valorPct != null && <VariacionBadge value={valorPct} />}
+      </div>
+    );
+  };
+
+  // Agrupa por cuenta_padre (el "grupo" de 4 dígitos del PUC, ej. 1305 =
+  // Clientes) en vez de listar cada subcuenta suelta - mismo nivel de
+  // detalle que muestra un contador en un estado financiero real.
+  const renderGrupo = (seccionKey: string, items: BalanceItem[]) => {
+    const grupos = new Map<string, BalanceItem[]>();
+    items.forEach((item) => {
+      const codigo = item.cuenta_padre || item.cuenta;
+      if (!grupos.has(codigo)) grupos.set(codigo, []);
+      grupos.get(codigo)!.push(item);
+    });
+
+    return Array.from(grupos.entries()).map(([codigo, cuentas]) => {
+      const key = `${seccionKey}:${codigo}`;
+      const abierto = !!gruposAbiertos[key];
+      const totalGrupo = sum(cuentas, "saldo_actual");
+      const totalGrupoAnt = sum(cuentas, "saldo_anterior");
+      const variacionGrupo = showComparison ? totalGrupo - totalGrupoAnt : null;
+      const variacionGrupoPct =
+        variacionGrupo == null ? null : totalGrupoAnt !== 0 ? (variacionGrupo / totalGrupoAnt) * 100 : 0;
+      const soloUnaCuenta = cuentas.length === 1;
+
+      return (
+        <Fragment key={key}>
+          <tr className="border-b border-slate-100 hover:bg-slate-50/60">
+            <td className="py-2 pl-6 pr-3 text-slate-700">
+              <div className="flex items-center gap-2">
+                {soloUnaCuenta ? (
+                  <span className="w-6" />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => toggleGrupo(key)}
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-slate-300 bg-white text-xs font-bold text-slate-600 shadow-sm transition hover:bg-slate-100"
+                    title={abierto ? "Contraer cuentas" : `Ver ${cuentas.length} cuentas`}
+                  >
+                    {abierto ? "−" : "+"}
+                  </button>
+                )}
+                <div>
+                  <div>{soloUnaCuenta ? cuentas[0].nombre : nombreGrupoPuc(codigo)}</div>
+                  {!soloUnaCuenta && (
+                    <div className="text-[11px] text-slate-400 font-normal">
+                      {cuentas.length} cuentas
+                    </div>
+                  )}
+                </div>
+              </div>
+            </td>
+            <td className="py-2 px-3 text-right">
+              <ValueCell value={totalGrupo} emphasizeNegative />
+            </td>
+            {showComparison && (
+              <>
+                <td className="py-2 px-3 text-right">
+                  <ValueCell value={totalGrupoAnt} emphasizeNegative />
+                </td>
+                <td className="py-2 px-3 text-right">
+                  {renderVariacionCelda(variacionGrupo, variacionGrupoPct)}
+                </td>
+              </>
+            )}
+          </tr>
+
+          {abierto &&
+            !soloUnaCuenta &&
+            cuentas.map((item) => (
+              <tr key={item.cuenta} className="border-b border-slate-50 bg-slate-50/40">
+                <td className="py-1.5 pl-16 pr-3 text-slate-500 text-[13px]">{item.nombre}</td>
+                <td className="py-1.5 px-3 text-right text-[13px]">
+                  <ValueCell value={item.saldo_actual} emphasizeNegative />
+                </td>
+                {showComparison && (
+                  <>
+                    <td className="py-1.5 px-3 text-right text-[13px]">
+                      <ValueCell value={item.saldo_anterior} emphasizeNegative />
+                    </td>
+                    <td className="py-1.5 px-3 text-right text-[13px]">
+                      {renderVariacionCelda(item.variacion_abs, item.variacion_pct)}
+                    </td>
+                  </>
+                )}
+              </tr>
+            ))}
+        </Fragment>
+      );
+    });
+  };
+
+  const renderSubtotal = (label: string, valorActual: number, valorAnterior: number) => {
+    const variacion = showComparison ? valorActual - valorAnterior : null;
+    const variacionPct =
+      variacion == null ? null : valorAnterior !== 0 ? (variacion / valorAnterior) * 100 : 0;
+    return (
+      <tr className="bg-slate-50 font-bold border-b border-slate-200">
+        <td className="py-2 pl-6 pr-3 text-slate-800">{label}</td>
+        <td className="py-2 px-3 text-right">
+          <ValueCell value={valorActual} emphasizeNegative />
+        </td>
+        {showComparison && (
+          <>
+            <td className="py-2 px-3 text-right">
+              <ValueCell value={valorAnterior} emphasizeNegative />
+            </td>
+            <td className="py-2 px-3 text-right">{renderVariacionCelda(variacion, variacionPct)}</td>
+          </>
+        )}
+      </tr>
+    );
+  };
+
+  const renderSeccionHeader = (label: string) => (
+    <tr>
+      <td
+        colSpan={showComparison ? 4 : 2}
+        className="pt-6 pb-1 px-3 text-[11px] font-black uppercase tracking-widest text-slate-400"
+      >
+        {label}
+      </td>
+    </tr>
+  );
+
+  const renderGranTotal = (
+    label: string,
+    valorActual: number,
+    valorAnterior: number,
+    dark = false
+  ) => {
+    const variacion = showComparison ? valorActual - valorAnterior : null;
+    const variacionPct =
+      variacion == null ? null : valorAnterior !== 0 ? (variacion / valorAnterior) * 100 : 0;
+    return (
+      <tr className={dark ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-900"}>
+        <td className="py-3 pl-3 pr-3 font-black uppercase tracking-wide text-sm" colSpan={1}>
+          {label}
+        </td>
+        <td className="py-3 px-3 text-right font-black text-sm">
+          {dark ? formatCurrency(valorActual) : <ValueCell value={valorActual} emphasizeNegative />}
+        </td>
+        {showComparison && (
+          <>
+            <td className="py-3 px-3 text-right font-black text-sm">
+              {dark ? (
+                formatCurrency(valorAnterior)
+              ) : (
+                <ValueCell value={valorAnterior} emphasizeNegative />
+              )}
+            </td>
+            <td className="py-3 px-3 text-right">
+              <div className="flex flex-col items-end gap-1">
+                <span className="font-black text-sm">
+                  {dark ? (
+                    formatCurrency(variacion ?? 0)
+                  ) : (
+                    <ValueCell value={variacion ?? 0} emphasizeNegative />
+                  )}
+                </span>
+                {variacionPct != null && <VariacionBadge value={variacionPct} />}
+              </div>
+            </td>
+          </>
+        )}
+      </tr>
+    );
+  };
+
+  const totalActivoCorriente = sum(data.balance.activo_corriente, "saldo_actual");
+  const totalActivoCorrienteAnt = sum(data.balance.activo_corriente, "saldo_anterior");
+  const totalActivoNoCorriente = sum(data.balance.activo_no_corriente, "saldo_actual");
+  const totalActivoNoCorrienteAnt = sum(data.balance.activo_no_corriente, "saldo_anterior");
+  const totalPasivoCorriente = sum(data.balance.pasivo_corriente, "saldo_actual");
+  const totalPasivoCorrienteAnt = sum(data.balance.pasivo_corriente, "saldo_anterior");
+  const totalPasivoNoCorriente = sum(data.balance.pasivo_no_corriente, "saldo_actual");
+  const totalPasivoNoCorrienteAnt = sum(data.balance.pasivo_no_corriente, "saldo_anterior");
+  const totalPatrimonioAnt = sum(data.balance.patrimonio, "saldo_anterior");
+
+  const totalActivoAnt = totalActivoCorrienteAnt + totalActivoNoCorrienteAnt;
+  const totalPasivosAnt = totalPasivoCorrienteAnt + totalPasivoNoCorrienteAnt;
+  const totalPasivoMasPatrimonioAnt = totalPasivosAnt + totalPatrimonioAnt;
+
+  return (
+    <Card className="rounded-[2rem] shadow-2xl border-none overflow-hidden bg-white">
+      <div className="bg-slate-900 text-white px-6 py-5">
+        <h2 className="font-black text-lg uppercase tracking-widest">
+          Estado de Situación Financiera
+        </h2>
+        <p className="text-slate-400 text-xs mt-1 font-medium">
+          {showComparison
+            ? `Al ${labelActual} · comparado con el ${labelAnterior}`
+            : `Al ${labelActual}`}
+        </p>
+      </div>
+
+      <CardContent className="p-5">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse min-w-[560px]">
+            <thead>
+              <tr className="border-b bg-slate-50 text-slate-500 text-[10px] uppercase font-black tracking-widest">
+                <th className="text-left p-3">Cuenta</th>
+                <th className="text-right p-3">{labelActual}</th>
+                {showComparison && (
+                  <>
+                    <th className="text-right p-3">{labelAnterior}</th>
+                    <th className="text-right p-3">Variación</th>
+                  </>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {renderSeccionHeader("Activos")}
+              {renderGrupo("activo_corriente", data.balance.activo_corriente)}
+              {renderSubtotal("Total Activo Corriente", totalActivoCorriente, totalActivoCorrienteAnt)}
+              {data.balance.activo_no_corriente.length > 0 && (
+                <>
+                  {renderGrupo("activo_no_corriente", data.balance.activo_no_corriente)}
+                  {renderSubtotal(
+                    "Total Activo No Corriente",
+                    totalActivoNoCorriente,
+                    totalActivoNoCorrienteAnt
+                  )}
+                </>
+              )}
+              {renderGranTotal("Total Activo", cards.activos_totales, totalActivoAnt)}
+
+              {renderSeccionHeader("Pasivos")}
+              {renderGrupo("pasivo_corriente", data.balance.pasivo_corriente)}
+              {renderSubtotal("Total Pasivo Corriente", totalPasivoCorriente, totalPasivoCorrienteAnt)}
+              {data.balance.pasivo_no_corriente.length > 0 && (
+                <>
+                  {renderGrupo("pasivo_no_corriente", data.balance.pasivo_no_corriente)}
+                  {renderSubtotal(
+                    "Total Pasivo No Corriente",
+                    totalPasivoNoCorriente,
+                    totalPasivoNoCorrienteAnt
+                  )}
+                </>
+              )}
+              {renderGranTotal("Total Pasivos", cards.pasivos_totales, totalPasivosAnt)}
+
+              {renderSeccionHeader("Patrimonio")}
+              {renderGrupo("patrimonio", data.balance.patrimonio)}
+              {renderGranTotal("Total Patrimonio", cards.patrimonio_total, totalPatrimonioAnt)}
+
+              {renderGranTotal(
+                "Total Pasivo + Patrimonio",
+                cards.pasivo_mas_patrimonio,
+                totalPasivoMasPatrimonioAnt,
+                true
+              )}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function SoftBreakdownCard({
   title,
   subtitle,
@@ -734,16 +1090,35 @@ export default function BalanceGeneralPage() {
   const bpFileInputRef = useRef<HTMLInputElement>(null);
 
   const [openSections, setOpenSections] = useState({
-    activo_corriente: false,
     activo_no_corriente_bruto: false,
     activo_no_corriente_contra: false,
-    pasivo_corriente: false,
-    pasivo_no_corriente: false,
     patrimonio_explicito: false,
     patrimonio_calculado: false,
   });
 
   const [openAlertas, setOpenAlertas] = useState(false);
+  const [mostrarDetalleTecnico, setMostrarDetalleTecnico] = useState(false);
+
+  // "Analizar con IA" - mismo patron de cache/tope/modal que ya funciona
+  // en Estado de Resultados (backend: analisis_ia.py, tipo_reporte
+  // "balance_general"). El tope mensual de analisis es compartido entre
+  // reportes (uno solo por cliente al mes), por eso el estado se consulta
+  // aparte para este reporte pero contra el mismo contador del backend.
+  const [nombreCliente, setNombreCliente] = useState<string>("");
+  const [analisisIAOpen, setAnalisisIAOpen] = useState(false);
+  const [analisisIALoading, setAnalisisIALoading] = useState(false);
+  const [analisisIAError, setAnalisisIAError] = useState<string | null>(null);
+  const [analisisIATexto, setAnalisisIATexto] = useState<string | null>(null);
+  const [analisisIAFuente, setAnalisisIAFuente] = useState<"cache" | "nuevo" | null>(null);
+  const [analisisIAUso, setAnalisisIAUso] = useState<{ actual: number; tope: number } | null>(null);
+  const [analisisIAPeriodoLabel, setAnalisisIAPeriodoLabel] = useState<string>("");
+  const [exportandoWord, setExportandoWord] = useState(false);
+  const [analisisIAUsoGlobal, setAnalisisIAUsoGlobal] = useState<{ actual: number; tope: number } | null>(null);
+  const [analisisIAHistorial, setAnalisisIAHistorial] = useState<
+    { periodo_desde: string; periodo_hasta: string; generado_en: string | null }[]
+  >([]);
+  const [historialOpen, setHistorialOpen] = useState(false);
+  const [confirmGasto, setConfirmGasto] = useState<{ mensaje: string; forzar: boolean } | null>(null);
 
   useEffect(() => {
     setCompararCon(getLastDayOfPreviousMonth(fechaCorte));
@@ -751,11 +1126,8 @@ export default function BalanceGeneralPage() {
 
   const resetCollapsedState = () => {
     setOpenSections({
-      activo_corriente: false,
       activo_no_corriente_bruto: false,
       activo_no_corriente_contra: false,
-      pasivo_corriente: false,
-      pasivo_no_corriente: false,
       patrimonio_explicito: false,
       patrimonio_calculado: false,
     });
@@ -1002,11 +1374,142 @@ export default function BalanceGeneralPage() {
     }
   };
 
+  // Se consulta apenas se entra al reporte, para que el usuario sepa
+  // cuántos análisis le quedan y qué cortes ya tiene guardados en caché
+  // antes de decidir si generar uno nuevo. Falla en silencio si el
+  // cliente no tiene el permiso (403) - no rompe el resto del reporte.
+  const cargarEstadoAnalisisIA = async () => {
+    try {
+      const [estado, hist] = await Promise.all([
+        authFetch("/reportes/balance_general_v1/analisis-ia/estado"),
+        authFetch("/reportes/balance_general_v1/analisis-ia/historial"),
+      ]);
+      if (typeof estado?.uso_mensual === "number" && typeof estado?.tope_mensual === "number") {
+        setAnalisisIAUsoGlobal({ actual: estado.uso_mensual, tope: estado.tope_mensual });
+      }
+      setAnalisisIAHistorial(Array.isArray(hist?.historial) ? hist.historial : []);
+    } catch {
+      // silencioso a propósito - ver comentario arriba
+    }
+  };
+
+  // fechaCorteParam/compararConParam: se usan solo al reabrir un análisis
+  // desde "Ver análisis anteriores", para no depender del estado de los
+  // filtros (que en ese momento todavía no se re-renderizó con la fecha
+  // clickeada - sería una lectura obsoleta). En el uso normal (botón
+  // "Analizar con IA" / "Regenerar") se omiten y toma los filtros activos.
+  const ejecutarAnalisisIA = async (
+    forzar: boolean,
+    fechaCorteParam?: string,
+    compararConParam?: string | null
+  ) => {
+    const fc = fechaCorteParam ?? fechaCorte;
+    const cc = compararConParam !== undefined ? compararConParam : usarComparacion ? compararCon : null;
+
+    setAnalisisIAOpen(true);
+    setAnalisisIALoading(true);
+    setAnalisisIAError(null);
+
+    try {
+      const res = await authFetch("/reportes/balance_general_v1/analisis-ia", {
+        method: "POST",
+        body: JSON.stringify({ fecha_corte: fc, comparar_con: cc, forzar }),
+      });
+      setAnalisisIATexto(res.analisis ?? "");
+      setAnalisisIAFuente(res.fuente ?? null);
+      setAnalisisIAPeriodoLabel(
+        cc && cc !== fc
+          ? `${formatFechaCorta(fc)} vs ${formatFechaCorta(cc)}`
+          : formatFechaCorta(fc)
+      );
+      setAnalisisIAUso(
+        typeof res.uso_mensual === "number" && typeof res.tope_mensual === "number"
+          ? { actual: res.uso_mensual, tope: res.tope_mensual }
+          : null
+      );
+      // El resultado pudo haber cambiado el cupo usado y/o agregar un
+      // corte nuevo al historial - se refresca para que el badge y la
+      // lista queden al día sin que el usuario tenga que recargar.
+      cargarEstadoAnalisisIA();
+    } catch (err) {
+      const mensaje = err instanceof Error ? err.message : "No fue posible generar el análisis con IA.";
+      setAnalisisIAError(mensaje);
+    } finally {
+      setAnalisisIALoading(false);
+    }
+  };
+
+  const solicitarAnalisisIA = (
+    forzar = false,
+    fechaCorteParam?: string,
+    compararConParam?: string | null
+  ) => {
+    const fc = fechaCorteParam ?? fechaCorte;
+    const cc = compararConParam !== undefined ? compararConParam : usarComparacion ? compararCon : null;
+
+    const yaExiste = analisisIAHistorial.some(
+      (h) => h.periodo_hasta === fc && h.periodo_desde === (cc ?? fc)
+    );
+    if (!forzar && yaExiste) {
+      ejecutarAnalisisIA(forzar, fc, cc);
+      return;
+    }
+
+    const restante = analisisIAUsoGlobal
+      ? Math.max(analisisIAUsoGlobal.tope - analisisIAUsoGlobal.actual, 0)
+      : null;
+    const mensaje = forzar
+      ? `Regenerar vuelve a redactar el análisis desde cero con IA y consume 1 de tus análisis del mes${restante !== null ? ` (te quedan ${restante})` : ""}.`
+      : `Este corte todavía no se ha analizado. Se va a generar un análisis nuevo con IA y va a consumir 1 de tus análisis del mes${restante !== null ? ` (te quedan ${restante})` : ""}.`;
+    setConfirmGasto({ mensaje, forzar });
+  };
+
+  const handleExportarWord = async () => {
+    if (!analisisIATexto) return;
+    setExportandoWord(true);
+    try {
+      // El .docx se genera en el backend (python-docx), igual que en
+      // Estado de Resultados - mismo motivo (incompatibilidad de la
+      // libreria JS "docx" con Turbopack).
+      const res = await fetch(`${API}/reportes/balance_general_v1/analisis-ia/word`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({
+          analisis_markdown: analisisIATexto,
+          nombre_cliente: nombreCliente || "Cliente InsightsFlow",
+          periodo: analisisIAPeriodoLabel,
+        }),
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `analisis_ia_Balance_${(nombreCliente || "cliente").replace(/\s+/g, "_")}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert("No fue posible generar el Word del análisis.");
+    } finally {
+      setExportandoWord(false);
+    }
+  };
+
   useEffect(() => {
     cargarBalance();
     getWhoAmI().then((me) => {
       if (me?.proveedor_datos) setProveedorDatos(me.proveedor_datos);
+      if (me?.cliente?.nombre) setNombreCliente(me.cliente.nombre);
     });
+    cargarEstadoAnalisisIA();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1059,6 +1562,40 @@ export default function BalanceGeneralPage() {
 
     const wb = XLSX.utils.book_new();
 
+    // Totales del corte anterior - se calculan aca mismo (mismo criterio
+    // que usa CascadaBalanceGeneral en pantalla: sumar saldo_anterior de
+    // las listas netas/blended) porque el backend no expone un objeto
+    // "kpis_anterior" aparte, solo saldo_anterior por cuenta.
+    const sumaAnterior = (items: BalanceItem[] | undefined) =>
+      (items || []).reduce((acc, it) => acc + (Number(it.saldo_anterior) || 0), 0);
+
+    const activoCorrienteAnt = sumaAnterior(data.balance.activo_corriente);
+    const activoNoCorrienteNetoAnt = sumaAnterior(data.balance.activo_no_corriente);
+    const activosTotalesAnt = activoCorrienteAnt + activoNoCorrienteNetoAnt;
+    const pasivoCorrienteAnt = sumaAnterior(data.balance.pasivo_corriente);
+    const pasivoNoCorrienteAnt = sumaAnterior(data.balance.pasivo_no_corriente);
+    const pasivosTotalesAnt = pasivoCorrienteAnt + pasivoNoCorrienteAnt;
+    const patrimonioTotalAnt = sumaAnterior(data.balance.patrimonio);
+    const pasivoMasPatrimonioAnt = pasivosTotalesAnt + patrimonioTotalAnt;
+
+    // Fila de KPI con anterior/variación solo si hay modo comparativo y
+    // se calculó un valor anterior para ese KPI - evita columnas vacías
+    // sin sentido en KPIs que no tienen un "anterior" derivable (razones
+    // financieras, cuadratura).
+    const filaKpi = (campo: string, actual: number, anterior?: number) => {
+      if (!modoComparativo || anterior === undefined) {
+        return { Campo: campo, Valor: actual };
+      }
+      const variacion = actual - anterior;
+      return {
+        Campo: campo,
+        Valor: actual,
+        Anterior: anterior,
+        Variacion_abs: variacion,
+        Variacion_pct: anterior !== 0 ? (variacion / anterior) * 100 : 0,
+      };
+    };
+
     const resumenRows = [
       {
         Campo: "Fecha de corte",
@@ -1077,21 +1614,19 @@ export default function BalanceGeneralPage() {
         Valor: snapshotComparativoExiste ? "Sí" : "No",
       },
       {
-        Campo: "Patrimonio calculado",
+        Campo: "Usa patrimonio calculado",
         Valor: patrimonioCalculado ? "Sí" : "No",
       },
-      { Campo: "Activo corriente", Valor: cards.activo_corriente },
-      { Campo: "Activo no corriente base", Valor: activoNoCorrienteBruto },
-      { Campo: "Depreciaciones / ajustes acumulados", Valor: activoNoCorrienteContra },
-      { Campo: "Activo no corriente neto", Valor: activoNoCorrienteNeto },
-      { Campo: "Activos totales", Valor: cards.activos_totales },
-      { Campo: "Pasivo corriente", Valor: cards.pasivo_corriente },
-      { Campo: "Pasivo no corriente", Valor: cards.pasivo_no_corriente },
-      { Campo: "Pasivos totales", Valor: cards.pasivos_totales },
+      filaKpi("Activo corriente", cards.activo_corriente, activoCorrienteAnt),
+      filaKpi("Activo no corriente (neto)", activoNoCorrienteNeto, activoNoCorrienteNetoAnt),
+      filaKpi("Activos totales", cards.activos_totales, activosTotalesAnt),
+      filaKpi("Pasivo corriente", cards.pasivo_corriente, pasivoCorrienteAnt),
+      filaKpi("Pasivo no corriente", cards.pasivo_no_corriente, pasivoNoCorrienteAnt),
+      filaKpi("Pasivos totales", cards.pasivos_totales, pasivosTotalesAnt),
       { Campo: "Patrimonio reportado", Valor: patrimonioExplicitoTotal },
       { Campo: "Patrimonio calculado", Valor: patrimonioCalculadoTotal },
-      { Campo: "Patrimonio total", Valor: patrimonioTotal },
-      { Campo: "Pasivo + patrimonio", Valor: cards.pasivo_mas_patrimonio },
+      filaKpi("Patrimonio total", patrimonioTotal, patrimonioTotalAnt),
+      filaKpi("Pasivo + patrimonio", cards.pasivo_mas_patrimonio, pasivoMasPatrimonioAnt),
       { Campo: "Capital de trabajo", Valor: cards.capital_trabajo },
       { Campo: "Razón corriente", Valor: cards.razon_corriente },
       { Campo: "Nivel de endeudamiento %", Valor: cards.nivel_endeudamiento_pct },
@@ -1146,25 +1681,69 @@ export default function BalanceGeneralPage() {
       return rows;
     };
 
+    const buildGrandTotalRow = (label: string, actual: number, anterior: number) => {
+      const row: Record<string, string | number> = {
+        Seccion: "TOTAL",
+        Cuenta: "",
+        Cuenta_padre: "",
+        Nombre: label,
+        Seccion_balance: "",
+        Grupo_balance: "",
+        Actual: actual,
+      };
+      if (modoComparativo) {
+        const variacion = actual - anterior;
+        row.Anterior = anterior;
+        row.Variacion_abs = variacion;
+        row.Variacion_pct = anterior !== 0 ? (variacion / anterior) * 100 : 0;
+      }
+      return row;
+    };
+
+    // Mismas listas netas/blended que usa la cascada en pantalla (no la
+    // descomposición bruto/contra ni explícito/calculado) - para que el
+    // Excel exportado sea fiel a lo que el usuario ve como reporte
+    // principal, con sus mismas filas de gran total.
     const detalleRows = [
       ...buildSectionRows("Activo Corriente", data.balance.activo_corriente || []),
-      ...buildSectionRows(
-        "Activo No Corriente Base",
-        data.balance.activo_no_corriente_bruto || []
-      ),
-      ...buildSectionRows(
-        "Depreciaciones y Ajustes Acumulados",
-        data.balance.activo_no_corriente_contra || []
-      ),
+      ...buildSectionRows("Activo No Corriente", data.balance.activo_no_corriente || []),
+      buildGrandTotalRow("TOTAL ACTIVO", cards.activos_totales, activosTotalesAnt),
       ...buildSectionRows("Pasivo Corriente", data.balance.pasivo_corriente || []),
       ...buildSectionRows("Pasivo No Corriente", data.balance.pasivo_no_corriente || []),
-      ...buildSectionRows("Patrimonio Reportado", data.balance.patrimonio_explicito || []),
-      ...buildSectionRows("Patrimonio Calculado", data.balance.patrimonio_calculado || []),
+      buildGrandTotalRow("TOTAL PASIVOS", cards.pasivos_totales, pasivosTotalesAnt),
+      ...buildSectionRows("Patrimonio", data.balance.patrimonio || []),
+      buildGrandTotalRow("TOTAL PATRIMONIO", patrimonioTotal, patrimonioTotalAnt),
+      buildGrandTotalRow(
+        "TOTAL PASIVO + PATRIMONIO",
+        cards.pasivo_mas_patrimonio,
+        pasivoMasPatrimonioAnt
+      ),
     ];
 
     const wsDetalle = XLSX.utils.json_to_sheet(detalleRows);
     autoFitColumns(wsDetalle, detalleRows);
     XLSX.utils.book_append_sheet(wb, wsDetalle, "Detalle Balance");
+
+    // Desglose técnico (bruto/contra del activo no corriente, explícito/
+    // calculado del patrimonio) - aparte de "Detalle Balance", igual que
+    // en pantalla quedó detrás de "Ver detalle técnico completo": es
+    // información válida pero no la vista principal, no debía mezclarse
+    // con las listas netas de arriba.
+    const detalleTecnicoRows = [
+      ...buildSectionRows("Activo No Corriente Base", data.balance.activo_no_corriente_bruto || []),
+      ...buildSectionRows(
+        "Depreciaciones y Ajustes Acumulados",
+        data.balance.activo_no_corriente_contra || []
+      ),
+      ...buildSectionRows("Patrimonio Reportado", data.balance.patrimonio_explicito || []),
+      ...buildSectionRows("Patrimonio Calculado", data.balance.patrimonio_calculado || []),
+    ];
+
+    if (detalleTecnicoRows.length > 0) {
+      const wsDetalleTecnico = XLSX.utils.json_to_sheet(detalleTecnicoRows);
+      autoFitColumns(wsDetalleTecnico, detalleTecnicoRows);
+      XLSX.utils.book_append_sheet(wb, wsDetalleTecnico, "Detalle Tecnico");
+    }
 
     const narrativaRows =
       data.resumen?.narrativa?.map((txt, idx) => ({
@@ -1198,7 +1777,7 @@ export default function BalanceGeneralPage() {
   };
 
   return (
-    <div className="space-y-4 p-5 bg-slate-50 min-h-screen">
+    <div id="pagina-balance-general" className="space-y-4 p-5 bg-slate-50 min-h-screen">
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-[2rem] border shadow-sm">
         <div>
@@ -1279,6 +1858,15 @@ export default function BalanceGeneralPage() {
               Excel
             </Button>
 
+            <button
+              onClick={() => solicitarAnalisisIA(false)}
+              disabled={!data || loading}
+              className="flex items-center gap-2 px-4 py-3 bg-violet-50 text-violet-700 rounded-2xl text-xs font-black hover:bg-violet-100 transition-all border border-violet-100 disabled:opacity-50"
+            >
+              <Sparkles size={16} />
+              Analizar con IA
+            </button>
+
             <ModeBadge
               comparativo={modoComparativo}
               snapshotComparativoExiste={snapshotComparativoExiste}
@@ -1295,6 +1883,64 @@ export default function BalanceGeneralPage() {
             <p className="text-slate-400 text-[10px] font-semibold italic text-right">
               Ruta Alegra: Contabilidad {" > "} Libro Diario {" > "} Exportar Excel
             </p>
+          )}
+
+          {(analisisIAUsoGlobal || analisisIAHistorial.length > 0) && (
+            <div className="relative flex items-center gap-3">
+              {analisisIAUsoGlobal && (
+                <span className="text-[10px] font-bold text-violet-400">
+                  <Sparkles size={10} className="inline -mt-0.5 mr-1" />
+                  {Math.max(analisisIAUsoGlobal.tope - analisisIAUsoGlobal.actual, 0)}/{analisisIAUsoGlobal.tope} análisis con IA disponibles este mes
+                </span>
+              )}
+
+              {analisisIAHistorial.length > 0 && (
+                <button
+                  onClick={() => setHistorialOpen((v) => !v)}
+                  className="text-[10px] font-black text-violet-600 hover:text-violet-800 underline decoration-dotted"
+                >
+                  Ver análisis anteriores ({analisisIAHistorial.length})
+                </button>
+              )}
+
+              {historialOpen && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setHistorialOpen(false)} />
+                  <div className="absolute top-full right-0 mt-2 z-40 w-72 bg-white rounded-2xl border border-slate-100 shadow-2xl overflow-hidden">
+                    <div className="px-4 py-3 border-b border-slate-100">
+                      <p className="text-xs font-black text-slate-700">Análisis ya generados</p>
+                      <p className="text-[10px] text-slate-400">Volver a ver uno de estos no gasta cupo del mes.</p>
+                    </div>
+                    <div className="max-h-64 overflow-y-auto">
+                      {analisisIAHistorial.map((h) => (
+                        <button
+                          key={`${h.periodo_desde}_${h.periodo_hasta}`}
+                          onClick={() => {
+                            setHistorialOpen(false);
+                            solicitarAnalisisIA(
+                              false,
+                              h.periodo_hasta,
+                              h.periodo_desde !== h.periodo_hasta ? h.periodo_desde : null
+                            );
+                          }}
+                          className="w-full text-left px-4 py-2.5 text-xs hover:bg-violet-50 border-b border-slate-50 last:border-0"
+                        >
+                          <div className="font-bold text-slate-700">
+                            Corte {h.periodo_hasta}
+                            {h.periodo_desde !== h.periodo_hasta ? ` vs ${h.periodo_desde}` : ""}
+                          </div>
+                          {h.generado_en && (
+                            <div className="text-[10px] text-slate-400">
+                              Generado el {new Date(h.generado_en).toLocaleDateString("es-CO")}
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -1412,7 +2058,10 @@ export default function BalanceGeneralPage() {
         </CardContent>
       </Card>
 
-      {/* BALANCE DE PRUEBA REAL (SIIGO) */}
+      {/* BALANCE DE PRUEBA REAL (SIIGO) - antes de la cascada a propósito:
+          es el paso de "cargar la fuente de datos" para este corte, tiene
+          que ir antes del resultado para que el usuario sepa que primero
+          hay que generar/subir el balance. */}
       {proveedorDatos === "siigo" && (
         <Card className="rounded-[2rem] border shadow-sm bg-white">
           <CardContent className="p-5 space-y-4">
@@ -1514,6 +2163,17 @@ export default function BalanceGeneralPage() {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {/* ESTADO DE SITUACIÓN FINANCIERA (cascada) - lectura principal */}
+      {data && cards && (
+        <CascadaBalanceGeneral
+          data={data}
+          cards={cards}
+          showComparison={modoComparativo}
+          fechaActualLabel={fechaActualLabel}
+          fechaAnteriorLabel={fechaAnteriorLabel}
+        />
       )}
 
       {error && (
@@ -1657,6 +2317,34 @@ export default function BalanceGeneralPage() {
         />
       ) : null}
 
+      {/* DETALLE TÉCNICO: desgloses (patrimonio reportado vs. calculado,
+          activo no corriente bruto/contra) y las 7 tarjetas por cuenta -
+          antes era lo primero que veía el usuario; ahora queda como
+          contenido secundario, colapsado, para quien quiera auditar el
+          detalle o entender cómo se armó cada número de la cascada. */}
+      {data && (
+        <button
+          type="button"
+          onClick={() => setMostrarDetalleTecnico((prev) => !prev)}
+          className="w-full flex items-center justify-between gap-3 rounded-[2rem] border bg-white px-6 py-4 shadow-sm hover:bg-slate-50 transition-all"
+        >
+          <div className="flex items-center gap-3 text-left">
+            <div className="p-2.5 rounded-2xl bg-slate-50 border border-slate-100">
+              <Layers3 size={18} className="text-slate-700" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-slate-700">Ver detalle técnico completo</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Desglose de patrimonio reportado vs. calculado, activo no corriente bruto/contra, y el detalle por cuenta de cada grupo.
+              </p>
+            </div>
+          </div>
+          {mostrarDetalleTecnico ? <Minus size={18} className="text-slate-400 shrink-0" /> : <Plus size={18} className="text-slate-400 shrink-0" />}
+        </button>
+      )}
+
+      {mostrarDetalleTecnico && (
+      <>
       {/* DESGLOSES */}
       {cards && (
         <Card className="rounded-[2rem] shadow-sm border bg-white">
@@ -1732,19 +2420,14 @@ export default function BalanceGeneralPage() {
         </Card>
       )}
 
-      {/* SECCIONES */}
+      {/* SECCIONES - solo las que muestran algo que la cascada NO expone
+          (la descomposición bruto/contra del activo no corriente, y
+          reportado/calculado del patrimonio). Activo Corriente, Pasivo
+          Corriente y Pasivo No Corriente se quitaron: son exactamente los
+          mismos data.balance.* que ya muestra la cascada de arriba
+          (con el +/- por grupo PUC), mostrarlos dos veces era ruido. */}
       {data && (
         <div className="space-y-4">
-          <SectionTable
-            title="Activo Corriente"
-            items={data.balance.activo_corriente}
-            showComparison={modoComparativo}
-            open={openSections.activo_corriente}
-            onToggle={() => toggleSection("activo_corriente")}
-          fechaActualLabel={fechaActualLabel}
-          fechaAnteriorLabel={fechaAnteriorLabel}
-          />
-
           <SectionTable
             title="Activo No Corriente Base"
             subtitle="Activos no corrientes antes de depreciaciones, amortizaciones o ajustes contra activo."
@@ -1763,26 +2446,6 @@ export default function BalanceGeneralPage() {
             showComparison={modoComparativo}
             open={openSections.activo_no_corriente_contra}
             onToggle={() => toggleSection("activo_no_corriente_contra")}
-          fechaActualLabel={fechaActualLabel}
-          fechaAnteriorLabel={fechaAnteriorLabel}
-          />
-
-          <SectionTable
-            title="Pasivo Corriente"
-            items={data.balance.pasivo_corriente}
-            showComparison={modoComparativo}
-            open={openSections.pasivo_corriente}
-            onToggle={() => toggleSection("pasivo_corriente")}
-          fechaActualLabel={fechaActualLabel}
-          fechaAnteriorLabel={fechaAnteriorLabel}
-          />
-
-          <SectionTable
-            title="Pasivo No Corriente"
-            items={data.balance.pasivo_no_corriente}
-            showComparison={modoComparativo}
-            open={openSections.pasivo_no_corriente}
-            onToggle={() => toggleSection("pasivo_no_corriente")}
           fechaActualLabel={fechaActualLabel}
           fechaAnteriorLabel={fechaAnteriorLabel}
           />
@@ -1810,6 +2473,204 @@ export default function BalanceGeneralPage() {
           />
         </div>
       )}
+      </>
+      )}
+
+      {analisisIAOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/50 flex items-center justify-center p-4 print:hidden">
+          {/* Sin cierre por clic afuera a propósito - mismo motivo que en
+              Estado de Resultados: con resize:both, soltar un arrastre de
+              redimensionado se puede interpretar como clic sobre el fondo
+              y cerrar el modal justo al agrandarlo. */}
+          <div
+            className="relative flex flex-col rounded-[2rem] bg-white shadow-2xl overflow-auto"
+            style={{
+              width: "min(96vw, 1100px)",
+              height: "min(92vh, 900px)",
+              minWidth: "480px",
+              minHeight: "420px",
+              maxWidth: "98vw",
+              maxHeight: "96vh",
+              resize: "both",
+            }}
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-4 px-6 py-4 border-b border-slate-100 bg-white rounded-t-[2rem]">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center">
+                  <Sparkles size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">Análisis con IA</h3>
+                  <p className="text-[11px] text-slate-400 font-medium">
+                    {analisisIAPeriodoLabel}
+                    {analisisIAFuente === "cache" && " · desde caché (sin cambios desde el último análisis)"}
+                    {analisisIAFuente === "nuevo" && " · análisis nuevo"}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setAnalisisIAOpen(false)}
+                className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 flex-1">
+              {analisisIALoading && (
+                <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-400">
+                  <RefreshCcw className="animate-spin" size={24} />
+                  <p className="text-xs font-bold">Analizando el corte seleccionado…</p>
+                </div>
+              )}
+
+              {!analisisIALoading && analisisIAError && (
+                <div className="border border-rose-200 bg-rose-50 rounded-2xl p-4 text-sm text-rose-700 font-medium">
+                  {analisisIAError}
+                </div>
+              )}
+
+              {!analisisIALoading && !analisisIAError && analisisIATexto && (
+                <div className="prose prose-sm prose-slate max-w-none prose-headings:font-black prose-h2:text-base prose-h3:text-sm prose-table:text-xs prose-th:whitespace-nowrap prose-td:whitespace-nowrap">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      table: ({ children }) => (
+                        <div className="overflow-x-auto">
+                          <table>{children}</table>
+                        </div>
+                      ),
+                    }}
+                  >
+                    {analisisIATexto}
+                  </ReactMarkdown>
+                </div>
+              )}
+            </div>
+
+            <div className="sticky bottom-0 flex items-center justify-between gap-3 px-6 py-4 border-t border-slate-100 bg-white rounded-b-[2rem]">
+              <p className="text-[11px] text-slate-400 font-medium">
+                {analisisIAUso
+                  ? `${analisisIAUso.actual}/${analisisIAUso.tope} análisis usados este mes`
+                  : ""}
+              </p>
+              {!analisisIALoading && !analisisIAError && analisisIATexto && (
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => {
+                      const tituloOriginal = document.title;
+                      document.title = `analisis_ia_Balance_${(nombreCliente || "cliente").replace(/\s+/g, "_")}`;
+                      window.print();
+                      document.title = tituloOriginal;
+                    }}
+                    className="text-xs font-black text-slate-500 hover:text-slate-700"
+                  >
+                    Imprimir
+                  </button>
+                  <button
+                    onClick={handleExportarWord}
+                    disabled={exportandoWord}
+                    className="text-xs font-black text-slate-500 hover:text-slate-700 disabled:opacity-50"
+                  >
+                    {exportandoWord ? "Generando…" : "Exportar a Word"}
+                  </button>
+                  <button
+                    onClick={() => solicitarAnalisisIA(true)}
+                    className="text-xs font-black text-violet-700 hover:text-violet-900"
+                  >
+                    Regenerar análisis
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmGasto && (
+        <div
+          className="fixed inset-0 z-[110] bg-slate-900/50 flex items-center justify-center p-4"
+          onClick={() => setConfirmGasto(null)}
+        >
+          <div
+            className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-10 h-10 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center mb-3">
+              <Sparkles size={18} />
+            </div>
+            <h3 className="text-sm font-black text-slate-900 mb-1">Vas a generar un análisis nuevo</h3>
+            <p className="text-xs text-slate-500 leading-relaxed mb-5">{confirmGasto.mensaje}</p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setConfirmGasto(null)}
+                className="px-4 py-2 text-xs font-black text-slate-500 hover:text-slate-700"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  const { forzar } = confirmGasto;
+                  setConfirmGasto(null);
+                  ejecutarAnalisisIA(forzar);
+                }}
+                className="px-4 py-2 bg-violet-700 text-white rounded-xl text-xs font-black hover:bg-violet-800"
+              >
+                Continuar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Área imprimible: vive fuera del modal a propósito - mismo motivo
+          que en Estado de Resultados (el modal tiene overflow/resize
+          propio que rompe la paginación de impresión). */}
+      {analisisIATexto && (
+        <div id="analisis-ia-print-area" style={{ position: "absolute", top: "-9999px", left: 0, width: "800px" }}>
+          <div className="mb-4 pb-3 border-b border-slate-200">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/branding/insightsflow-logo.png" alt="InsightsFlow" className="h-8 w-auto mb-2" />
+            <div className="text-sm font-bold text-slate-700">{nombreCliente || "Cliente InsightsFlow"}</div>
+            <div className="text-xs text-slate-400">Balance General · {analisisIAPeriodoLabel}</div>
+          </div>
+
+          <div className="prose prose-sm prose-slate max-w-none">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{analisisIATexto}</ReactMarkdown>
+          </div>
+
+          <div className="mt-6 pt-3 border-t border-slate-200 text-center text-[10px] text-slate-400 italic">
+            Reporte generado por la IA de InsightsFlow {new Date().getFullYear()}
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @media print {
+          /* display:none (no visibility:hidden) en todo lo demás - un
+             elemento visibility:hidden sigue ocupando su espacio en el
+             flujo del documento, lo que generaba páginas en blanco extra
+             después del contenido real del análisis. */
+          #pagina-balance-general > *:not(#analisis-ia-print-area) {
+            display: none !important;
+          }
+          #analisis-ia-print-area {
+            position: static !important;
+            width: 100% !important;
+          }
+          /* Cuando una tabla del análisis se parte entre dos hojas, que
+             el encabezado se repita en la hoja siguiente - sin esto, la
+             continuación de una tabla larga (ej. la de patrimonio) arranca
+             con solo números, sin decir qué es cada columna. */
+          #analisis-ia-print-area table thead {
+            display: table-header-group;
+          }
+          #analisis-ia-print-area table tr {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+        }
+      `}</style>
     </div>
   );
 }

@@ -631,7 +631,9 @@ export default function DashboardResumenEjecutivoPage() {
     { periodo_desde: string; periodo_hasta: string; generado_en: string | null }[]
   >([]);
   const [historialOpen, setHistorialOpen] = useState(false);
-  const [confirmGasto, setConfirmGasto] = useState<{ mensaje: string; forzar: boolean } | null>(null);
+  const [confirmGasto, setConfirmGasto] = useState<
+    { mensaje: string; forzar: boolean; fechaDesde: string; fechaHasta: string } | null
+  >(null);
 
   const cargarEstadoAnalisisIA = async () => {
     try {
@@ -691,7 +693,7 @@ export default function DashboardResumenEjecutivoPage() {
     }
   };
 
-  const solicitarAnalisisIA = (
+  const solicitarAnalisisIA = async (
     forzar = false,
     fechaDesdeParam?: string,
     fechaHastaParam?: string
@@ -699,21 +701,63 @@ export default function DashboardResumenEjecutivoPage() {
     const fd = fechaDesdeParam ?? fechaDesde;
     const fh = fechaHastaParam ?? fechaHasta;
 
-    const yaExiste = analisisIAHistorial.some(
-      (h) => h.periodo_desde === fd && h.periodo_hasta === fh
-    );
-    if (!forzar && yaExiste) {
-      ejecutarAnalisisIA(forzar, fd, fh);
-      return;
-    }
-
     const restante = analisisIAUsoGlobal
       ? Math.max(analisisIAUsoGlobal.tope - analisisIAUsoGlobal.actual, 0)
       : null;
-    const mensaje = forzar
-      ? `Regenerar vuelve a redactar el diagnóstico desde cero con IA (combina PyG, Balance, Indicadores y este panel) y consume 1 de tus análisis del mes${restante !== null ? ` (te quedan ${restante})` : ""}.`
-      : `Este período todavía no se ha analizado de forma integral. Se va a generar un diagnóstico nuevo combinando 4 fuentes y va a consumir 1 de tus análisis del mes${restante !== null ? ` (te quedan ${restante})` : ""}.`;
-    setConfirmGasto({ mensaje, forzar });
+    const sufijoRestante = restante !== null ? ` (te quedan ${restante})` : "";
+
+    if (forzar) {
+      setConfirmGasto({
+        mensaje: `Regenerar vuelve a redactar el diagnóstico desde cero con IA (combina PyG, Balance, Indicadores y este panel) y consume 1 de tus análisis del mes${sufijoRestante}.`,
+        forzar: true,
+        fechaDesde: fd,
+        fechaHasta: fh,
+      });
+      return;
+    }
+
+    const yaExiste = analisisIAHistorial.some(
+      (h) => h.periodo_desde === fd && h.periodo_hasta === fh
+    );
+
+    if (!yaExiste) {
+      setConfirmGasto({
+        mensaje: `Este período todavía no se ha analizado de forma integral. Se va a generar un diagnóstico nuevo combinando 4 fuentes y va a consumir 1 de tus análisis del mes${sufijoRestante}.`,
+        forzar: false,
+        fechaDesde: fd,
+        fechaHasta: fh,
+      });
+      return;
+    }
+
+    // Ya está en el historial - puede salir gratis del caché, pero hay
+    // que verificar primero si los datos cambiaron desde entonces, para
+    // avisar ANTES de gastar en vez de enterarse recién con el resultado.
+    try {
+      const verificacion = await authFetch("/dashboard/resumen-ejecutivo/analisis-ia/verificar", {
+        method: "POST",
+        body: JSON.stringify({
+          desde: fd,
+          hasta: fh,
+          centro_costos: centroCostos || undefined,
+          modo_periodo: modoPeriodo,
+        }),
+      });
+      if (verificacion?.actualizado) {
+        ejecutarAnalisisIA(false, fd, fh);
+      } else {
+        setConfirmGasto({
+          mensaje: `Los datos de este período cambiaron desde la última vez que se analizó, así que verlo de nuevo va a generar un diagnóstico nuevo y va a consumir 1 de tus análisis del mes${sufijoRestante}.`,
+          forzar: false,
+          fechaDesde: fd,
+          fechaHasta: fh,
+        });
+      }
+    } catch {
+      // Si la verificación falla, no bloquear al usuario - se deja pasar
+      // directo (mismo comportamiento que había antes de este cambio).
+      ejecutarAnalisisIA(false, fd, fh);
+    }
   };
 
   const handleExportarWord = async () => {
@@ -2056,9 +2100,9 @@ export default function DashboardResumenEjecutivoPage() {
               </button>
               <button
                 onClick={() => {
-                  const { forzar } = confirmGasto;
+                  const { forzar, fechaDesde: fd, fechaHasta: fh } = confirmGasto;
                   setConfirmGasto(null);
-                  ejecutarAnalisisIA(forzar);
+                  ejecutarAnalisisIA(forzar, fd, fh);
                 }}
                 className="px-4 py-2 bg-violet-700 text-white rounded-xl text-xs font-black hover:bg-violet-800"
               >

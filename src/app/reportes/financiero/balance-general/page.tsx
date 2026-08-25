@@ -1118,7 +1118,9 @@ export default function BalanceGeneralPage() {
     { periodo_desde: string; periodo_hasta: string; generado_en: string | null }[]
   >([]);
   const [historialOpen, setHistorialOpen] = useState(false);
-  const [confirmGasto, setConfirmGasto] = useState<{ mensaje: string; forzar: boolean } | null>(null);
+  const [confirmGasto, setConfirmGasto] = useState<
+    { mensaje: string; forzar: boolean; fechaCorte: string; compararCon: string | null } | null
+  >(null);
 
   useEffect(() => {
     setCompararCon(getLastDayOfPreviousMonth(fechaCorte));
@@ -1439,7 +1441,7 @@ export default function BalanceGeneralPage() {
     }
   };
 
-  const solicitarAnalisisIA = (
+  const solicitarAnalisisIA = async (
     forzar = false,
     fechaCorteParam?: string,
     compararConParam?: string | null
@@ -1447,21 +1449,58 @@ export default function BalanceGeneralPage() {
     const fc = fechaCorteParam ?? fechaCorte;
     const cc = compararConParam !== undefined ? compararConParam : usarComparacion ? compararCon : null;
 
-    const yaExiste = analisisIAHistorial.some(
-      (h) => h.periodo_hasta === fc && h.periodo_desde === (cc ?? fc)
-    );
-    if (!forzar && yaExiste) {
-      ejecutarAnalisisIA(forzar, fc, cc);
-      return;
-    }
-
     const restante = analisisIAUsoGlobal
       ? Math.max(analisisIAUsoGlobal.tope - analisisIAUsoGlobal.actual, 0)
       : null;
-    const mensaje = forzar
-      ? `Regenerar vuelve a redactar el análisis desde cero con IA y consume 1 de tus análisis del mes${restante !== null ? ` (te quedan ${restante})` : ""}.`
-      : `Este corte todavía no se ha analizado. Se va a generar un análisis nuevo con IA y va a consumir 1 de tus análisis del mes${restante !== null ? ` (te quedan ${restante})` : ""}.`;
-    setConfirmGasto({ mensaje, forzar });
+    const sufijoRestante = restante !== null ? ` (te quedan ${restante})` : "";
+
+    if (forzar) {
+      setConfirmGasto({
+        mensaje: `Regenerar vuelve a redactar el análisis desde cero con IA y consume 1 de tus análisis del mes${sufijoRestante}.`,
+        forzar: true,
+        fechaCorte: fc,
+        compararCon: cc,
+      });
+      return;
+    }
+
+    const yaExiste = analisisIAHistorial.some(
+      (h) => h.periodo_hasta === fc && h.periodo_desde === (cc ?? fc)
+    );
+
+    if (!yaExiste) {
+      setConfirmGasto({
+        mensaje: `Este corte todavía no se ha analizado. Se va a generar un análisis nuevo con IA y va a consumir 1 de tus análisis del mes${sufijoRestante}.`,
+        forzar: false,
+        fechaCorte: fc,
+        compararCon: cc,
+      });
+      return;
+    }
+
+    // Ya está en el historial - puede salir gratis del caché, pero hay
+    // que verificar primero si los datos cambiaron desde entonces, para
+    // avisar ANTES de gastar en vez de enterarse recién con el resultado.
+    try {
+      const verificacion = await authFetch("/reportes/balance_general_v1/analisis-ia/verificar", {
+        method: "POST",
+        body: JSON.stringify({ fecha_corte: fc, comparar_con: cc }),
+      });
+      if (verificacion?.actualizado) {
+        ejecutarAnalisisIA(false, fc, cc);
+      } else {
+        setConfirmGasto({
+          mensaje: `Los datos de este corte cambiaron desde la última vez que se analizó, así que verlo de nuevo va a generar un análisis nuevo y va a consumir 1 de tus análisis del mes${sufijoRestante}.`,
+          forzar: false,
+          fechaCorte: fc,
+          compararCon: cc,
+        });
+      }
+    } catch {
+      // Si la verificación falla, no bloquear al usuario - se deja pasar
+      // directo (mismo comportamiento que había antes de este cambio).
+      ejecutarAnalisisIA(false, fc, cc);
+    }
   };
 
   const handleExportarWord = async () => {
@@ -2621,9 +2660,9 @@ export default function BalanceGeneralPage() {
               </button>
               <button
                 onClick={() => {
-                  const { forzar } = confirmGasto;
+                  const { forzar, fechaCorte: fc, compararCon: cc } = confirmGasto;
                   setConfirmGasto(null);
-                  ejecutarAnalisisIA(forzar);
+                  ejecutarAnalisisIA(forzar, fc, cc);
                 }}
                 className="px-4 py-2 bg-violet-700 text-white rounded-xl text-xs font-black hover:bg-violet-800"
               >

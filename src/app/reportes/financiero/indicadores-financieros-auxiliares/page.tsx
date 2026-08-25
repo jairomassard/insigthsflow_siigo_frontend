@@ -780,7 +780,9 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
     { periodo_desde: string; periodo_hasta: string; generado_en: string | null }[]
   >([]);
   const [historialOpen, setHistorialOpen] = useState(false);
-  const [confirmGasto, setConfirmGasto] = useState<{ mensaje: string; forzar: boolean } | null>(null);
+  const [confirmGasto, setConfirmGasto] = useState<
+    { mensaje: string; forzar: boolean; anio: number; mesInicio: number; mesFin: number } | null
+  >(null);
 
   // anio/mes_inicio/mes_fin -> fecha_desde/fecha_hasta ISO, con la misma
   // regla que usa el backend (date(anio, mes_inicio, 1) y último día del
@@ -846,7 +848,7 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
     }
   };
 
-  const solicitarAnalisisIA = (
+  const solicitarAnalisisIA = async (
     forzar = false,
     anioParam?: number,
     mesInicioParam?: number,
@@ -858,19 +860,59 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
     const fd = fechaDesdeCalculada(a, mi);
     const fh = fechaHastaCalculada(a, mf);
 
-    const yaExiste = analisisIAHistorial.some((h) => h.periodo_desde === fd && h.periodo_hasta === fh);
-    if (!forzar && yaExiste) {
-      ejecutarAnalisisIA(forzar, a, mi, mf);
-      return;
-    }
-
     const restante = analisisIAUsoGlobal
       ? Math.max(analisisIAUsoGlobal.tope - analisisIAUsoGlobal.actual, 0)
       : null;
-    const mensaje = forzar
-      ? `Regenerar vuelve a redactar el análisis desde cero con IA y consume 1 de tus análisis del mes${restante !== null ? ` (te quedan ${restante})` : ""}.`
-      : `Este período todavía no se ha analizado. Se va a generar un análisis nuevo con IA y va a consumir 1 de tus análisis del mes${restante !== null ? ` (te quedan ${restante})` : ""}.`;
-    setConfirmGasto({ mensaje, forzar });
+    const sufijoRestante = restante !== null ? ` (te quedan ${restante})` : "";
+
+    if (forzar) {
+      setConfirmGasto({
+        mensaje: `Regenerar vuelve a redactar el análisis desde cero con IA y consume 1 de tus análisis del mes${sufijoRestante}.`,
+        forzar: true,
+        anio: a,
+        mesInicio: mi,
+        mesFin: mf,
+      });
+      return;
+    }
+
+    const yaExiste = analisisIAHistorial.some((h) => h.periodo_desde === fd && h.periodo_hasta === fh);
+
+    if (!yaExiste) {
+      setConfirmGasto({
+        mensaje: `Este período todavía no se ha analizado. Se va a generar un análisis nuevo con IA y va a consumir 1 de tus análisis del mes${sufijoRestante}.`,
+        forzar: false,
+        anio: a,
+        mesInicio: mi,
+        mesFin: mf,
+      });
+      return;
+    }
+
+    // Ya está en el historial - puede salir gratis del caché, pero hay
+    // que verificar primero si los datos cambiaron desde entonces, para
+    // avisar ANTES de gastar en vez de enterarse recién con el resultado.
+    try {
+      const verificacion = await authFetch("/reportes/auxiliares/indicadores-financieros/analisis-ia/verificar", {
+        method: "POST",
+        body: JSON.stringify({ anio: a, mes_inicio: mi, mes_fin: mf }),
+      });
+      if (verificacion?.actualizado) {
+        ejecutarAnalisisIA(false, a, mi, mf);
+      } else {
+        setConfirmGasto({
+          mensaje: `Los datos de este período cambiaron desde la última vez que se analizó, así que verlo de nuevo va a generar un análisis nuevo y va a consumir 1 de tus análisis del mes${sufijoRestante}.`,
+          forzar: false,
+          anio: a,
+          mesInicio: mi,
+          mesFin: mf,
+        });
+      }
+    } catch {
+      // Si la verificación falla, no bloquear al usuario - se deja pasar
+      // directo (mismo comportamiento que había antes de este cambio).
+      ejecutarAnalisisIA(false, a, mi, mf);
+    }
   };
 
   const handleExportarWord = async () => {
@@ -1858,9 +1900,9 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
               </button>
               <button
                 onClick={() => {
-                  const { forzar } = confirmGasto;
+                  const { forzar, anio: a, mesInicio: mi, mesFin: mf } = confirmGasto;
                   setConfirmGasto(null);
-                  ejecutarAnalisisIA(forzar);
+                  ejecutarAnalisisIA(forzar, a, mi, mf);
                 }}
                 className="px-4 py-2 bg-violet-700 text-white rounded-xl text-xs font-black hover:bg-violet-800"
               >

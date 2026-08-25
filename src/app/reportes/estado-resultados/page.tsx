@@ -426,7 +426,9 @@ export default function EstadoResultadosPage() {
   // el período SÍ está en el historial, no se pregunta nada - lo normal
   // es que salga gratis del caché, y si algo cambió por dentro el
   // usuario lo ve igual reflejado como "análisis nuevo" en el modal.
-  const [confirmGasto, setConfirmGasto] = useState<{ mensaje: string; forzar: boolean } | null>(null);
+  const [confirmGasto, setConfirmGasto] = useState<
+    { mensaje: string; forzar: boolean; fechaDesde: string; fechaHasta: string } | null
+  >(null);
 
   // fechaDesdeParam/fechaHastaParam: se usan solo al reabrir un análisis
   // desde "Ver análisis anteriores". Sin esto, el click dispara
@@ -472,7 +474,7 @@ export default function EstadoResultadosPage() {
     }
   };
 
-  const solicitarAnalisisIA = (
+  const solicitarAnalisisIA = async (
     forzar = false,
     fechaDesdeParam?: string,
     fechaHastaParam?: string
@@ -480,21 +482,58 @@ export default function EstadoResultadosPage() {
     const fd = fechaDesdeParam ?? fechaDesde;
     const fh = fechaHastaParam ?? fechaHasta;
 
-    const yaExiste = analisisIAHistorial.some(
-      (h) => h.periodo_desde === fd && h.periodo_hasta === fh
-    );
-    if (!forzar && yaExiste) {
-      ejecutarAnalisisIA(forzar, fd, fh);
-      return;
-    }
-
     const restante = analisisIAUsoGlobal
       ? Math.max(analisisIAUsoGlobal.tope - analisisIAUsoGlobal.actual, 0)
       : null;
-    const mensaje = forzar
-      ? `Regenerar vuelve a redactar el análisis desde cero con IA y consume 1 de tus análisis del mes${restante !== null ? ` (te quedan ${restante})` : ""}.`
-      : `Este período todavía no se ha analizado. Se va a generar un análisis nuevo con IA y va a consumir 1 de tus análisis del mes${restante !== null ? ` (te quedan ${restante})` : ""}.`;
-    setConfirmGasto({ mensaje, forzar });
+    const sufijoRestante = restante !== null ? ` (te quedan ${restante})` : "";
+
+    if (forzar) {
+      setConfirmGasto({
+        mensaje: `Regenerar vuelve a redactar el análisis desde cero con IA y consume 1 de tus análisis del mes${sufijoRestante}.`,
+        forzar: true,
+        fechaDesde: fd,
+        fechaHasta: fh,
+      });
+      return;
+    }
+
+    const yaExiste = analisisIAHistorial.some(
+      (h) => h.periodo_desde === fd && h.periodo_hasta === fh
+    );
+
+    if (!yaExiste) {
+      setConfirmGasto({
+        mensaje: `Este período todavía no se ha analizado. Se va a generar un análisis nuevo con IA y va a consumir 1 de tus análisis del mes${sufijoRestante}.`,
+        forzar: false,
+        fechaDesde: fd,
+        fechaHasta: fh,
+      });
+      return;
+    }
+
+    // Ya está en el historial - puede salir gratis del caché, pero hay
+    // que verificar primero si los datos cambiaron desde entonces, para
+    // avisar ANTES de gastar en vez de enterarse recién con el resultado.
+    try {
+      const verificacion = await authFetch("/reportes/pnl_v1/analisis-ia/verificar", {
+        method: "POST",
+        body: JSON.stringify({ desde: fd, hasta: fh }),
+      });
+      if (verificacion?.actualizado) {
+        ejecutarAnalisisIA(false, fd, fh);
+      } else {
+        setConfirmGasto({
+          mensaje: `Los datos de este período cambiaron desde la última vez que se analizó, así que verlo de nuevo va a generar un análisis nuevo y va a consumir 1 de tus análisis del mes${sufijoRestante}.`,
+          forzar: false,
+          fechaDesde: fd,
+          fechaHasta: fh,
+        });
+      }
+    } catch {
+      // Si la verificación falla, no bloquear al usuario - se deja pasar
+      // directo (mismo comportamiento que había antes de este cambio).
+      ejecutarAnalisisIA(false, fd, fh);
+    }
   };
 
   const handleExportarWord = async () => {
@@ -2064,9 +2103,9 @@ export default function EstadoResultadosPage() {
               </button>
               <button
                 onClick={() => {
-                  const { forzar } = confirmGasto;
+                  const { forzar, fechaDesde: fd, fechaHasta: fh } = confirmGasto;
                   setConfirmGasto(null);
-                  ejecutarAnalisisIA(forzar);
+                  ejecutarAnalisisIA(forzar, fd, fh);
                 }}
                 className="px-4 py-2 bg-violet-700 text-white rounded-xl text-xs font-black hover:bg-violet-800"
               >

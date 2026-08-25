@@ -1768,20 +1768,31 @@ export default function IndicadoresFinancierosAuxiliaresPage() {
               )}
 
               {!analisisIALoading && !analisisIAError && analisisIATexto && (
-                <div className="prose prose-sm prose-slate max-w-none prose-headings:font-black prose-h2:text-base prose-h3:text-sm prose-table:text-xs prose-th:whitespace-nowrap prose-td:whitespace-nowrap">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      table: ({ children }) => (
-                        <div className="overflow-x-auto">
-                          <table>{children}</table>
-                        </div>
-                      ),
-                    }}
-                  >
-                    {analisisIATexto}
-                  </ReactMarkdown>
-                </div>
+                <>
+                  {analisisIAFuente === "nuevo" && (
+                    <div className="mb-4 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-800">
+                      <Sparkles size={14} className="mt-0.5 shrink-0" />
+                      <span>
+                        Este análisis se generó de nuevo (los datos del período cambiaron desde la última
+                        vez, no salió del caché) y consumió 1 de tus análisis del mes.
+                      </span>
+                    </div>
+                  )}
+                  <div className="prose prose-sm prose-slate max-w-none prose-headings:font-black prose-h2:text-base prose-h3:text-sm prose-table:text-xs prose-th:whitespace-nowrap prose-td:whitespace-nowrap">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        table: ({ children }) => (
+                          <div className="overflow-x-auto">
+                            <table>{children}</table>
+                          </div>
+                        ),
+                      }}
+                    >
+                      {analisisIATexto}
+                    </ReactMarkdown>
+                  </div>
+                </>
               )}
             </div>
 

@@ -1951,6 +1951,15 @@ export default function EstadoResultadosPage() {
 
               {!analisisIALoading && !analisisIAError && analisisIATexto && (
                 <>
+                  {analisisIAFuente === "nuevo" && (
+                    <div className="mb-4 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-800">
+                      <Sparkles size={14} className="mt-0.5 shrink-0" />
+                      <span>
+                        Este análisis se generó de nuevo (los datos del período cambiaron desde la última
+                        vez, no salió del caché) y consumió 1 de tus análisis del mes.
+                      </span>
+                    </div>
+                  )}
                   <div className="mb-5 rounded-2xl border border-slate-100 bg-slate-50/60 p-3">
                     <div className="flex items-center justify-between px-1 mb-1">
                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">

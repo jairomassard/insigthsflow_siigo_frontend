@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, Fragment } from "react";
+import { useEffect, useState, useRef } from "react";
 import { authFetch } from "@/lib/api";
 import { getWhoAmI } from "@/lib/authInfo";
 import useAuthGuard from "@/hooks/useAuthGuard";
@@ -19,7 +19,7 @@ import {
   Pie,
   LabelList
 } from "recharts";
-import { TrendingUp, TrendingDown, DollarSign, FileText, ArrowUpRight, RefreshCcw, Search, CheckCircle2, Info, ChevronDown, ChevronUp } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, FileText, ArrowUpRight, RefreshCcw, Search, CheckCircle2, Info } from "lucide-react";
 
 // --- HELPERS DE FORMATO ---
 function abreviar(valor: number): string {
@@ -95,9 +95,6 @@ export default function CruceIVAReportPage() {
   const [uploading, setUploading] = useState(false);
   const [proveedorDatos, setProveedorDatos] = useState<"siigo" | "alegra">("siigo");
   const [comprobantesCierre, setComprobantesCierre] = useState<any[]>([]);
-  const [coberturaAuxiliarVentasHasta, setCoberturaAuxiliarVentasHasta] = useState<string | null>(null);
-  const [coberturaAuxiliarComprasHasta, setCoberturaAuxiliarComprasHasta] = useState<string | null>(null);
-  const [cruceDian, setCruceDian] = useState<any>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -109,8 +106,6 @@ export default function CruceIVAReportPage() {
       setKpis(res.kpis ?? {});
       setAgrupadas(res.series_agrupadas?.[modo] ?? []);
       setComprobantesCierre(res.comprobantes_cierre_detectados ?? []);
-      setCoberturaAuxiliarVentasHasta(res.cobertura_auxiliar_ventas_hasta ?? null);
-      setCoberturaAuxiliarComprasHasta(res.cobertura_auxiliar_compras_hasta ?? null);
       setFetchError(null);
     } catch (err) {
       console.error(err);
@@ -120,19 +115,6 @@ export default function CruceIVAReportPage() {
       setFetchError("No se pudo actualizar el reporte con los filtros actuales. Los datos mostrados pueden estar desactualizados.");
     } finally {
       setLoading(false);
-    }
-
-    // Cruce contra el token DIAN ya cargado (mismo endpoint que usa la
-    // pantalla de Cruce DIAN) - se pide aparte y en modo silencioso: si
-    // falla o el cliente no tiene el cruce implementado, el panel de
-    // alerta simplemente no se muestra, no debe tumbar el resto de la
-    // pantalla de Cruce de IVA.
-    try {
-      const resDian = await authFetch(`/reportes/cruce_dian?desde=${fechaDesde}&hasta=${fechaHasta}`);
-      setCruceDian(resDian?.implementado ? resDian : null);
-    } catch (err) {
-      console.error(err);
-      setCruceDian(null);
     }
   };
 
@@ -239,9 +221,6 @@ export default function CruceIVAReportPage() {
         </div>
       </div>
 
-      {/* ZONA 1: TU LIQUIDACIÓN — todo calculado desde Siigo/Alegra, sin tocar el token DIAN */}
-      <SeccionHeader titulo={`Tu liquidación (calculada en ${proveedorDatos === "alegra" ? "Alegra" : "Siigo"})`} />
-
       {/* KPIs — fila compacta de una sola línea */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard title="IVA Ventas"    value={kpis.iva_ventas}    icon={<TrendingUp size={15}/>}   color="indigo" />
@@ -331,11 +310,11 @@ export default function CruceIVAReportPage() {
       {/* COMPROBANTES DE CIERRE EXCLUIDOS (transparencia) */}
       <ComprobantesCierrePanel comprobantes={comprobantesCierre} />
 
-      {/* TABLA DE LIQUIDACIÓN POR PERÍODO */}
+      {/* TABLA DE LIQUIDACIÓN */}
       <Card className="rounded-[1.5rem] shadow-2xl border-none overflow-hidden bg-white">
         <div className="bg-slate-900 text-white px-5 py-3 flex justify-between items-center">
-          <span className="flex items-center gap-2 font-black text-xs uppercase tracking-widest"><Search size={15} className="text-indigo-400" /> Liquidación Sugerida por Período</span>
-          <span className="text-[10px] font-bold bg-white/10 px-3 py-1 rounded-full border border-white/20 uppercase tracking-tighter">Calculado en {proveedorDatos === "alegra" ? "Alegra" : "Siigo"}</span>
+          <span className="flex items-center gap-2 font-black text-xs uppercase tracking-widest"><Search size={15} className="text-indigo-400" /> Liquidación Sugerida DIAN</span>
+          <span className="text-[10px] font-bold bg-white/10 px-3 py-1 rounded-full border border-white/20 uppercase tracking-tighter">Cruce Auditoría</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -384,24 +363,9 @@ export default function CruceIVAReportPage() {
           </table>
         </div>
       </Card>
-
-      {/* ZONA 2: AUDITORÍA — lo único de la página que cruza contra el token DIAN real */}
-      <SeccionHeader titulo="Auditoría contra el token DIAN" />
-      <ComparativaDianPanel cruceDian={cruceDian} kpis={kpis} fechaHasta={fechaHasta} proveedorDatos={proveedorDatos}
-        coberturaAuxiliarVentasHasta={coberturaAuxiliarVentasHasta} coberturaAuxiliarComprasHasta={coberturaAuxiliarComprasHasta} />
     </div>
   );
 }
-
-// Encabezado de zona - separa visualmente lo calculado desde Siigo/Alegra
-// (Tu Liquidación) de lo que se cruza contra el token DIAN real (Auditoría),
-// para que quede claro cuál sección usa cuál fuente de datos.
-const SeccionHeader = ({ titulo }: { titulo: string }) => (
-  <div className="flex items-center gap-3 pt-2">
-    <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{titulo}</span>
-    <div className="flex-1 h-px bg-slate-200" />
-  </div>
-);
 
 // Compara el calculo independiente (transaccional) contra lo que
 // contabilidad cerro oficialmente (cuenta "IVA por pagar" contra la DIAN).
@@ -479,250 +443,6 @@ const ComprobantesCierrePanel = ({ comprobantes }: { comprobantes: any[] }) => {
     </Card>
   );
 };
-
-// Replica el metodo manual que usa un contador para liquidar IVA: bajar el
-// token DIAN, sumar IVA de venta (neto de notas credito) y de compra, y
-// cruzarlo contra el ReteIVA/saldo que ya calcula el sistema contable. Se
-// muestra lado a lado con el "Calculado" (transaccional Siigo/Alegra) y el
-// "Declarado" (cuando contabilidad ya cerro el periodo) - InsightsFlow es
-// una guia de auditoria, nunca reemplaza un numero por otro (mismo patron
-// que EstadoDeclaradoBadge). Usa los mismos documentos que ya trae
-// cruceDian (todo lo que la DIAN reporto, cruce o no con Siigo) - sin pedir
-// nada nuevo al backend.
-//
-// Cada fila con diferencia (Ventas/Compras) se puede expandir para ver
-// EXACTAMENTE que documentos la explican - documentos que faltan por
-// ingresar en Siigo/Alegra Y documentos que ya estan pero con un IVA
-// distinto al que reporto la DIAN (ver AlertaDianPanel, version anterior
-// que solo cubria compras faltantes - se fusiono aqui porque tener dos
-// paneles con numeros relacionados pero distintos confundia al usuario).
-const ComparativaDianPanel = ({ cruceDian, kpis, fechaHasta, proveedorDatos, coberturaAuxiliarVentasHasta, coberturaAuxiliarComprasHasta }: { cruceDian: any; kpis: any; fechaHasta: string; proveedorDatos: string; coberturaAuxiliarVentasHasta: string | null; coberturaAuxiliarComprasHasta: string | null }) => {
-  const [expandido, setExpandido] = useState<{ ventas: boolean; compras: boolean }>({ ventas: false, compras: false });
-
-  if (!cruceDian) return null;
-
-  const sumarIva = (lista: any[]) => (lista ?? []).reduce((s, d) => s + (d.iva_dian || 0), 0);
-  const todosDian = (bucket: any) => sumarIva([...(bucket?.coincide ?? []), ...(bucket?.monto_distinto ?? []), ...(bucket?.falta_en_siigo ?? [])]);
-
-  const ivaVentasDian = todosDian(cruceDian.ventas) - todosDian(cruceDian.notas_credito);
-  const ivaComprasDian = todosDian(cruceDian.compras);
-  const reteivaFavor = kpis.reteiva_favor || 0;
-  const netoDian = ivaVentasDian - ivaComprasDian - reteivaFavor;
-
-  // Documentos que explican una diferencia: los que faltan por completo en
-  // Siigo/Alegra + los que ya estan pero con un IVA distinto al de la DIAN
-  // (los que "coinciden" no aportan diferencia, se excluyen). `signo` es -1
-  // para notas credito porque restan del IVA de venta neto.
-  const documentosDeBucket = (bucket: any, signo: number, tipoTercero: string) => {
-    const faltantes = (bucket?.falta_en_siigo ?? []).map((d: any) => ({
-      ...d, tipoTercero, tipo: "Falta por ingresar", iva_siigo: null, aporte: signo * (d.iva_dian || 0),
-    }));
-    const distintos = (bucket?.monto_distinto ?? []).map((d: any) => ({
-      ...d, tipoTercero, tipo: "IVA distinto", aporte: signo * ((d.iva_dian || 0) - (d.iva_siigo || 0)),
-    }));
-    return [...faltantes, ...distintos];
-  };
-
-  const docsVentas = [
-    ...documentosDeBucket(cruceDian.ventas, 1, "Factura"),
-    ...documentosDeBucket(cruceDian.notas_credito, -1, "Nota crédito"),
-  ].sort((a, b) => Math.abs(b.aporte) - Math.abs(a.aporte));
-
-  const docsCompras = documentosDeBucket(cruceDian.compras, 1, "Factura")
-    .sort((a, b) => Math.abs(b.aporte) - Math.abs(a.aporte));
-
-  // "Calculado" suma el libro contable (auxiliar), que se sube por separado
-  // del token DIAN y puede quedar rezagado unos dias frente a las facturas
-  // ya emitidas - confirmado con datos reales de Binaria (14 facturas del
-  // 19-26 de agosto existian en Siigo y en la DIAN pero todavia no en el
-  // auxiliar de IVA venta). Cada cuenta (venta/compra) se sube junta en el
-  // mismo Excel pero puede quedar en una fecha de corte distinta - por eso
-  // se calcula por separado, no un solo corte global (un corte global hubiera
-  // ocultado justo este caso real).
-  const auxiliarVentasIncompleto = !!coberturaAuxiliarVentasHasta && fechaHasta > coberturaAuxiliarVentasHasta;
-  const auxiliarComprasIncompleto = !!coberturaAuxiliarComprasHasta && fechaHasta > coberturaAuxiliarComprasHasta;
-
-  const filas = [
-    { key: "ventas", concepto: "IVA Ventas", calculado: kpis.iva_ventas || 0, dian: ivaVentasDian as number | null, declarado: null, docs: docsVentas, colorClass: "", auxiliarHasta: coberturaAuxiliarVentasHasta, auxiliarIncompleto: auxiliarVentasIncompleto },
-    { key: "compras", concepto: "IVA Compras", calculado: kpis.iva_compras || 0, dian: ivaComprasDian as number | null, declarado: null, docs: docsCompras, colorClass: "", auxiliarHasta: coberturaAuxiliarComprasHasta, auxiliarIncompleto: auxiliarComprasIncompleto },
-    // Sin columna "Según Token DIAN": ya confirmamos que el campo Rete IVA
-    // del token DIAN siempre viene en $0 para documentos "Recibido" (no
-    // refleja lo que el comprador retiene) - no sirve como fuente
-    // independiente de comparación, ver nota en memoria del proyecto. Se
-    // muestra en naranja para que se entienda el puente hacia "Neto a Pagar"
-    // (mismo color que usan las demás tarjetas/gráficos de ReteIVA).
-    { key: "reteiva", concepto: "ReteIVA en sistema contable", calculado: reteivaFavor, dian: null as number | null, declarado: null, docs: null, colorClass: "text-orange-600", auxiliarHasta: null, auxiliarIncompleto: false },
-    { key: "neto", concepto: "Neto a Pagar", calculado: kpis.saldo_iva || 0, dian: netoDian as number | null, declarado: kpis.iva_declarado_contabilidad ?? null, docs: null, colorClass: "", auxiliarHasta: null, auxiliarIncompleto: false },
-  ];
-
-  const coberturaHasta = cruceDian.cobertura_dian_hasta as string | null;
-  const coberturaIncompleta = !!coberturaHasta && fechaHasta > coberturaHasta;
-
-  const toggle = (key: "ventas" | "compras") => setExpandido((e) => ({ ...e, [key]: !e[key] }));
-
-  return (
-    <Card className="rounded-[1.5rem] shadow-lg border-none bg-white">
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div>
-            <p className="text-sm font-black text-slate-800">Liquidación cruzada contra el token DIAN</p>
-            <p className="text-xs text-slate-500 mt-1">
-              Mismo método manual que usa un contador: IVA de venta (neto de notas crédito) y de compra según lo que
-              la DIAN reportó, cruzado contra el ReteIVA del sistema contable — expande una fila para ver exactamente
-              qué documentos explican la diferencia con {proveedorDatos === "alegra" ? "Alegra" : "Siigo"}.
-            </p>
-          </div>
-          <div className="shrink-0 text-right text-[10px] font-bold text-slate-400 whitespace-nowrap space-y-0.5">
-            {coberturaHasta && <p>Token DIAN hasta {coberturaHasta}</p>}
-            {coberturaAuxiliarVentasHasta && <p>Auxiliar ventas hasta {coberturaAuxiliarVentasHasta}</p>}
-            {coberturaAuxiliarComprasHasta && <p>Auxiliar compras hasta {coberturaAuxiliarComprasHasta}</p>}
-          </div>
-        </div>
-
-        {coberturaIncompleta && (
-          <div className="bg-amber-50 border border-amber-200 text-amber-700 px-4 py-2 rounded-xl text-[11px] font-bold mb-3">
-            El token DIAN cargado solo cubre hasta {coberturaHasta}, pero estás filtrando hasta {fechaHasta}. La
-            diferencia de ese tramo puede aparecer como "faltante" sin serlo — sube el token DIAN más reciente.
-          </div>
-        )}
-
-        {(auxiliarVentasIncompleto || auxiliarComprasIncompleto) && (
-          <div className="bg-amber-50 border border-amber-200 text-amber-700 px-4 py-2 rounded-xl text-[11px] font-bold mb-3">
-            El auxiliar contable (libro contable) cargado en {proveedorDatos === "alegra" ? "Alegra" : "Siigo"} solo llega
-            hasta{" "}
-            {auxiliarVentasIncompleto && <>{coberturaAuxiliarVentasHasta} (ventas)</>}
-            {auxiliarVentasIncompleto && auxiliarComprasIncompleto && " y hasta "}
-            {auxiliarComprasIncompleto && <>{coberturaAuxiliarComprasHasta} (compras)</>}
-            , pero estás filtrando hasta {fechaHasta}. Las facturas emitidas después de esa fecha ya existen en el
-            sistema y en la DIAN, pero "Calculado" todavía no las ve — sube el auxiliar más reciente con "Sincronizar
-            Auxiliar" antes de comparar esa diferencia.
-          </div>
-        )}
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead className="text-slate-400 font-black uppercase text-[10px] border-b">
-              <tr>
-                <th className="py-2 text-left">Concepto</th>
-                <th className="py-2 text-right">Calculado (sistema)</th>
-                <th className="py-2 text-right">Según Token DIAN</th>
-                <th className="py-2 text-right">Diferencia</th>
-                <th className="py-2 text-right">Declarado Contabilidad</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-bold">
-              {filas.map((f) => {
-                const tieneComparacionDian = f.dian != null;
-                const diferencia = tieneComparacionDian ? (f.dian as number) - f.calculado : 0;
-                const diferenciaEsMaterial = tieneComparacionDian && Math.abs(diferencia) > Math.max(1000, Math.abs(f.calculado) * 0.01);
-                // Se puede expandir cualquier fila con documentos propios (Ventas/Compras,
-                // no Neto ni ReteIVA) que tenga diferencia material - incluso sin documentos
-                // que la expliquen, para mostrar honestamente que no hay ninguno (ver nota abajo).
-                const puedeExpandir = f.docs != null && diferenciaEsMaterial;
-                const abierto = f.key === "ventas" ? expandido.ventas : f.key === "compras" ? expandido.compras : false;
-                return (
-                  <Fragment key={f.key}>
-                    <tr
-                      className={puedeExpandir ? "cursor-pointer hover:bg-slate-50" : ""}
-                      onClick={() => puedeExpandir && toggle(f.key as "ventas" | "compras")}
-                    >
-                      <td className={`py-2 flex items-center gap-1.5 ${f.colorClass || 'text-slate-700'}`}>
-                        {f.concepto}
-                        {puedeExpandir && (abierto ? <ChevronUp size={12} className="text-slate-400" /> : <ChevronDown size={12} className="text-slate-400" />)}
-                      </td>
-                      <td className={`py-2 text-right ${f.colorClass || 'text-slate-600'}`}>{formatCurrency(f.calculado)}</td>
-                      <td className="py-2 text-right text-slate-800">
-                        {tieneComparacionDian ? formatCurrency(f.dian as number) : <span className="text-slate-300 italic font-semibold">No aplica</span>}
-                      </td>
-                      <td className={`py-2 text-right ${diferenciaEsMaterial ? 'text-orange-600' : 'text-slate-300'}`}>
-                        {tieneComparacionDian ? formatCurrency(diferencia) : <span className="text-slate-300 italic font-semibold">—</span>}
-                      </td>
-                      <td className="py-2 text-right text-slate-500">
-                        {f.declarado != null ? formatCurrency(f.declarado) : <span className="text-slate-300 italic font-semibold">—</span>}
-                      </td>
-                    </tr>
-                    {puedeExpandir && abierto && (
-                      <tr>
-                        <td colSpan={5} className="py-2 bg-slate-50">
-                          {f.docs.length > 0 ? (
-                            <DetalleDiferenciaDian docs={f.docs} />
-                          ) : (
-                            <p className="text-[11px] text-slate-500 px-2 py-1">
-                              Ningún documento individual explica esta diferencia — todas las facturas{f.key === "ventas" ? " y notas crédito" : ""} de
-                              este período cruzan exacto contra la DIAN.{" "}
-                              {f.auxiliarIncompleto ? (
-                                <>La causa más probable: el auxiliar contable solo llega hasta {f.auxiliarHasta} y estás filtrando hasta{" "}
-                                {fechaHasta} — las facturas de esos últimos días ya existen en el sistema y en la DIAN, pero el libro contable
-                                todavía no las tiene. Sube el auxiliar más reciente y esta diferencia debería bajar.</>
-                              ) : (
-                                <>La diferencia sale de comparar dos fuentes distintas: "Calculado" viene del libro contable (auxiliar) y "Según
-                                Token DIAN" de sumar directamente las facturas — pueden no coincidir al peso por ajustes contables o por fecha de
-                                contabilización distinta a la fecha de emisión. Revisa con tu contador si esa diferencia tiene una causa puntual.</>
-                              )}
-                            </p>
-                          )}
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        <p className="text-[10px] text-slate-400 mt-3 italic">
-          "Según Token DIAN" suma el IVA de TODO lo que la DIAN reportó, así ya esté en Siigo/Alegra. La diferencia
-          puede incluir documentos que faltan por ingresar y documentos que ya están registrados pero con el IVA sin
-          desglosar igual al de la DIAN — el detalle expandido muestra ambos casos, ordenados por el que más aporta.
-          El ReteIVA no tiene comparación contra el token porque ese reporte no refleja lo que el comprador retiene —
-          solo lo que ya tiene registrado el sistema contable.
-        </p>
-      </CardContent>
-    </Card>
-  );
-};
-
-// Tabla de detalle mostrada al expandir una fila de ComparativaDianPanel:
-// que documentos concretos (facturas y notas credito) explican la
-// diferencia de esa fila, ordenados por cuanto aportan.
-const DetalleDiferenciaDian = ({ docs }: { docs: any[] }) => (
-  <div className="overflow-x-auto">
-    <table className="w-full text-[11px]">
-      <thead className="text-slate-400 font-black uppercase text-[9px] border-b border-slate-200">
-        <tr>
-          <th className="py-1.5 pr-3 text-left">Tipo</th>
-          <th className="py-1.5 pr-3 text-left">Documento</th>
-          <th className="py-1.5 pr-3 text-left">Tercero</th>
-          <th className="py-1.5 pr-3 text-left">Fecha</th>
-          <th className="py-1.5 pl-3 text-right">Base DIAN</th>
-          <th className="py-1.5 pl-3 text-right">IVA DIAN</th>
-          <th className="py-1.5 pl-3 text-right">Total DIAN</th>
-          <th className="py-1.5 pl-3 text-right">IVA Siigo</th>
-          <th className="py-1.5 pl-3 pr-2 text-right">Aporta a la diferencia</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-slate-200 font-bold">
-        {docs.map((d, i) => (
-          <tr key={i}>
-            <td className="py-1.5 pr-3 text-slate-500 font-semibold">{d.tipoTercero} · {d.tipo}</td>
-            <td className="py-1.5 pr-3 text-slate-700 font-mono">{d.folio}</td>
-            <td className="py-1.5 pr-3 text-slate-600">{d.tercero_nombre}</td>
-            <td className="py-1.5 pr-3 text-slate-500">{d.fecha}</td>
-            <td className="py-1.5 pl-3 text-right text-slate-500">{formatCurrency((d.total_dian || 0) - (d.iva_dian || 0))}</td>
-            <td className="py-1.5 pl-3 text-right text-slate-700">{formatCurrency(d.iva_dian || 0)}</td>
-            <td className="py-1.5 pl-3 text-right text-slate-500">{formatCurrency(d.total_dian || 0)}</td>
-            <td className="py-1.5 pl-3 text-right text-slate-500">
-              {d.iva_siigo != null ? formatCurrency(d.iva_siigo) : <span className="text-slate-300 italic">no existe</span>}
-            </td>
-            <td className={`py-1.5 pl-3 pr-2 text-right ${d.aporte >= 0 ? 'text-orange-600' : 'text-emerald-600'}`}>
-              {formatCurrency(d.aporte)}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
-);
 
 // KPI CARD — una sola línea: icono | label | valor (+ subtitulo opcional)
 const StatCard = ({ title, value, icon, color, highlight = false, subtitle }: any) => {

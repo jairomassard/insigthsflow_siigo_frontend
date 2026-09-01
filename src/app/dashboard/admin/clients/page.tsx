@@ -51,14 +51,14 @@ const PAQUETES: {
     codigo: "operativo",
     nombre: "InsightFlow Operativo",
     descripcion:
-      "Ventas, compras, cartera, integración Siigo y reportes operativos principales.",
-    permisos: 23,
+      "Ventas, compras, cartera, integración con tu sistema contable (Siigo o Alegra) y reportes operativos y financieros principales.",
+    permisos: 24,
   },
   {
     codigo: "financiero",
     nombre: "InsightFlow Financiero",
     descripcion:
-      "IVA, retenciones, P&L, análisis de variación, balance e indicadores financieros.",
+      "IVA, retenciones, P&L, análisis de variación, balance e indicadores financieros — sin conexión API, solo carga de archivos. Solo disponible para Siigo.",
     permisos: 11,
   },
   {
@@ -66,9 +66,21 @@ const PAQUETES: {
     nombre: "InsightFlow Completo",
     descripcion:
       "Acceso completo: operativo, financiero, dashboard ejecutivo y configuraciones avanzadas.",
-    permisos: 25,
+    permisos: 28,
   },
 ];
+
+// Financiero no aplica a Alegra: a diferencia de Siigo (donde Financiero no
+// necesita ninguna conexion API, solo carga de Excel), en Alegra hasta el
+// Cruce de IVA/Retenciones/PyG dependen de datos ya sincronizados por API -
+// un cliente "Financiero" en Alegra pagaria menos por lo mismo que ya trae
+// Operativo (que ya incluye esos mismos 6 permisos financieros) con el mismo
+// costo de sincronizacion que Completo. Ver memoria del proyecto
+// (project_insightflow_billing_mercadopago) para el analisis completo.
+const paquetesDisponiblesPara = (proveedor: ProveedorDatos) =>
+  proveedor === "alegra"
+    ? PAQUETES.filter((p) => p.codigo !== "financiero")
+    : PAQUETES;
 
 const isValidEmail = (email: string) => {
   const clean = email.trim();
@@ -163,6 +175,16 @@ export default function ClientsPage() {
     load();
   }, []);
 
+  // Financiero no existe para Alegra (ver paquetesDisponiblesPara) - si el
+  // admin cambia el origen de datos a Alegra teniendo Financiero
+  // seleccionado, se cae a Operativo automaticamente en vez de dejar
+  // seleccionada una opcion que va a desaparecer de la lista.
+  useEffect(() => {
+    if (form.proveedor_datos === "alegra" && form.paquete === "financiero") {
+      setForm((f) => ({ ...f, paquete: "operativo" }));
+    }
+  }, [form.proveedor_datos, form.paquete]);
+
   const clientePayloadFromForm = () => ({
     nombre: form.nombre.trim(),
     nit: form.nit.trim() || null,
@@ -205,6 +227,10 @@ export default function ClientsPage() {
 
     if (!form.paquete) {
       return "Debes seleccionar el paquete contratado.";
+    }
+
+    if (form.proveedor_datos === "alegra" && form.paquete === "financiero") {
+      return "El paquete Financiero no está disponible para clientes Alegra. Selecciona Operativo o Completo.";
     }
 
     if (!form.admin_nombre.trim()) {
@@ -319,6 +345,11 @@ export default function ClientsPage() {
 
       if (paqueteActualCodigo === form.paquete) {
         setOk("El cliente ya tiene seleccionado ese paquete.");
+        return;
+      }
+
+      if (form.proveedor_datos === "alegra" && form.paquete === "financiero") {
+        setErr("El paquete Financiero no está disponible para clientes Alegra.");
         return;
       }
 
@@ -809,10 +840,16 @@ export default function ClientsPage() {
               ? "Selecciona un nuevo paquete y presiona “Cambiar paquete y actualizar permisos”. Este cambio no se aplica al guardar datos básicos."
               : "Este paquete define las páginas y reportes disponibles para el cliente."}
           </p>
+          {form.proveedor_datos === "alegra" && (
+            <p className="mt-1 text-xs font-medium text-amber-600">
+              Financiero no está disponible para clientes Alegra — la conexión API es necesaria de todas formas
+              para el Cruce de IVA y Retenciones, así que no reduce el trabajo de conexión frente a Completo.
+            </p>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          {PAQUETES.map((p) => {
+        <div className={`grid grid-cols-1 gap-3 ${form.proveedor_datos === "alegra" ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
+          {paquetesDisponiblesPara(form.proveedor_datos).map((p) => {
             const selected = form.paquete === p.codigo;
 
             return (

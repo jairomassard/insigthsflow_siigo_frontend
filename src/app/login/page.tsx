@@ -230,7 +230,7 @@ export default function LoginPage() {
       `}</style>
       <style jsx>{`
         .if-login-mobile-header { display: none; }
-        @media (max-width: 768px) {
+        @media (max-width: 768px), (max-height: 500px) {
           .if-login-root {
             flex-direction: column !important;
             height: auto !important;

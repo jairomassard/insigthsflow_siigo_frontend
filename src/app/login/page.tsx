@@ -231,14 +231,23 @@ export default function LoginPage() {
       <style jsx>{`
         .if-login-mobile-header { display: none; }
         @media (max-width: 768px) {
-          .if-login-root { flex-direction: column; height: auto; max-height: none; overflow: auto; }
-          .if-login-left { display: none; }
-          .if-login-mobile-header { display: block; }
-          .if-login-right { flex: 1; padding: 24px; }
-          .if-login-right-brand { display: none; }
+          .if-login-root {
+            flex-direction: column !important;
+            height: auto !important;
+            max-height: none !important;
+            overflow: auto !important;
+          }
+          .if-login-left { display: none !important; }
+          .if-login-mobile-header { display: block !important; }
+          .if-login-right {
+            flex: 1 1 auto !important;
+            padding: 24px !important;
+            overflow: visible !important;
+          }
+          .if-login-right-brand { display: none !important; }
         }
         @media (max-width: 340px) {
-          .if-login-mobile-tagline { display: none; }
+          .if-login-mobile-tagline { display: none !important; }
         }
       `}</style>
     </div>

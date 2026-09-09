@@ -227,6 +227,9 @@ export default function LoginPage() {
       {/* Reset de margen del body + responsive */}
       <style jsx global>{`
         html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+        @media (max-width: 768px), (max-height: 500px) {
+          html, body { overflow: auto !important; height: auto !important; }
+        }
       `}</style>
       <style jsx>{`
         .if-login-mobile-header { display: none; }

@@ -48,8 +48,19 @@ type BalanceItem = {
   variacion_pct: number | null;
 };
 
+type CuentaCoberturaBalance = { cuenta_nombre: string; tipo_cuenta: string; neto: number };
+type GrupoCoberturaBalance = { tipo_cuenta: string; monto: number; cuentas: CuentaCoberturaBalance[] };
+
+type CoberturaBalance = {
+  monto_incluido: number;
+  monto_excluido_por_revisar: number;
+  detalle_incluido: GrupoCoberturaBalance[];
+  detalle_excluido: GrupoCoberturaBalance[];
+};
+
 type BalanceResponse = {
   ok: boolean;
+  cobertura?: CoberturaBalance;
   fechas: {
     fecha_corte: string;
     comparar_con: string | null;
@@ -1088,6 +1099,7 @@ export default function BalanceGeneralPage() {
   const [bpSubiendo, setBpSubiendo] = useState(false);
   const [bpMensaje, setBpMensaje] = useState<string | null>(null);
   const bpFileInputRef = useRef<HTMLInputElement>(null);
+  const [mostrarDetalleCoberturaBalance, setMostrarDetalleCoberturaBalance] = useState(false);
 
   const [openSections, setOpenSections] = useState({
     activo_no_corriente_bruto: false,
@@ -2355,6 +2367,94 @@ export default function BalanceGeneralPage() {
           onToggle={() => setOpenAlertas((prev) => !prev)}
         />
       ) : null}
+
+      {/* COBERTURA ALEGRA: a diferencia del PyG (donde todo lo sin código
+          ya está incluido), aquí una parte puede quedar deliberadamente
+          afuera por sospechosa - el mensaje tiene que distinguir las dos
+          cosas con claridad, no mezclarlas. */}
+      {proveedorDatos === "alegra" &&
+        data?.cobertura &&
+        (data.cobertura.monto_incluido > 0 || data.cobertura.monto_excluido_por_revisar > 0) && (
+          <div className="bg-amber-50 border border-amber-200 rounded-[1.5rem] p-4 flex flex-col gap-3">
+            <div className="flex flex-col md:flex-row md:items-center gap-3 justify-between">
+              <div className="flex flex-col gap-1">
+                {data.cobertura.monto_incluido > 0 && (
+                  <p className="text-amber-900 text-xs font-medium leading-relaxed">
+                    <strong>{formatCurrency(data.cobertura.monto_incluido)}</strong> sin código contable en
+                    Alegra se clasificó automáticamente y <strong>sí está incluido</strong> en este balance.
+                  </p>
+                )}
+                {data.cobertura.monto_excluido_por_revisar > 0 && (
+                  <p className="text-amber-900 text-xs font-medium leading-relaxed">
+                    <strong>{formatCurrency(data.cobertura.monto_excluido_por_revisar)}</strong> adicionales
+                    quedaron sin código y <strong>NO se incluyeron</strong> en el balance porque su monto es
+                    desproporcionado frente al resto de tu contabilidad — probablemente un error de
+                    parametrización o de digitación en Alegra, no una cifra real. Pídele a tu contador que lo
+                    revise directamente en Alegra antes de confiar en estas cuentas.
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => setMostrarDetalleCoberturaBalance((v) => !v)}
+                className="shrink-0 flex items-center gap-2 px-4 py-2 bg-white text-amber-700 border border-amber-300 rounded-xl text-xs font-black hover:bg-amber-100 transition-all"
+              >
+                {mostrarDetalleCoberturaBalance ? <Minus size={14} /> : <Plus size={14} />}
+                Ver detalle
+              </button>
+            </div>
+
+            {mostrarDetalleCoberturaBalance && (
+              <div className="flex flex-col gap-4">
+                {[
+                  {
+                    titulo: "Incluido en el balance (monto razonable)",
+                    grupos: data.cobertura.detalle_incluido,
+                  },
+                  {
+                    titulo: "Excluido por revisar (monto desproporcionado)",
+                    grupos: data.cobertura.detalle_excluido,
+                  },
+                ]
+                  .filter((g) => g.grupos.length > 0)
+                  .map((seccion) => (
+                    <div key={seccion.titulo} className="bg-white border border-amber-200 rounded-2xl overflow-hidden">
+                      <div className="px-3 py-2 bg-amber-100/60">
+                        <p className="text-amber-900 text-[11px] font-black">{seccion.titulo}</p>
+                      </div>
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-amber-100/40 text-amber-900">
+                            <th className="text-left font-black px-3 py-2">Cuenta</th>
+                            <th className="text-left font-black px-3 py-2">Tipo</th>
+                            <th className="text-right font-black px-3 py-2">Monto</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {seccion.grupos.flatMap((grupo) =>
+                            grupo.cuentas.map((cuenta) => (
+                              <tr key={`${grupo.tipo_cuenta}-${cuenta.cuenta_nombre}`} className="border-t border-amber-100">
+                                <td className="px-3 py-2 text-slate-700">{cuenta.cuenta_nombre}</td>
+                                <td className="px-3 py-2 text-slate-500">
+                                  {cuenta.tipo_cuenta === "asset"
+                                    ? "Activo"
+                                    : cuenta.tipo_cuenta === "liability"
+                                    ? "Pasivo"
+                                    : "Patrimonio"}
+                                </td>
+                                <td className="px-3 py-2 text-right text-slate-700 font-semibold">
+                                  {formatCurrency(cuenta.neto)}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
 
       {/* DETALLE TÉCNICO: desgloses (patrimonio reportado vs. calculado,
           activo no corriente bruto/contra) y las 7 tarjetas por cuenta -

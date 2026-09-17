@@ -321,6 +321,14 @@ export default function ClientHome() {
                 description="Consulta activos, pasivos y patrimonio para analizar la situación financiera de la empresa."
               />
             )}
+            {tiene("ver_reporte_flujo_efectivo") && (
+              <FeatureCard
+                icon="💵"
+                title="Flujo de Efectivo"
+                href="/reportes/financiero/flujo-efectivo"
+                description="Entiende de dónde salió realmente el efectivo que tienes hoy: operación, inversión o financiación."
+              />
+            )}
             {tiene("ver_reporte_indicadores_auxiliares") && (
               <FeatureCard
                 icon="📊"

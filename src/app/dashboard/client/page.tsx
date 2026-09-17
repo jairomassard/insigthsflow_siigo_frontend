@@ -149,7 +149,7 @@ export default function ClientHome() {
       )}
 
       {/* 📊 Secciones de reportes */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {(tiene("ver_reporte_ventas") ||
           tiene("ver_reporte_vendedores") ||
           tiene("ver_reporte_productos") ||
@@ -377,7 +377,13 @@ function Section({ title, children, color = "bg-gray-100" }: SectionProps) {
   return (
     <section className={`rounded-xl p-3 space-y-3 ${color}`}>
       <h2 className="text-base font-semibold text-gray-800">{title}</h2>
-      <div className="flex flex-col gap-2">{children}</div>
+      {/* grid en vez de una sola columna: con secciones de 8-10 tarjetas
+          (ej. Reportes Especiales) una lista vertical se salía de la
+          pantalla y obligaba a hacer scroll - en 2 columnas (desde ~640px)
+          se reduce la altura casi a la mitad sin perder legibilidad. En
+          móvil angosto (<640px) sigue en 1 columna, tarjetas a todo el
+          ancho, más fácil de tocar. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{children}</div>
     </section>
   );
 }
@@ -386,9 +392,9 @@ function FeatureCard({ icon, title, description, href }: FeatureCardProps) {
   return (
     <Link
       href={href}
-      className="flex items-start gap-3 rounded-lg border bg-white p-3 hover:bg-gray-100 hover:shadow"
+      className="flex items-start gap-2.5 rounded-lg border bg-white p-2.5 hover:bg-gray-100 hover:shadow"
     >
-      <div className="text-2xl leading-none">{icon}</div>
+      <div className="text-xl leading-none">{icon}</div>
       <div>
         <h3 className="font-semibold text-sm text-gray-800">{title}</h3>
         <p className="text-xs text-gray-600 leading-snug">{description}</p>

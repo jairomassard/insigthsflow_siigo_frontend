@@ -7,6 +7,17 @@ import { Button } from "@/components/ui/button";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  Cell,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  LabelList,
+} from "recharts";
+import {
   Wallet,
   TrendingUp,
   TrendingDown,
@@ -43,6 +54,8 @@ type FlujoEfectivoResponse = {
     flujo_inversion: number;
     flujo_financiacion: number;
     total_flujos_calculado: number;
+    caja_inicial: number;
+    caja_final: number;
     delta_caja_real: number;
     diferencia: number;
     diferencia_pct: number | null;
@@ -220,7 +233,98 @@ function TablaFlujo({
   );
 }
 
+type PasoCascada = {
+  label: string;
+  base: number;
+  valor: number;
+  tipo: "total" | "positivo" | "negativo";
+  real: number;
+};
+
+function CascadaTooltip({ active, payload }: { active?: boolean; payload?: { payload: PasoCascada }[] }) {
+  if (!active || !payload || !payload.length) return null;
+  const d = payload[0].payload;
+  const prefijo = d.tipo === "positivo" ? "+" : "";
+  return (
+    <div className="bg-white border rounded-xl shadow-lg px-3 py-2 text-xs">
+      <p className="font-black text-slate-800">{d.label}</p>
+      <p className="text-slate-600 font-semibold">
+        {prefijo}
+        {formatCurrency(d.real)}
+      </p>
+    </div>
+  );
+}
+
+function GraficoCascada({
+  cajaInicial,
+  flujoOperacion,
+  flujoInversion,
+  flujoFinanciacion,
+  cajaFinal,
+}: {
+  cajaInicial: number;
+  flujoOperacion: number;
+  flujoInversion: number;
+  flujoFinanciacion: number;
+  cajaFinal: number;
+}) {
+  let running = cajaInicial;
+  const pasos = [
+    { label: "Operación", delta: flujoOperacion },
+    { label: "Inversión", delta: flujoInversion },
+    { label: "Financiación", delta: flujoFinanciacion },
+  ];
+
+  const data: PasoCascada[] = [
+    { label: "Caja Inicial", base: Math.min(cajaInicial, 0), valor: Math.abs(cajaInicial), tipo: "total", real: cajaInicial },
+    ...pasos.map((p) => {
+      const antes = running;
+      const despues = running + p.delta;
+      running = despues;
+      return {
+        label: p.label,
+        base: Math.min(antes, despues),
+        valor: Math.abs(despues - antes),
+        tipo: (p.delta >= 0 ? "positivo" : "negativo") as PasoCascada["tipo"],
+        real: p.delta,
+      };
+    }),
+    { label: "Caja Final", base: Math.min(cajaFinal, 0), valor: Math.abs(cajaFinal), tipo: "total", real: cajaFinal },
+  ];
+
+  const colorPorTipo: Record<PasoCascada["tipo"], string> = {
+    total: "#475569",
+    positivo: "#10b981",
+    negativo: "#f43f5e",
+  };
+
+  return (
+    <ResponsiveContainer width="100%" height={320}>
+      <BarChart data={data} margin={{ top: 28, right: 10, left: 0, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+        <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: "bold" }} />
+        <YAxis hide />
+        <Tooltip content={<CascadaTooltip />} cursor={{ fill: "#f8fafc" }} />
+        <Bar dataKey="base" stackId="a" fill="transparent" />
+        <Bar dataKey="valor" stackId="a" radius={[6, 6, 6, 6]} barSize={56}>
+          {data.map((entry, idx) => (
+            <Cell key={idx} fill={colorPorTipo[entry.tipo]} />
+          ))}
+          <LabelList
+            dataKey="real"
+            position="top"
+            formatter={(v: unknown) => formatCurrency(typeof v === "number" ? v : Number(v))}
+            style={{ fontSize: 10, fontWeight: 700, fill: "#334155" }}
+          />
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
 export default function FlujoEfectivoPage() {
+  const [mostrarExplicacion, setMostrarExplicacion] = useState(false);
   const [fechasDisponibles, setFechasDisponibles] = useState<string[] | null>(null);
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaFin, setFechaFin] = useState("");
@@ -302,6 +406,8 @@ export default function FlujoEfectivoPage() {
       { Campo: "Flujo de Inversión", Valor: kpis.flujo_inversion },
       { Campo: "Flujo de Financiación", Valor: kpis.flujo_financiacion },
       { Campo: "Total 3 flujos (calculado)", Valor: kpis.total_flujos_calculado },
+      { Campo: "Caja inicial", Valor: kpis.caja_inicial },
+      { Campo: "Caja final", Valor: kpis.caja_final },
       { Campo: "Movimiento real de caja", Valor: kpis.delta_caja_real },
       { Campo: "Diferencia", Valor: kpis.diferencia },
       { Campo: "Diferencia %", Valor: kpis.diferencia_pct },
@@ -389,77 +495,87 @@ export default function FlujoEfectivoPage() {
       </div>
 
       {/* EXPLICACIÓN AMIGABLE - pensado para dueños de pyme/mediana empresa,
-          no para contadores. Objetivo: que alguien sin formación contable
-          entienda en 20 segundos para qué sirve este reporte. */}
+          no para contadores. Colapsada por defecto para no robarle
+          protagonismo al reporte - solo el icono + la pregunta gancho,
+          con un toggle para quien quiera leer el resto. */}
       <Card className="rounded-[2rem] border border-blue-100 bg-blue-50/60 shadow-sm">
-        <CardContent className="p-6">
-          <div className="flex items-start gap-3">
-            <div className="p-2.5 rounded-2xl bg-blue-600 text-white shrink-0">
-              <Lightbulb size={18} />
+        <button
+          onClick={() => setMostrarExplicacion((v) => !v)}
+          className="w-full flex items-center gap-3 p-4 text-left hover:bg-blue-100/30 transition-all rounded-[2rem]"
+        >
+          <div className="p-2 rounded-xl bg-blue-600 text-white shrink-0">
+            <Lightbulb size={16} />
+          </div>
+          <h3 className="text-xs md:text-sm font-black text-slate-800 flex-1">
+            ¿Por qué mi utilidad no se parece a la plata que tengo en el banco?
+          </h3>
+          {mostrarExplicacion ? (
+            <ChevronUp size={16} className="text-blue-600 shrink-0" />
+          ) : (
+            <ChevronDown size={16} className="text-blue-600 shrink-0" />
+          )}
+        </button>
+
+        {mostrarExplicacion && (
+          <CardContent className="px-6 pb-6 pt-0">
+            <p className="text-xs text-slate-600 leading-relaxed max-w-3xl">
+              Es la pregunta que más confunde a un dueño de negocio: <i>&quot;si gané tanto, ¿por qué no
+              tengo esa plata en el banco?&quot;</i> — o al revés, <i>&quot;si tengo tanta plata, ¿por qué mi
+              utilidad se ve tan chica?&quot;</i> Tu Estado de Resultados te dice si ganaste plata y tu
+              Balance te dice qué tienes y qué debes, pero ninguno de los dos te explica esto. Este reporte
+              sí: te muestra si el efectivo que tienes hoy viene de que tu negocio genuinamente está
+              mejorando, o de algo que no se va a repetir (cobrar una cartera vieja, un préstamo nuevo) —
+              para que decidas con información real si puedes contratar, invertir, o si debes cuidarte de
+              gastar de más pensando que &quot;hay plata&quot;.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+              <div className="bg-white border border-blue-100 rounded-2xl p-3 flex items-start gap-2.5">
+                <Wallet size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-[11px] font-black text-slate-800">Operación</p>
+                  <p className="text-[11px] text-slate-500 leading-snug">
+                    El efectivo que generó (o consumió) tu negocio del día a día: ventas, cobros, pagos a
+                    proveedores y empleados.
+                  </p>
+                </div>
+              </div>
+              <div className="bg-white border border-blue-100 rounded-2xl p-3 flex items-start gap-2.5">
+                <ArrowRightLeft size={16} className="text-blue-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-[11px] font-black text-slate-800">Inversión</p>
+                  <p className="text-[11px] text-slate-500 leading-snug">
+                    Plata usada o recibida por comprar o vender activos: maquinaria, equipos, vehículos.
+                  </p>
+                </div>
+              </div>
+              <div className="bg-white border border-blue-100 rounded-2xl p-3 flex items-start gap-2.5">
+                <Building2 size={16} className="text-indigo-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-[11px] font-black text-slate-800">Financiación</p>
+                  <p className="text-[11px] text-slate-500 leading-snug">
+                    Plata que entró o salió por préstamos, tarjetas de crédito, aportes de socios o retiros.
+                  </p>
+                </div>
+              </div>
             </div>
-            <div>
-              <h3 className="text-sm font-black text-slate-800">
-                ¿Por qué mi utilidad no se parece a la plata que tengo en el banco?
-              </h3>
-              <p className="text-xs text-slate-600 mt-1 leading-relaxed max-w-3xl">
-                Es la pregunta que más confunde a un dueño de negocio: <i>&quot;si gané tanto, ¿por qué no
-                tengo esa plata en el banco?&quot;</i> — o al revés, <i>&quot;si tengo tanta plata, ¿por qué mi
-                utilidad se ve tan chica?&quot;</i> Tu Estado de Resultados te dice si ganaste plata y tu
-                Balance te dice qué tienes y qué debes, pero ninguno de los dos te explica esto. Este reporte
-                sí: te muestra si el efectivo que tienes hoy viene de que tu negocio genuinamente está
-                mejorando, o de algo que no se va a repetir (cobrar una cartera vieja, un préstamo nuevo) —
-                para que decidas con información real si puedes contratar, invertir, o si debes cuidarte de
-                gastar de más pensando que &quot;hay plata&quot;.
+
+            <div className="flex items-start gap-2 bg-white border border-blue-100 rounded-2xl px-3 py-2.5 mt-4">
+              <span className="text-base leading-none">💡</span>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                Este es uno de los 3 estados financieros que casi todo banco pide para un crédito — y la
+                mayoría de las pymes en Colombia no lo tienen listo (toca armarlo a mano en Excel). Aquí lo
+                tienes automático, con los datos que ya cargaste.
               </p>
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
-            <div className="bg-white border border-blue-100 rounded-2xl p-3 flex items-start gap-2.5">
-              <Wallet size={16} className="text-emerald-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-[11px] font-black text-slate-800">Operación</p>
-                <p className="text-[11px] text-slate-500 leading-snug">
-                  El efectivo que generó (o consumió) tu negocio del día a día: ventas, cobros, pagos a
-                  proveedores y empleados.
-                </p>
-              </div>
-            </div>
-            <div className="bg-white border border-blue-100 rounded-2xl p-3 flex items-start gap-2.5">
-              <ArrowRightLeft size={16} className="text-blue-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-[11px] font-black text-slate-800">Inversión</p>
-                <p className="text-[11px] text-slate-500 leading-snug">
-                  Plata usada o recibida por comprar o vender activos: maquinaria, equipos, vehículos.
-                </p>
-              </div>
-            </div>
-            <div className="bg-white border border-blue-100 rounded-2xl p-3 flex items-start gap-2.5">
-              <Building2 size={16} className="text-indigo-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-[11px] font-black text-slate-800">Financiación</p>
-                <p className="text-[11px] text-slate-500 leading-snug">
-                  Plata que entró o salió por préstamos, tarjetas de crédito, aportes de socios o retiros.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-2 bg-white border border-blue-100 rounded-2xl px-3 py-2.5 mt-4">
-            <span className="text-base leading-none">💡</span>
-            <p className="text-[11px] text-slate-600 leading-relaxed">
-              Este es uno de los 3 estados financieros que casi todo banco pide para un crédito — y la
-              mayoría de las pymes en Colombia no lo tienen listo (toca armarlo a mano en Excel). Aquí lo
-              tienes automático, con los datos que ya cargaste.
+            <p className="text-[11px] text-slate-500 mt-3 leading-relaxed">
+              Cuando ves el badge <b>&quot;CUADRA&quot;</b>, significa que el sistema comparó el resultado
+              contra el movimiento real de tu cuenta bancaria — así sabes que el número es confiable, no una
+              estimación.
             </p>
-          </div>
-
-          <p className="text-[11px] text-slate-500 mt-3 leading-relaxed">
-            Cuando ves el badge <b>&quot;CUADRA&quot;</b>, significa que el sistema comparó el resultado
-            contra el movimiento real de tu cuenta bancaria — así sabes que el número es confiable, no una
-            estimación.
-          </p>
-        </CardContent>
+          </CardContent>
+        )}
       </Card>
 
       {/* FILTROS */}
@@ -641,6 +757,24 @@ export default function FlujoEfectivoPage() {
                 <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Cuadratura</p>
                 <CuadraturaBadge cuadra={k.cuadra} diferencia={k.diferencia} />
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Gráfico de cascada: la forma estándar de visualizar un Flujo de
+              Efectivo - muestra visualmente el puente entre la caja inicial
+              y la caja final a través de los 3 flujos. */}
+          <Card className="rounded-[2rem] border shadow-sm bg-white">
+            <CardContent className="p-6">
+              <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-2">
+                De tu caja inicial a tu caja final
+              </h3>
+              <GraficoCascada
+                cajaInicial={k.caja_inicial}
+                flujoOperacion={k.flujo_operacion}
+                flujoInversion={k.flujo_inversion}
+                flujoFinanciacion={k.flujo_financiacion}
+                cajaFinal={k.caja_final}
+              />
             </CardContent>
           </Card>
 

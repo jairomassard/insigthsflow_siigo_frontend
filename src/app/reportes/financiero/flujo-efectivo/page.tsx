@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { API, getToken } from "@/lib/api";
+import { API, getToken, authFetch } from "@/lib/api";
+import { getWhoAmI } from "@/lib/authInfo";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   ResponsiveContainer,
   BarChart,
@@ -32,6 +35,9 @@ import {
   ArrowRightLeft,
   Building2,
   Download,
+  Sparkles,
+  RefreshCcw,
+  X,
 } from "lucide-react";
 
 type ItemFlujo = {
@@ -365,6 +371,168 @@ export default function FlujoEfectivoPage() {
     excluido: false,
   });
 
+  // "Analizar con IA" - mismo patron (cache por huella, tope mensual
+  // compartido con los demas reportes, historial consultable) ya usado en
+  // Balance General / Estado de Resultados / Indicadores.
+  const [nombreCliente, setNombreCliente] = useState<string>("");
+  const [analisisIAOpen, setAnalisisIAOpen] = useState(false);
+  const [analisisIALoading, setAnalisisIALoading] = useState(false);
+  const [analisisIAError, setAnalisisIAError] = useState<string | null>(null);
+  const [analisisIATexto, setAnalisisIATexto] = useState<string | null>(null);
+  const [analisisIAFuente, setAnalisisIAFuente] = useState<"cache" | "nuevo" | null>(null);
+  const [analisisIAUso, setAnalisisIAUso] = useState<{ actual: number; tope: number } | null>(null);
+  const [analisisIAPeriodoLabel, setAnalisisIAPeriodoLabel] = useState<string>("");
+  const [analisisIAUsoGlobal, setAnalisisIAUsoGlobal] = useState<{ actual: number; tope: number } | null>(null);
+  const [analisisIAHistorial, setAnalisisIAHistorial] = useState<
+    { periodo_desde: string; periodo_hasta: string; generado_en: string | null }[]
+  >([]);
+  const [historialOpen, setHistorialOpen] = useState(false);
+  const [exportandoWord, setExportandoWord] = useState(false);
+  const [confirmGasto, setConfirmGasto] = useState<
+    { mensaje: string; forzar: boolean; fechaInicio: string; fechaFin: string } | null
+  >(null);
+
+  const cargarEstadoAnalisisIA = async () => {
+    try {
+      const [estado, hist] = await Promise.all([
+        authFetch("/reportes/flujo_efectivo_v1/analisis-ia/estado"),
+        authFetch("/reportes/flujo_efectivo_v1/analisis-ia/historial"),
+      ]);
+      if (typeof estado?.uso_mensual === "number" && typeof estado?.tope_mensual === "number") {
+        setAnalisisIAUsoGlobal({ actual: estado.uso_mensual, tope: estado.tope_mensual });
+      }
+      setAnalisisIAHistorial(Array.isArray(hist?.historial) ? hist.historial : []);
+    } catch {
+      // silencioso a proposito, igual que en Balance General
+    }
+  };
+
+  useEffect(() => {
+    getWhoAmI().then((me) => {
+      if (me?.cliente?.nombre) setNombreCliente(me.cliente.nombre);
+    });
+    cargarEstadoAnalisisIA();
+  }, []);
+
+  const ejecutarAnalisisIA = async (forzar: boolean, fi?: string, ff?: string) => {
+    const desde = fi ?? fechaInicio;
+    const hasta = ff ?? fechaFin;
+
+    setAnalisisIAOpen(true);
+    setAnalisisIALoading(true);
+    setAnalisisIAError(null);
+
+    try {
+      const res = await authFetch("/reportes/flujo_efectivo_v1/analisis-ia", {
+        method: "POST",
+        body: JSON.stringify({ fecha_inicio: desde, fecha_fin: hasta, forzar }),
+      });
+      setAnalisisIATexto(res.analisis ?? "");
+      setAnalisisIAFuente(res.fuente ?? null);
+      setAnalisisIAPeriodoLabel(`${formatFechaCorta(desde)} a ${formatFechaCorta(hasta)}`);
+      setAnalisisIAUso(
+        typeof res.uso_mensual === "number" && typeof res.tope_mensual === "number"
+          ? { actual: res.uso_mensual, tope: res.tope_mensual }
+          : null
+      );
+      cargarEstadoAnalisisIA();
+    } catch (err) {
+      const mensaje = err instanceof Error ? err.message : "No fue posible generar el análisis con IA.";
+      setAnalisisIAError(mensaje);
+    } finally {
+      setAnalisisIALoading(false);
+    }
+  };
+
+  const solicitarAnalisisIA = async (forzar = false, fi?: string, ff?: string) => {
+    const desde = fi ?? fechaInicio;
+    const hasta = ff ?? fechaFin;
+
+    const restante = analisisIAUsoGlobal
+      ? Math.max(analisisIAUsoGlobal.tope - analisisIAUsoGlobal.actual, 0)
+      : null;
+    const sufijoRestante = restante !== null ? ` (te quedan ${restante})` : "";
+
+    if (forzar) {
+      setConfirmGasto({
+        mensaje: `Regenerar vuelve a redactar el análisis desde cero con IA y consume 1 de tus análisis del mes${sufijoRestante}.`,
+        forzar: true,
+        fechaInicio: desde,
+        fechaFin: hasta,
+      });
+      return;
+    }
+
+    const yaExiste = analisisIAHistorial.some(
+      (h) => h.periodo_hasta === hasta && h.periodo_desde === desde
+    );
+
+    if (!yaExiste) {
+      setConfirmGasto({
+        mensaje: `Este periodo todavía no se ha analizado. Se va a generar un análisis nuevo con IA y va a consumir 1 de tus análisis del mes${sufijoRestante}.`,
+        forzar: false,
+        fechaInicio: desde,
+        fechaFin: hasta,
+      });
+      return;
+    }
+
+    try {
+      const verificacion = await authFetch("/reportes/flujo_efectivo_v1/analisis-ia/verificar", {
+        method: "POST",
+        body: JSON.stringify({ fecha_inicio: desde, fecha_fin: hasta }),
+      });
+      if (verificacion?.actualizado) {
+        ejecutarAnalisisIA(false, desde, hasta);
+      } else {
+        setConfirmGasto({
+          mensaje: `Los datos de este periodo cambiaron desde la última vez que se analizó, así que verlo de nuevo va a generar un análisis nuevo y va a consumir 1 de tus análisis del mes${sufijoRestante}.`,
+          forzar: false,
+          fechaInicio: desde,
+          fechaFin: hasta,
+        });
+      }
+    } catch {
+      ejecutarAnalisisIA(false, desde, hasta);
+    }
+  };
+
+  const handleExportarWord = async () => {
+    if (!analisisIATexto) return;
+    setExportandoWord(true);
+    try {
+      const res = await fetch(`${API}/reportes/flujo_efectivo_v1/analisis-ia/word`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({
+          analisis_markdown: analisisIATexto,
+          nombre_cliente: nombreCliente || "Cliente InsightsFlow",
+          periodo: analisisIAPeriodoLabel,
+        }),
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `analisis_ia_FlujoEfectivo_${(nombreCliente || "cliente").replace(/\s+/g, "_")}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert("No fue posible generar el Word del análisis.");
+    } finally {
+      setExportandoWord(false);
+    }
+  };
+
   const consultar = async () => {
     try {
       setLoading(true);
@@ -471,7 +639,7 @@ export default function FlujoEfectivoPage() {
   const k = data?.kpis;
 
   return (
-    <div className="space-y-4 p-5 bg-slate-50 min-h-screen">
+    <div id="pagina-flujo-efectivo" className="space-y-4 p-5 bg-slate-50 min-h-screen">
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-[2rem] border shadow-sm">
         <div>
@@ -487,15 +655,81 @@ export default function FlujoEfectivoPage() {
           </p>
         </div>
 
-        <Button
-          onClick={exportarExcel}
-          disabled={!data}
-          variant="outline"
-          className="rounded-2xl px-5 py-3 text-xs font-black border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-        >
-          <Download size={16} className="mr-2" />
-          Excel
-        </Button>
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <Button
+              onClick={exportarExcel}
+              disabled={!data}
+              variant="outline"
+              className="rounded-2xl px-5 py-3 text-xs font-black border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+            >
+              <Download size={16} className="mr-2" />
+              Excel
+            </Button>
+
+            <button
+              onClick={() => solicitarAnalisisIA(false)}
+              disabled={!data}
+              className="flex items-center gap-2 px-4 py-3 bg-violet-50 text-violet-700 rounded-2xl text-xs font-black hover:bg-violet-100 transition-all border border-violet-100 disabled:opacity-50"
+            >
+              <Sparkles size={16} />
+              Analizar con IA
+            </button>
+          </div>
+
+          {(analisisIAUsoGlobal || analisisIAHistorial.length > 0) && (
+            <div className="relative flex items-center gap-3">
+              {analisisIAUsoGlobal && (
+                <span className="text-[10px] font-bold text-violet-400">
+                  <Sparkles size={10} className="inline -mt-0.5 mr-1" />
+                  {Math.max(analisisIAUsoGlobal.tope - analisisIAUsoGlobal.actual, 0)}/{analisisIAUsoGlobal.tope} análisis con IA disponibles este mes
+                </span>
+              )}
+
+              {analisisIAHistorial.length > 0 && (
+                <button
+                  onClick={() => setHistorialOpen((v) => !v)}
+                  className="text-[10px] font-black text-violet-600 hover:text-violet-800 underline decoration-dotted"
+                >
+                  Ver análisis anteriores ({analisisIAHistorial.length})
+                </button>
+              )}
+
+              {historialOpen && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setHistorialOpen(false)} />
+                  <div className="absolute top-full right-0 mt-2 z-40 w-72 bg-white rounded-2xl border border-slate-100 shadow-2xl overflow-hidden">
+                    <div className="px-4 py-3 border-b border-slate-100">
+                      <p className="text-xs font-black text-slate-700">Análisis ya generados</p>
+                      <p className="text-[10px] text-slate-400">Volver a ver uno de estos no gasta cupo del mes.</p>
+                    </div>
+                    <div className="max-h-64 overflow-y-auto">
+                      {analisisIAHistorial.map((h) => (
+                        <button
+                          key={`${h.periodo_desde}_${h.periodo_hasta}`}
+                          onClick={() => {
+                            setHistorialOpen(false);
+                            solicitarAnalisisIA(false, h.periodo_desde, h.periodo_hasta);
+                          }}
+                          className="w-full text-left px-4 py-2.5 text-xs hover:bg-violet-50 border-b border-slate-50 last:border-0"
+                        >
+                          <div className="font-bold text-slate-700">
+                            {formatFechaCorta(h.periodo_desde)} a {formatFechaCorta(h.periodo_hasta)}
+                          </div>
+                          {h.generado_en && (
+                            <div className="text-[10px] text-slate-400">
+                              Generado {formatFechaCorta(h.generado_en)}
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* EXPLICACIÓN AMIGABLE - pensado para dueños de pyme/mediana empresa,
@@ -912,6 +1146,199 @@ export default function FlujoEfectivoPage() {
           )}
         </>
       )}
+
+      {/* MODAL Analizar con IA - mismo patron que Balance General */}
+      {analisisIAOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/50 flex items-center justify-center p-4 print:hidden">
+          <div
+            className="relative flex flex-col rounded-[2rem] bg-white shadow-2xl overflow-auto"
+            style={{
+              width: "min(96vw, 1100px)",
+              height: "min(92vh, 900px)",
+              minWidth: "480px",
+              minHeight: "420px",
+              maxWidth: "98vw",
+              maxHeight: "96vh",
+              resize: "both",
+            }}
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-4 px-6 py-4 border-b border-slate-100 bg-white rounded-t-[2rem]">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center">
+                  <Sparkles size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">Análisis con IA</h3>
+                  <p className="text-[11px] text-slate-400 font-medium">
+                    {analisisIAPeriodoLabel}
+                    {analisisIAFuente === "cache" && " · desde caché (sin cambios desde el último análisis)"}
+                    {analisisIAFuente === "nuevo" && " · análisis nuevo"}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setAnalisisIAOpen(false)}
+                className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 flex-1">
+              {analisisIALoading && (
+                <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-400">
+                  <RefreshCcw className="animate-spin" size={24} />
+                  <p className="text-xs font-bold">Analizando el periodo seleccionado…</p>
+                </div>
+              )}
+
+              {!analisisIALoading && analisisIAError && (
+                <div className="border border-rose-200 bg-rose-50 rounded-2xl p-4 text-sm text-rose-700 font-medium">
+                  {analisisIAError}
+                </div>
+              )}
+
+              {!analisisIALoading && !analisisIAError && analisisIATexto && (
+                <>
+                  {analisisIAFuente === "nuevo" && (
+                    <div className="mb-4 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-800">
+                      <Sparkles size={14} className="mt-0.5 shrink-0" />
+                      <span>
+                        Este análisis se generó de nuevo (los datos del período cambiaron desde la última
+                        vez, no salió del caché) y consumió 1 de tus análisis del mes.
+                      </span>
+                    </div>
+                  )}
+                  <div className="prose prose-sm prose-slate max-w-none prose-headings:font-black prose-h2:text-base prose-h3:text-sm prose-table:text-xs prose-th:whitespace-nowrap prose-td:whitespace-nowrap">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        table: ({ children }) => (
+                          <div className="overflow-x-auto">
+                            <table>{children}</table>
+                          </div>
+                        ),
+                      }}
+                    >
+                      {analisisIATexto}
+                    </ReactMarkdown>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="sticky bottom-0 flex items-center justify-between gap-3 px-6 py-4 border-t border-slate-100 bg-white rounded-b-[2rem]">
+              <p className="text-[11px] text-slate-400 font-medium">
+                {analisisIAUso
+                  ? `${analisisIAUso.actual}/${analisisIAUso.tope} análisis usados este mes`
+                  : ""}
+              </p>
+              {!analisisIALoading && !analisisIAError && analisisIATexto && (
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => {
+                      const tituloOriginal = document.title;
+                      document.title = `analisis_ia_FlujoEfectivo_${(nombreCliente || "cliente").replace(/\s+/g, "_")}`;
+                      window.print();
+                      document.title = tituloOriginal;
+                    }}
+                    className="text-xs font-black text-slate-500 hover:text-slate-700"
+                  >
+                    Imprimir
+                  </button>
+                  <button
+                    onClick={handleExportarWord}
+                    disabled={exportandoWord}
+                    className="text-xs font-black text-slate-500 hover:text-slate-700 disabled:opacity-50"
+                  >
+                    {exportandoWord ? "Generando…" : "Exportar a Word"}
+                  </button>
+                  <button
+                    onClick={() => solicitarAnalisisIA(true)}
+                    className="text-xs font-black text-violet-700 hover:text-violet-900"
+                  >
+                    Regenerar análisis
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmGasto && (
+        <div
+          className="fixed inset-0 z-[110] bg-slate-900/50 flex items-center justify-center p-4"
+          onClick={() => setConfirmGasto(null)}
+        >
+          <div
+            className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-10 h-10 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center mb-3">
+              <Sparkles size={18} />
+            </div>
+            <h3 className="text-sm font-black text-slate-900 mb-1">Vas a generar un análisis nuevo</h3>
+            <p className="text-xs text-slate-500 leading-relaxed mb-5">{confirmGasto.mensaje}</p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setConfirmGasto(null)}
+                className="px-4 py-2 text-xs font-black text-slate-500 hover:text-slate-700"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  const { forzar, fechaInicio: fi, fechaFin: ff } = confirmGasto;
+                  setConfirmGasto(null);
+                  ejecutarAnalisisIA(forzar, fi, ff);
+                }}
+                className="px-4 py-2 bg-violet-700 text-white rounded-xl text-xs font-black hover:bg-violet-800"
+              >
+                Continuar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Área imprimible: vive fuera del modal a propósito - el modal tiene
+          overflow/resize propio que rompe la paginación de impresión. */}
+      {analisisIATexto && (
+        <div id="analisis-ia-print-area" style={{ position: "absolute", top: "-9999px", left: 0, width: "800px" }}>
+          <div className="mb-4 pb-3 border-b border-slate-200">
+            <div className="text-sm font-bold text-slate-700">{nombreCliente || "Cliente InsightsFlow"}</div>
+            <div className="text-xs text-slate-400">Flujo de Efectivo · {analisisIAPeriodoLabel}</div>
+          </div>
+
+          <div className="prose prose-sm prose-slate max-w-none">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{analisisIATexto}</ReactMarkdown>
+          </div>
+
+          <div className="mt-6 pt-3 border-t border-slate-200 text-center text-[10px] text-slate-400 italic">
+            Reporte generado por la IA de InsightsFlow {new Date().getFullYear()}
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @media print {
+          #pagina-flujo-efectivo > *:not(#analisis-ia-print-area) {
+            display: none !important;
+          }
+          #analisis-ia-print-area {
+            position: static !important;
+            width: 100% !important;
+          }
+          #analisis-ia-print-area table thead {
+            display: table-header-group;
+          }
+          #analisis-ia-print-area table tr {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+        }
+      `}</style>
     </div>
   );
 }

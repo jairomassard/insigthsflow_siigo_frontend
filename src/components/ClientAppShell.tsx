@@ -326,6 +326,15 @@ export default function ClientAppShell({ children }: { children: React.ReactNode
               },
             ]
           : []),
+        ...(tiene("ver_reporte_flujo_efectivo")
+          ? [
+              {
+                href: "/reportes/financiero/flujo-efectivo",
+                label: "Flujo de Efectivo",
+                icon: <FileBarChart2 className="w-4 h-4" />,
+              },
+            ]
+          : []),
         ...(tiene("ver_reporte_balance") && proveedorDatos === "siigo"
           ? [
               {

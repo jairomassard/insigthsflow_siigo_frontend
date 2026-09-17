@@ -96,7 +96,7 @@ function formatFechaCorta(fecha?: string | null) {
   return `${d}/${m}/${y}`;
 }
 
-function InfoHint({ text }: { text: string }) {
+function InfoHint({ text, align = "right" }: { text: string; align?: "left" | "right" }) {
   return (
     <div className="relative group/info inline-flex">
       <button
@@ -106,7 +106,11 @@ function InfoHint({ text }: { text: string }) {
       >
         <HelpCircle size={11} />
       </button>
-      <div className="pointer-events-none absolute top-6 right-0 z-50 w-64 rounded-2xl border border-slate-200 bg-white text-slate-700 px-3 py-3 text-[11px] leading-5 shadow-2xl opacity-0 scale-95 transition-all duration-200 group-hover/info:opacity-100 group-hover/info:scale-100">
+      <div
+        className={`pointer-events-none absolute top-6 z-50 w-64 rounded-2xl border border-slate-200 bg-white text-slate-700 px-3 py-3 text-[11px] leading-5 shadow-2xl opacity-0 scale-95 transition-all duration-200 group-hover/info:opacity-100 group-hover/info:scale-100 ${
+          align === "left" ? "left-0" : "right-0"
+        }`}
+      >
         {text}
       </div>
     </div>
@@ -762,12 +766,42 @@ export default function FlujoEfectivoPage() {
 
           {/* Gráfico de cascada: la forma estándar de visualizar un Flujo de
               Efectivo - muestra visualmente el puente entre la caja inicial
-              y la caja final a través de los 3 flujos. */}
+              y la caja final a través de los 3 flujos. Con leyenda + ícono
+              de ayuda porque sin eso no era obvio qué significaba cada
+              color (feedback real: "no me es claro las barras verdes y
+              grises, no sé si suma o resta"). */}
           <Card className="rounded-[2rem] border shadow-sm bg-white">
             <CardContent className="p-6">
-              <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-2">
-                De tu caja inicial a tu caja final
-              </h3>
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
+                <div className="flex items-center gap-1.5">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">
+                    De tu caja inicial a tu caja final
+                  </h3>
+                  <InfoHint
+                    align="left"
+                    text={
+                      "Las barras grises son el saldo real de tu cuenta bancaria (inicio y fin del periodo). " +
+                      "Las barras de color muestran cuánta caja entró (verde) o salió (rojo) en cada categoría " +
+                      "entre esas dos fechas — sumando o restando una tras otra hasta llegar a la caja final."
+                    }
+                  />
+                </div>
+                <div className="flex items-center gap-4 text-[10px] font-bold text-slate-500">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-slate-600 inline-block" /> Saldo de caja
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" /> Entra caja
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-rose-500 inline-block" /> Sale caja
+                  </span>
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-500 mb-3">
+                Saldo inicial: <b className="text-slate-700">{formatCurrency(k.caja_inicial)}</b> — Saldo
+                final: <b className="text-slate-700">{formatCurrency(k.caja_final)}</b>
+              </p>
               <GraficoCascada
                 cajaInicial={k.caja_inicial}
                 flujoOperacion={k.flujo_operacion}

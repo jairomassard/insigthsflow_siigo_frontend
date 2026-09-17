@@ -41,6 +41,7 @@ import {
   ArrowRight,
   CalendarClock,
   PiggyBank,
+  ArrowRightLeft,
 } from "lucide-react";
 
 /* =========================================================
@@ -144,6 +145,16 @@ type DashboardResponse = {
     mensaje_contexto?: string | null;
   };
   kpis: Kpis;
+  flujo_efectivo?: {
+    ok: boolean;
+    error?: string;
+    kpis?: {
+      flujo_operacion: number;
+      flujo_inversion: number;
+      flujo_financiacion: number;
+      cuadra: boolean;
+    };
+  };
   series: {
     mensual: SerieMensual[];
   };
@@ -1043,7 +1054,7 @@ export default function DashboardResumenEjecutivoPage() {
     const gastoPromedioRunway = getGastoPromedioRunway(runway, caja.actual);
     const mesesPromedioRunway = Number(runway?.meses_promedio || 3);
 
-    return [
+    const cards: KpiCardItem[] = [
       {
         label: "Eficiencia operativa",
         value: hayAuxiliar ? formatPercent(ef.actual) : "Sin datos",
@@ -1218,6 +1229,38 @@ export default function DashboardResumenEjecutivoPage() {
         },
       },
     ];
+
+    // Flujo de Efectivo: solo se muestra si el período coincidió con
+    // Balance de Prueba real en ambas puntas (construir_flujo_efectivo lo
+    // exige) - la mayoría de períodos del dashboard NO lo van a tener, así
+    // que esta tarjeta se oculta con gracia en vez de mostrar un hueco o
+    // un error. No tiene "período anterior" para comparar (no es de eso
+    // que trata este reporte), por eso no lleva delta de variación.
+    const fe = data.flujo_efectivo;
+    if (fe?.ok && fe.kpis) {
+      cards.push({
+        label: "Flujo de Operación",
+        value: formatCurrencyShort(fe.kpis.flujo_operacion),
+        valueFull: formatCurrency(fe.kpis.flujo_operacion),
+        description:
+          "Efectivo generado (o consumido) por el negocio del día a día en este período - la parte del Flujo de Efectivo que más importa para saber si la caja es sostenible.",
+        delta: fe.kpis.cuadra ? "Cuadra contra el banco real" : "Revisar: no cuadra del todo",
+        accent: "from-violet-100 via-purple-50 to-white",
+        chip: "bg-violet-50 text-violet-700 border-violet-200",
+        bar: "bg-violet-500",
+        glow: "bg-violet-300/60",
+        icon: <ArrowRightLeft size={16} />,
+        helpText:
+          "Es la parte de tu Estado de Flujo de Efectivo que muestra si el negocio genuinamente genera caja con su operación (ventas, cobros, pagos), sin contar préstamos, aportes ni compra/venta de activos.",
+        helpAlign: "right" as const,
+        link: {
+          href: "/reportes/financiero/flujo-efectivo",
+          label: "Ver Flujo de Efectivo completo",
+        },
+      });
+    }
+
+    return cards;
   }, [data, hayAuxiliar, cxcTotal, cxpTotal, cxcPendienteAntiguo, cxpPendienteAntiguo, fechaDesde, fechaHasta]);
 
   const detalleIndicador = useMemo<DetalleIndicador | null>(() => {

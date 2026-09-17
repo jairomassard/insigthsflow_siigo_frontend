@@ -188,12 +188,14 @@ function TablaFlujo({
   open,
   onToggle,
   colorHeader,
+  nota,
 }: {
   titulo: string;
   items: ItemFlujo[];
   open: boolean;
   onToggle: () => void;
   colorHeader: string;
+  nota?: string;
 }) {
   const total = items.reduce((acc, it) => acc + (it.efecto_caja ?? it.delta), 0);
 
@@ -205,7 +207,7 @@ function TablaFlujo({
       >
         <div className="flex items-center gap-3">
           <span className={`text-xs font-black uppercase tracking-widest ${colorHeader}`}>{titulo}</span>
-          <span className="text-[10px] text-slate-400 font-bold">({items.length} cuentas)</span>
+          <span className="text-[10px] text-slate-400 font-bold">({items.length} líneas)</span>
         </div>
         <div className="flex items-center gap-3">
           <span className="text-sm font-black text-slate-800">{formatCurrency(total)}</span>
@@ -215,6 +217,9 @@ function TablaFlujo({
 
       {open && (
         <CardContent className="p-0 border-t">
+          {nota && (
+            <p className="text-[11px] text-slate-500 leading-relaxed px-6 py-3 bg-slate-50 border-b">{nota}</p>
+          )}
           {items.length === 0 ? (
             <p className="text-xs text-slate-400 px-6 py-4">Sin movimiento en este periodo.</p>
           ) : (
@@ -590,6 +595,20 @@ export default function FlujoEfectivoPage() {
     XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
 
     const detalleRows = [
+      {
+        Seccion: "Operación",
+        Cuenta: "UTILIDAD_NETA",
+        Nombre: "Utilidad Neta (Estado de Resultados)",
+        Efecto_en_caja: kpis.utilidad_neta,
+      },
+      ...(Math.abs(kpis.dep_amort) >= 1
+        ? [{
+            Seccion: "Operación",
+            Cuenta: "DEP_AMORT",
+            Nombre: "+ Depreciación/Amortización (no es salida de caja)",
+            Efecto_en_caja: kpis.dep_amort,
+          }]
+        : []),
       ...(data.detalle?.operacion || []).map((it) => ({
         Seccion: "Operación",
         Cuenta: it.cuenta,
@@ -637,6 +656,22 @@ export default function FlujoEfectivoPage() {
   };
 
   const k = data?.kpis;
+
+  // El "Flujo de Operación" de la tarjeta suma Utilidad Neta + Dep/Amort +
+  // la variación de capital de trabajo (esta última sí son cuentas reales,
+  // las otras dos vienen del Estado de Resultados, no del balance) - sin
+  // mostrarlas como filas aquí, el total de "Detalle Operación" no
+  // coincidía con la tarjeta y generaba confusión real (usuario no
+  // entendía por qué $226.6M en la tarjeta vs $162.4M en el detalle).
+  const detalleOperacionCompleto: ItemFlujo[] = k
+    ? [
+        { cuenta: "UTILIDAD_NETA", nombre: "Utilidad Neta (Estado de Resultados)", delta: k.utilidad_neta, efecto_caja: k.utilidad_neta },
+        ...(Math.abs(k.dep_amort) >= 1
+          ? [{ cuenta: "DEP_AMORT", nombre: "+ Depreciación/Amortización (no es salida de caja)", delta: k.dep_amort, efecto_caja: k.dep_amort }]
+          : []),
+        ...(data?.detalle?.operacion || []),
+      ]
+    : [];
 
   return (
     <div id="pagina-flujo-efectivo" className="space-y-4 p-5 bg-slate-50 min-h-screen">
@@ -1075,10 +1110,11 @@ export default function FlujoEfectivoPage() {
             <div className="space-y-3">
               <TablaFlujo
                 titulo="Detalle Operación"
-                items={data.detalle.operacion}
+                items={detalleOperacionCompleto}
                 open={openSections.operacion}
                 onToggle={() => setOpenSections((s) => ({ ...s, operacion: !s.operacion }))}
                 colorHeader="text-emerald-700"
+                nota="Las 2 primeras líneas (Utilidad Neta y Depreciación/Amortización) vienen de tu Estado de Resultados, no son cuentas del Balance — se suman aquí para que este total coincida exactamente con la tarjeta 'Flujo de Operación' de arriba."
               />
               <TablaFlujo
                 titulo="Detalle Inversión"

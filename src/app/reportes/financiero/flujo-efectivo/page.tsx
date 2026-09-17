@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { API, getToken } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
 import {
   Wallet,
   TrendingUp,
@@ -16,6 +17,10 @@ import {
   ChevronDown,
   ChevronUp,
   AlertTriangle,
+  Lightbulb,
+  ArrowRightLeft,
+  Building2,
+  Download,
 } from "lucide-react";
 
 type ItemFlujo = {
@@ -60,16 +65,15 @@ function formatCurrency(value: number | null | undefined) {
   }).format(value || 0);
 }
 
-function getLastDayOfPreviousMonth(dateStr: string) {
-  const d = new Date(`${dateStr}T00:00:00`);
-  const prevMonthLastDay = new Date(d.getFullYear(), d.getMonth(), 0);
-  return prevMonthLastDay.toISOString().slice(0, 10);
-}
-
-function getLastDayNMonthsBefore(dateStr: string, n: number) {
-  const d = new Date(`${dateStr}T00:00:00`);
-  const target = new Date(d.getFullYear(), d.getMonth() - n + 1, 0);
-  return target.toISOString().slice(0, 10);
+function autoFitColumns(ws: XLSX.WorkSheet, rows: Record<string, unknown>[]) {
+  const widths: number[] = [];
+  rows.forEach((row) => {
+    Object.values(row || {}).forEach((value, idx) => {
+      const cellValue = value === null || value === undefined ? "" : String(value);
+      widths[idx] = Math.max(widths[idx] || 10, cellValue.length + 2);
+    });
+  });
+  ws["!cols"] = widths.map((w) => ({ wch: Math.min(w, 40) }));
 }
 
 function formatFechaCorta(fecha?: string | null) {
@@ -217,16 +221,34 @@ function TablaFlujo({
 }
 
 export default function FlujoEfectivoPage() {
-  const today = new Date().toISOString().slice(0, 10);
-  const finDefault = getLastDayOfPreviousMonth(today);
-  const inicioDefault = getLastDayNMonthsBefore(finDefault, 6);
-
-  const [fechaInicio, setFechaInicio] = useState(inicioDefault);
-  const [fechaFin, setFechaFin] = useState(finDefault);
+  const [fechasDisponibles, setFechasDisponibles] = useState<string[] | null>(null);
+  const [fechaInicio, setFechaInicio] = useState("");
+  const [fechaFin, setFechaFin] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fechasFaltantes, setFechasFaltantes] = useState<string[]>([]);
   const [data, setData] = useState<FlujoEfectivoResponse | null>(null);
+
+  // Guía al usuario para que solo pueda elegir fechas que SÍ tienen Balance
+  // de Prueba real cargado — evita el "elige y falla" de un date picker
+  // libre, dado que el backend exige ambas fechas ancladas para confiar
+  // en el saldo inicial.
+  useEffect(() => {
+    const cargarFechas = async () => {
+      const token = getToken();
+      const res = await fetch(`${API}/reportes/flujo_efectivo_v1/fechas_disponibles`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const json = await res.json();
+      const fechas: string[] = json?.fechas || [];
+      setFechasDisponibles(fechas);
+      if (fechas.length >= 2) {
+        setFechaInicio(fechas[fechas.length - 2]);
+        setFechaFin(fechas[fechas.length - 1]);
+      }
+    };
+    cargarFechas();
+  }, []);
 
   const [openSections, setOpenSections] = useState({
     operacion: true,
@@ -261,6 +283,81 @@ export default function FlujoEfectivoPage() {
     }
   };
 
+  const exportarExcel = () => {
+    if (!data || !data.kpis || !data.fechas) {
+      alert("No hay información para exportar.");
+      return;
+    }
+    const kpis = data.kpis;
+
+    const wb = XLSX.utils.book_new();
+
+    const resumenRows = [
+      { Campo: "Fecha inicio del periodo", Valor: data.fechas.fecha_inicio },
+      { Campo: "Fecha fin del periodo", Valor: data.fechas.fecha_fin },
+      { Campo: "Utilidad neta", Valor: kpis.utilidad_neta },
+      { Campo: "+ Depreciación/Amortización", Valor: kpis.dep_amort },
+      { Campo: "Variación capital de trabajo", Valor: kpis.variacion_capital_trabajo },
+      { Campo: "Flujo de Operación", Valor: kpis.flujo_operacion },
+      { Campo: "Flujo de Inversión", Valor: kpis.flujo_inversion },
+      { Campo: "Flujo de Financiación", Valor: kpis.flujo_financiacion },
+      { Campo: "Total 3 flujos (calculado)", Valor: kpis.total_flujos_calculado },
+      { Campo: "Movimiento real de caja", Valor: kpis.delta_caja_real },
+      { Campo: "Diferencia", Valor: kpis.diferencia },
+      { Campo: "Diferencia %", Valor: kpis.diferencia_pct },
+      { Campo: "Cuadra", Valor: kpis.cuadra ? "Sí" : "No" },
+    ];
+    const wsResumen = XLSX.utils.json_to_sheet(resumenRows);
+    autoFitColumns(wsResumen, resumenRows);
+    XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
+
+    const detalleRows = [
+      ...(data.detalle?.operacion || []).map((it) => ({
+        Seccion: "Operación",
+        Cuenta: it.cuenta,
+        Nombre: it.nombre,
+        Efecto_en_caja: it.efecto_caja ?? it.delta,
+      })),
+      ...(data.detalle?.inversion || []).map((it) => ({
+        Seccion: "Inversión",
+        Cuenta: it.cuenta,
+        Nombre: it.nombre,
+        Efecto_en_caja: it.efecto_caja ?? it.delta,
+      })),
+      ...(data.detalle?.financiacion || []).map((it) => ({
+        Seccion: "Financiación",
+        Cuenta: it.cuenta,
+        Nombre: it.nombre,
+        Efecto_en_caja: it.efecto_caja ?? it.delta,
+      })),
+      ...(data.detalle?.excluido_patrimonio || []).map((it) => ({
+        Seccion: "Excluido (requiere revisión)",
+        Cuenta: it.cuenta,
+        Nombre: it.nombre,
+        Efecto_en_caja: it.delta,
+      })),
+    ];
+    if (detalleRows.length > 0) {
+      const wsDetalle = XLSX.utils.json_to_sheet(detalleRows);
+      autoFitColumns(wsDetalle, detalleRows);
+      XLSX.utils.book_append_sheet(wb, wsDetalle, "Detalle");
+    }
+
+    if (data.resumen?.narrativa?.length) {
+      const narrativaRows = data.resumen.narrativa.map((txt) => ({ Lectura_ejecutiva: txt }));
+      const wsNarrativa = XLSX.utils.json_to_sheet(narrativaRows);
+      autoFitColumns(wsNarrativa, narrativaRows);
+      XLSX.utils.book_append_sheet(wb, wsNarrativa, "Lectura Ejecutiva");
+    }
+
+    const fileName = `flujo_efectivo_${data.fechas.fecha_inicio}_a_${data.fechas.fecha_fin}.xlsx`;
+    const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    const blob = new Blob([excelBuffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    saveAs(blob, fileName);
+  };
+
   const k = data?.kpis;
 
   return (
@@ -279,46 +376,158 @@ export default function FlujoEfectivoPage() {
             y Balance General.
           </p>
         </div>
+
+        <Button
+          onClick={exportarExcel}
+          disabled={!data}
+          variant="outline"
+          className="rounded-2xl px-5 py-3 text-xs font-black border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+        >
+          <Download size={16} className="mr-2" />
+          Excel
+        </Button>
       </div>
+
+      {/* EXPLICACIÓN AMIGABLE - pensado para dueños de pyme/mediana empresa,
+          no para contadores. Objetivo: que alguien sin formación contable
+          entienda en 20 segundos para qué sirve este reporte. */}
+      <Card className="rounded-[2rem] border border-blue-100 bg-blue-50/60 shadow-sm">
+        <CardContent className="p-6">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 rounded-2xl bg-blue-600 text-white shrink-0">
+              <Lightbulb size={18} />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-slate-800">
+                ¿Por qué mi utilidad no se parece a la plata que tengo en el banco?
+              </h3>
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed max-w-3xl">
+                Es la pregunta que más confunde a un dueño de negocio: <i>&quot;si gané tanto, ¿por qué no
+                tengo esa plata en el banco?&quot;</i> — o al revés, <i>&quot;si tengo tanta plata, ¿por qué mi
+                utilidad se ve tan chica?&quot;</i> Tu Estado de Resultados te dice si ganaste plata y tu
+                Balance te dice qué tienes y qué debes, pero ninguno de los dos te explica esto. Este reporte
+                sí: te muestra si el efectivo que tienes hoy viene de que tu negocio genuinamente está
+                mejorando, o de algo que no se va a repetir (cobrar una cartera vieja, un préstamo nuevo) —
+                para que decidas con información real si puedes contratar, invertir, o si debes cuidarte de
+                gastar de más pensando que &quot;hay plata&quot;.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+            <div className="bg-white border border-blue-100 rounded-2xl p-3 flex items-start gap-2.5">
+              <Wallet size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-[11px] font-black text-slate-800">Operación</p>
+                <p className="text-[11px] text-slate-500 leading-snug">
+                  El efectivo que generó (o consumió) tu negocio del día a día: ventas, cobros, pagos a
+                  proveedores y empleados.
+                </p>
+              </div>
+            </div>
+            <div className="bg-white border border-blue-100 rounded-2xl p-3 flex items-start gap-2.5">
+              <ArrowRightLeft size={16} className="text-blue-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-[11px] font-black text-slate-800">Inversión</p>
+                <p className="text-[11px] text-slate-500 leading-snug">
+                  Plata usada o recibida por comprar o vender activos: maquinaria, equipos, vehículos.
+                </p>
+              </div>
+            </div>
+            <div className="bg-white border border-blue-100 rounded-2xl p-3 flex items-start gap-2.5">
+              <Building2 size={16} className="text-indigo-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-[11px] font-black text-slate-800">Financiación</p>
+                <p className="text-[11px] text-slate-500 leading-snug">
+                  Plata que entró o salió por préstamos, tarjetas de crédito, aportes de socios o retiros.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-2 bg-white border border-blue-100 rounded-2xl px-3 py-2.5 mt-4">
+            <span className="text-base leading-none">💡</span>
+            <p className="text-[11px] text-slate-600 leading-relaxed">
+              Este es uno de los 3 estados financieros que casi todo banco pide para un crédito — y la
+              mayoría de las pymes en Colombia no lo tienen listo (toca armarlo a mano en Excel). Aquí lo
+              tienes automático, con los datos que ya cargaste.
+            </p>
+          </div>
+
+          <p className="text-[11px] text-slate-500 mt-3 leading-relaxed">
+            Cuando ves el badge <b>&quot;CUADRA&quot;</b>, significa que el sistema comparó el resultado
+            contra el movimiento real de tu cuenta bancaria — así sabes que el número es confiable, no una
+            estimación.
+          </p>
+        </CardContent>
+      </Card>
 
       {/* FILTROS */}
       <Card className="rounded-[2rem] border shadow-sm bg-white">
         <CardContent className="p-5">
-          <div className="flex flex-wrap gap-4 items-end">
-            <div className="flex flex-col min-w-[180px]">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1">
-                Fecha inicio del periodo
-              </label>
-              <Input
-                type="date"
-                value={fechaInicio}
-                onChange={(e) => setFechaInicio(e.target.value)}
-                className="rounded-xl bg-slate-50 text-xs font-bold"
-              />
+          {fechasDisponibles === null ? (
+            <p className="text-xs text-slate-400 font-medium">Cargando fechas disponibles...</p>
+          ) : fechasDisponibles.length < 2 ? (
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={18} />
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Todavía no tienes suficientes Balances de Prueba cargados para usar este reporte — necesitas
+                al menos 2 fechas de corte. Sube y aplica el Balance de Prueba real de Siigo desde{" "}
+                <a href="/reportes/financiero/balance-general" className="underline font-bold text-slate-800">
+                  Balance General
+                </a>
+                .
+              </p>
             </div>
-            <div className="flex flex-col min-w-[180px]">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1">
-                Fecha fin del periodo
-              </label>
-              <Input
-                type="date"
-                value={fechaFin}
-                onChange={(e) => setFechaFin(e.target.value)}
-                className="rounded-xl bg-slate-50 text-xs font-bold"
-              />
-            </div>
-            <Button
-              onClick={consultar}
-              disabled={loading}
-              className="rounded-2xl px-6 py-3 text-xs font-black bg-slate-900 hover:bg-black text-white shadow-lg active:scale-95"
-            >
-              {loading ? "Consultando..." : "Consultar"}
-            </Button>
-          </div>
-          <p className="text-[11px] text-slate-500 mt-3 leading-relaxed">
-            Ambas fechas deben tener el <b>Balance de Prueba real de Siigo</b> cargado y aplicado (no el
-            auxiliar acumulado) — es la única forma de garantizar que el saldo de apertura sea confiable.
-          </p>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-4 items-end">
+                <div className="flex flex-col min-w-[200px]">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1">
+                    Desde (inicio del periodo)
+                  </label>
+                  <select
+                    value={fechaInicio}
+                    onChange={(e) => setFechaInicio(e.target.value)}
+                    className="rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold px-3 py-2.5"
+                  >
+                    {fechasDisponibles.map((f) => (
+                      <option key={f} value={f} disabled={f === fechaFin}>
+                        {formatFechaCorta(f)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col min-w-[200px]">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1">
+                    Hasta (fin del periodo)
+                  </label>
+                  <select
+                    value={fechaFin}
+                    onChange={(e) => setFechaFin(e.target.value)}
+                    className="rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold px-3 py-2.5"
+                  >
+                    {fechasDisponibles.map((f) => (
+                      <option key={f} value={f} disabled={f === fechaInicio}>
+                        {formatFechaCorta(f)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <Button
+                  onClick={consultar}
+                  disabled={loading || fechaInicio >= fechaFin}
+                  className="rounded-2xl px-6 py-3 text-xs font-black bg-slate-900 hover:bg-black text-white shadow-lg active:scale-95"
+                >
+                  {loading ? "Consultando..." : "Consultar"}
+                </Button>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-3 leading-relaxed">
+                Solo se muestran las fechas que ya tienen el <b>Balance de Prueba real de Siigo</b> cargado y
+                aplicado — así te garantizamos que el resultado va a ser confiable.
+              </p>
+            </>
+          )}
         </CardContent>
       </Card>
 

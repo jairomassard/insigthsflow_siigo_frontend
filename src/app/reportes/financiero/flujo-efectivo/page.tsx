@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { API, getToken, authFetch } from "@/lib/api";
 import { getWhoAmI } from "@/lib/authInfo";
 import { Card, CardContent } from "@/components/ui/card";
@@ -339,6 +340,7 @@ function GraficoCascada({
 }
 
 export default function FlujoEfectivoPage() {
+  const searchParams = useSearchParams();
   const [mostrarExplicacion, setMostrarExplicacion] = useState(false);
   const [fechasDisponibles, setFechasDisponibles] = useState<string[] | null>(null);
   const [fechaInicio, setFechaInicio] = useState("");
@@ -361,12 +363,29 @@ export default function FlujoEfectivoPage() {
       const json = await res.json();
       const fechas: string[] = json?.fechas || [];
       setFechasDisponibles(fechas);
+
+      // Si se llega desde un link con fecha_inicio/fecha_fin en la URL (ej.
+      // "Ver Flujo de Efectivo completo" desde el Resumen Ejecutivo) y esas
+      // 2 fechas sí tienen Balance de Prueba real, se preseleccionan y se
+      // consulta de una vez - para que muestre exactamente el mismo
+      // periodo que el usuario ya vio en la tarjeta de origen, sin tener
+      // que volver a elegir fechas ni hacer clic en "Consultar".
+      const paramInicio = searchParams.get("fecha_inicio");
+      const paramFin = searchParams.get("fecha_fin");
+      if (paramInicio && paramFin && fechas.includes(paramInicio) && fechas.includes(paramFin)) {
+        setFechaInicio(paramInicio);
+        setFechaFin(paramFin);
+        consultar(paramInicio, paramFin);
+        return;
+      }
+
       if (fechas.length >= 2) {
         setFechaInicio(fechas[fechas.length - 2]);
         setFechaFin(fechas[fechas.length - 1]);
       }
     };
     cargarFechas();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const [openSections, setOpenSections] = useState({
@@ -538,12 +557,14 @@ export default function FlujoEfectivoPage() {
     }
   };
 
-  const consultar = async () => {
+  const consultar = async (fi?: string, ff?: string) => {
+    const desde = fi ?? fechaInicio;
+    const hasta = ff ?? fechaFin;
     try {
       setLoading(true);
       setError(null);
       setFechasFaltantes([]);
-      const params = new URLSearchParams({ fecha_inicio: fechaInicio, fecha_fin: fechaFin });
+      const params = new URLSearchParams({ fecha_inicio: desde, fecha_fin: hasta });
       const token = getToken();
       const res = await fetch(`${API}/reportes/flujo_efectivo_v1?${params.toString()}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -904,7 +925,7 @@ export default function FlujoEfectivoPage() {
                   </select>
                 </div>
                 <Button
-                  onClick={consultar}
+                  onClick={() => consultar()}
                   disabled={loading || fechaInicio >= fechaFin}
                   className="rounded-2xl px-6 py-3 text-xs font-black bg-slate-900 hover:bg-black text-white shadow-lg active:scale-95"
                 >

@@ -347,6 +347,12 @@ function formatDateSafe(value?: string | null) {
   return `${d}/${m}/${y}`;
 }
 
+function restarUnDia(fechaStr: string): string {
+  const d = new Date(`${fechaStr}T00:00:00`);
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 function toYYYYMM(value: string): string {
   const raw = String(value || "").slice(0, 10);
   const [y, m] = raw.split("-");
@@ -1254,7 +1260,13 @@ export default function DashboardResumenEjecutivoPage() {
           "Es la parte de tu Estado de Flujo de Efectivo que muestra si el negocio genuinamente genera caja con su operación (ventas, cobros, pagos), sin contar préstamos, aportes ni compra/venta de activos.",
         helpAlign: "right" as const,
         link: {
-          href: "/reportes/financiero/flujo-efectivo",
+          // Mismas 2 fechas que ya se usaron para calcular este KPI
+          // (fecha_inicio = cierre del período anterior, un día antes de
+          // que arranque este período - no "fecha desde" del Resumen
+          // Ejecutivo, que es el primer día, no una fecha de cierre) -
+          // así el reporte completo abre mostrando exactamente lo mismo
+          // que el usuario ya vio en esta tarjeta, no algo distinto.
+          href: `/reportes/financiero/flujo-efectivo?fecha_inicio=${restarUnDia(periodoDesdeEfectivo)}&fecha_fin=${periodoHastaEfectivo}`,
           label: "Ver Flujo de Efectivo completo",
         },
       });

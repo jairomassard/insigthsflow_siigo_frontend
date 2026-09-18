@@ -108,6 +108,8 @@ type BalanceResponse = {
     utilidad_calculada_anterior?: number | null;
     ajuste_patrimonio_aplicado_actual?: number;
     ajuste_patrimonio_aplicado_anterior?: number | null;
+    ajuste_cuadratura_residual_actual?: number;
+    ajuste_cuadratura_residual_anterior?: number | null;
   };
   resumen?: {
     narrativa?: string[];
@@ -2358,6 +2360,35 @@ export default function BalanceGeneralPage() {
           </CardContent>
         </Card>
       ) : null}
+
+      {/* DIFERENCIA SIN EXPLICAR: distinto de la cobertura Alegra (que es
+          "esto quedó afuera porque no cuadraba con el resto") - esto es "el
+          balance completo, con todo lo que sí se pudo clasificar, sigue sin
+          cuadrar". El sistema igual lo fuerza a cuadrar en pantalla (ver
+          ajuste_cuadratura_residual_actual en balance.py) para que el resto
+          del reporte sea usable, pero eso no debe esconder que hay una señal
+          real de un problema en los datos de origen - por eso banner propio,
+          más severo (rojo) que el amber de cobertura, y siempre visible
+          arriba, no enterrado en el detalle técnico colapsado. */}
+      {typeof data?.kpis?.ajuste_cuadratura_residual_actual === "number" &&
+        Math.abs(data.kpis.ajuste_cuadratura_residual_actual) >= 1 && (
+          <div className="bg-rose-50 border border-rose-200 rounded-[1.5rem] p-4 flex flex-col md:flex-row md:items-center gap-3">
+            <div className="p-2 rounded-xl bg-rose-100 text-rose-700 shrink-0">
+              <AlertTriangle size={20} />
+            </div>
+            <p className="text-rose-900 text-xs font-medium leading-relaxed">
+              Este balance tiene una diferencia de{" "}
+              <strong>{formatCurrency(Math.abs(data.kpis.ajuste_cuadratura_residual_actual))}</strong> que{" "}
+              <strong>no se explica</strong> ni con las cuentas cargadas ni con el resultado (utilidad o pérdida)
+              del ejercicio. El sistema la muestra como un ajuste de patrimonio para que la ecuación contable
+              cierre y el resto del reporte se pueda seguir usando, pero es una señal de un posible error en los
+              datos de origen en Alegra — probablemente el mismo tipo de problema que ya hemos encontrado antes
+              (cuentas sin código, saldos iniciales incompletos, o datos corruptos en alguna cuenta). Pídele a tu
+              contador que lo revise directamente en Alegra antes de confiar en las cifras de patrimonio de este
+              balance.
+            </p>
+          </div>
+        )}
 
       {/* ALERTAS */}
       {data?.resumen?.alertas?.length ? (

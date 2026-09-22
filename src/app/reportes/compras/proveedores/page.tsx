@@ -187,6 +187,49 @@ function formatFecha(fecha?: string): string {
   return `${d}-${m}-${y}`;
 }
 
+const MESES_ES = [
+  "Ene", "Feb", "Mar", "Abr", "May", "Jun",
+  "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
+];
+
+interface CompraMensual {
+  mes: string;
+  mesLabel: string;
+  total_compras: number;
+  num_compras: number;
+}
+
+// Agrupa las compras de UN proveedor por mes calendario (año-mes de
+// f.fecha), sumando el total de cada factura/documento de compra - misma
+// fuente que ya alimenta el detalle de facturas de la tarjeta, así la
+// evolución mensual siempre coincide con lo que el usuario ve abajo.
+function agruparPorMes(facturas: FacturaDetalle[]): CompraMensual[] {
+  const mapa: Record<string, { total: number; num: number }> = {};
+
+  for (const f of facturas) {
+    const raw = String(f.fecha || "").slice(0, 10);
+    const [anio, mes] = raw.split("-");
+    if (!anio || !mes) continue;
+
+    const key = `${anio}-${mes}`;
+    if (!mapa[key]) mapa[key] = { total: 0, num: 0 };
+    mapa[key].total += Number(f.total || 0);
+    mapa[key].num += 1;
+  }
+
+  return Object.entries(mapa)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([key, v]) => {
+      const [anio, mes] = key.split("-");
+      return {
+        mes: key,
+        mesLabel: `${MESES_ES[Number(mes) - 1]} ${anio}`,
+        total_compras: v.total,
+        num_compras: v.num,
+      };
+    });
+}
+
 function labelEstado(estado: FacturaDetalle["estado"]): string {
   if (estado === "pagado") return "Pagado";
   if (estado === "parcial") return "Parcial";
@@ -212,6 +255,8 @@ export default function ReporteComprasProveedoresPage() {
   const [proveedorSeleccionado, setProveedorSeleccionado] = useState<string>("");
   const [busquedaProveedor, setBusquedaProveedor] = useState<string>("");
   const [mostrarSugerencias, setMostrarSugerencias] = useState<boolean>(false);
+
+  const [vistaGrafico, setVistaGrafico] = useState<"totalizado" | "evolucion">("totalizado");
 
   const [estadoPago, setEstadoPago] = useState<string>("");
   const [centroCostos, setCentroCostos] = useState<string>("");
@@ -346,6 +391,17 @@ export default function ReporteComprasProveedoresPage() {
   }, [detalle]);
 
   const facturasFiltradas = detallePorProveedor[proveedorSeleccionado] || [];
+
+  const proveedorActivo = proveedores.find(
+    (p) => p.proveedor_identificacion === proveedorSeleccionado
+  );
+
+  const evolucionMensual = useMemo(
+    () => agruparPorMes(facturasFiltradas),
+    [facturasFiltradas]
+  );
+
+  const mostrarEvolucion = vistaGrafico === "evolucion" && !!proveedorSeleccionado;
 
   if (loading) {
     return (
@@ -575,68 +631,139 @@ export default function ReporteComprasProveedoresPage() {
 
       {/* Chart */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-md">📊 Compras por Proveedor</CardTitle>
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
+          <CardTitle className="text-md">
+            {mostrarEvolucion
+              ? `📈 Evolución mensual de compras — ${proveedorActivo?.proveedor_nombre || ""}`
+              : "📊 Compras por Proveedor"}
+          </CardTitle>
+
+          {proveedorSeleccionado && (
+            <div className="flex gap-1 rounded-md border p-1 text-xs">
+              <button
+                type="button"
+                onClick={() => setVistaGrafico("totalizado")}
+                className={`rounded px-3 py-1 transition ${
+                  !mostrarEvolucion
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                Totalizado
+              </button>
+              <button
+                type="button"
+                onClick={() => setVistaGrafico("evolucion")}
+                className={`rounded px-3 py-1 transition ${
+                  mostrarEvolucion
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                Evolución mensual
+              </button>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={400}>
-            <BarChart
-              data={proveedoresFiltrados.slice(0, 15)}
-              margin={{ top: 30, left: 60, right: 20, bottom: 40 }}
-            >
-              <XAxis
-                dataKey="proveedor_nombre"
-                interval={0}
-                tick={({ x, y, payload }) => {
-                  const total = proveedoresFiltrados.length;
-                  const fontSize = total > 10 ? 10 : 12;
-                  const angle = total > 6 ? -30 : 0;
+          {mostrarEvolucion ? (
+            evolucionMensual.length > 0 ? (
+              <ResponsiveContainer width="100%" height={400}>
+                <BarChart
+                  data={evolucionMensual}
+                  margin={{ top: 30, left: 60, right: 20, bottom: 40 }}
+                >
+                  <XAxis dataKey="mesLabel" interval={0} height={60} fontSize={12} />
 
-                  return (
-                    <text
-                      x={x}
-                      y={y + 10}
-                      textAnchor={angle === 0 ? "middle" : "end"}
-                      transform={`rotate(${angle},${x},${y})`}
-                      fontSize={fontSize}
-                    >
-                      {payload.value}
-                    </text>
-                  );
-                }}
-                height={60}
-              />
+                  <YAxis tickFormatter={(v) => `$${(v / 1_000_000).toFixed(0)}M`} />
 
-              <YAxis tickFormatter={(v) => `$${(v / 1_000_000).toFixed(0)}M`} />
+                  <Tooltip
+                    formatter={(value: number, name: string) =>
+                      name === "total_compras"
+                        ? `$${Number(value).toLocaleString("es-CO")}`
+                        : value
+                    }
+                    labelFormatter={(label) => `Mes: ${label}`}
+                  />
 
-              <Tooltip
-                formatter={(value: number) =>
-                  `$${Number(value).toLocaleString("es-CO")}`
-                }
-              />
+                  <Bar dataKey="total_compras" radius={[6, 6, 0, 0]} fill="#2563eb">
+                    <LabelList
+                      dataKey="total_compras"
+                      position="top"
+                      content={({ x, y, value }) => (
+                        <text x={x} y={y} dy={-4} fontSize={10} textAnchor="middle">
+                          {abreviarNumero(Number(value))}
+                        </text>
+                      )}
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="py-16 text-center text-sm text-gray-500">
+                Este proveedor no tiene compras en el periodo seleccionado.
+              </div>
+            )
+          ) : (
+            <ResponsiveContainer width="100%" height={400}>
+              <BarChart
+                data={proveedoresFiltrados.slice(0, 15)}
+                margin={{ top: 30, left: 60, right: 20, bottom: 40 }}
+              >
+                <XAxis
+                  dataKey="proveedor_nombre"
+                  interval={0}
+                  tick={({ x, y, payload }) => {
+                    const total = proveedoresFiltrados.length;
+                    const fontSize = total > 10 ? 10 : 12;
+                    const angle = total > 6 ? -30 : 0;
 
-              <Bar dataKey="total_compras" radius={[6, 6, 0, 0]}>
-                <LabelList
-                  dataKey="total_compras"
-                  position="top"
-                  content={({ x, y, value }) => (
-                    <text x={x} y={y} dy={-4} fontSize={10} textAnchor="middle">
-                      {abreviarNumero(Number(value))}
-                    </text>
-                  )}
+                    return (
+                      <text
+                        x={x}
+                        y={y + 10}
+                        textAnchor={angle === 0 ? "middle" : "end"}
+                        transform={`rotate(${angle},${x},${y})`}
+                        fontSize={fontSize}
+                      >
+                        {payload.value}
+                      </text>
+                    );
+                  }}
+                  height={60}
                 />
 
-                {proveedoresFiltrados.slice(0, 15).map((p, i) => (
-                  <Cell
-                    key={`cell-${i}`}
-                    fill="#2563eb"
-                    style={{ cursor: "pointer" }}
-                    onClick={() => seleccionarProveedor(p)}
+                <YAxis tickFormatter={(v) => `$${(v / 1_000_000).toFixed(0)}M`} />
+
+                <Tooltip
+                  formatter={(value: number) =>
+                    `$${Number(value).toLocaleString("es-CO")}`
+                  }
+                />
+
+                <Bar dataKey="total_compras" radius={[6, 6, 0, 0]}>
+                  <LabelList
+                    dataKey="total_compras"
+                    position="top"
+                    content={({ x, y, value }) => (
+                      <text x={x} y={y} dy={-4} fontSize={10} textAnchor="middle">
+                        {abreviarNumero(Number(value))}
+                      </text>
+                    )}
                   />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+
+                  {proveedoresFiltrados.slice(0, 15).map((p, i) => (
+                    <Cell
+                      key={`cell-${i}`}
+                      fill="#2563eb"
+                      style={{ cursor: "pointer" }}
+                      onClick={() => seleccionarProveedor(p)}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </CardContent>
       </Card>
 

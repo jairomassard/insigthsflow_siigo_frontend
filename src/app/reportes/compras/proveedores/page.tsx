@@ -196,15 +196,22 @@ interface CompraMensual {
   mes: string;
   mesLabel: string;
   total_compras: number;
+  total_pagado: number;
+  total_saldo: number;
   num_compras: number;
 }
+
+const COLOR_PAGADO = "#16a34a";
+const COLOR_PENDIENTE = "#dc2626";
 
 // Agrupa las compras de UN proveedor por mes calendario (año-mes de
 // f.fecha), sumando el total de cada factura/documento de compra - misma
 // fuente que ya alimenta el detalle de facturas de la tarjeta, así la
 // evolución mensual siempre coincide con lo que el usuario ve abajo.
+// También separa pagado/saldo por mes (misma lógica que pagadoCompra) para
+// poder pintar la barra apilada Pagado/Pendiente.
 function agruparPorMes(facturas: FacturaDetalle[]): CompraMensual[] {
-  const mapa: Record<string, { total: number; num: number }> = {};
+  const mapa: Record<string, { total: number; pagado: number; saldo: number; num: number }> = {};
 
   for (const f of facturas) {
     const raw = String(f.fecha || "").slice(0, 10);
@@ -212,8 +219,10 @@ function agruparPorMes(facturas: FacturaDetalle[]): CompraMensual[] {
     if (!anio || !mes) continue;
 
     const key = `${anio}-${mes}`;
-    if (!mapa[key]) mapa[key] = { total: 0, num: 0 };
+    if (!mapa[key]) mapa[key] = { total: 0, pagado: 0, saldo: 0, num: 0 };
     mapa[key].total += Number(f.total || 0);
+    mapa[key].pagado += pagadoCompra(f);
+    mapa[key].saldo += Number(f.saldo || 0);
     mapa[key].num += 1;
   }
 
@@ -225,6 +234,8 @@ function agruparPorMes(facturas: FacturaDetalle[]): CompraMensual[] {
         mes: key,
         mesLabel: `${MESES_ES[Number(mes) - 1]} ${anio}`,
         total_compras: v.total,
+        total_pagado: v.pagado,
+        total_saldo: v.saldo,
         num_compras: v.num,
       };
     });
@@ -666,6 +677,26 @@ export default function ReporteComprasProveedoresPage() {
           )}
         </CardHeader>
         <CardContent>
+          {/* Leyenda Pagado/Pendiente - las barras van apiladas en las 2
+              vistas, así el color muestra la proporción sin sacrificar el
+              total (ese sigue arriba de la barra, como antes). */}
+          <div className="mb-2 flex items-center gap-4 text-xs text-gray-600">
+            <span className="flex items-center gap-1">
+              <span
+                className="inline-block h-2.5 w-2.5 rounded-sm"
+                style={{ backgroundColor: COLOR_PAGADO }}
+              />
+              Pagado
+            </span>
+            <span className="flex items-center gap-1">
+              <span
+                className="inline-block h-2.5 w-2.5 rounded-sm"
+                style={{ backgroundColor: COLOR_PENDIENTE }}
+              />
+              Pendiente
+            </span>
+          </div>
+
           {mostrarEvolucion ? (
             evolucionMensual.length > 0 ? (
               <ResponsiveContainer width="100%" height={400}>
@@ -678,21 +709,24 @@ export default function ReporteComprasProveedoresPage() {
                   <YAxis tickFormatter={(v) => `$${(v / 1_000_000).toFixed(0)}M`} />
 
                   <Tooltip
-                    formatter={(value: number, name: string) =>
-                      name === "total_compras"
-                        ? `$${Number(value).toLocaleString("es-CO")}`
-                        : value
-                    }
+                    formatter={(value: number, name: string) => [
+                      `$${Number(value).toLocaleString("es-CO")}`,
+                      name === "total_pagado" ? "Pagado" : "Pendiente",
+                    ]}
                     labelFormatter={(label) => `Mes: ${label}`}
                   />
 
-                  <Bar dataKey="total_compras" radius={[6, 6, 0, 0]} fill="#2563eb">
+                  <Bar dataKey="total_pagado" stackId="compra" fill={COLOR_PAGADO} />
+
+                  <Bar dataKey="total_saldo" stackId="compra" fill={COLOR_PENDIENTE} radius={[6, 6, 0, 0]}>
                     <LabelList
-                      dataKey="total_compras"
+                      dataKey="total_saldo"
                       position="top"
-                      content={({ x, y, value }) => (
+                      content={({ x, y, index }) => (
                         <text x={x} y={y} dy={-4} fontSize={10} textAnchor="middle">
-                          {abreviarNumero(Number(value))}
+                          {abreviarNumero(
+                            Number(evolucionMensual[Number(index)]?.total_compras || 0)
+                          )}
                         </text>
                       )}
                     />
@@ -736,26 +770,40 @@ export default function ReporteComprasProveedoresPage() {
                 <YAxis tickFormatter={(v) => `$${(v / 1_000_000).toFixed(0)}M`} />
 
                 <Tooltip
-                  formatter={(value: number) =>
-                    `$${Number(value).toLocaleString("es-CO")}`
-                  }
+                  formatter={(value: number, name: string) => [
+                    `$${Number(value).toLocaleString("es-CO")}`,
+                    name === "total_pagado" ? "Pagado" : "Pendiente",
+                  ]}
                 />
 
-                <Bar dataKey="total_compras" radius={[6, 6, 0, 0]}>
+                <Bar dataKey="total_pagado" stackId="compra" fill={COLOR_PAGADO}>
+                  {proveedoresFiltrados.slice(0, 15).map((p, i) => (
+                    <Cell
+                      key={`cell-pagado-${i}`}
+                      fill={COLOR_PAGADO}
+                      style={{ cursor: "pointer" }}
+                      onClick={() => seleccionarProveedor(p)}
+                    />
+                  ))}
+                </Bar>
+
+                <Bar dataKey="total_saldo" stackId="compra" fill={COLOR_PENDIENTE} radius={[6, 6, 0, 0]}>
                   <LabelList
-                    dataKey="total_compras"
+                    dataKey="total_saldo"
                     position="top"
-                    content={({ x, y, value }) => (
+                    content={({ x, y, index }) => (
                       <text x={x} y={y} dy={-4} fontSize={10} textAnchor="middle">
-                        {abreviarNumero(Number(value))}
+                        {abreviarNumero(
+                          Number(proveedoresFiltrados[Number(index)]?.total_compras || 0)
+                        )}
                       </text>
                     )}
                   />
 
                   {proveedoresFiltrados.slice(0, 15).map((p, i) => (
                     <Cell
-                      key={`cell-${i}`}
-                      fill="#2563eb"
+                      key={`cell-saldo-${i}`}
+                      fill={COLOR_PENDIENTE}
                       style={{ cursor: "pointer" }}
                       onClick={() => seleccionarProveedor(p)}
                     />

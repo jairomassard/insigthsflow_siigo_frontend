@@ -201,7 +201,7 @@ interface CompraMensual {
   num_compras: number;
 }
 
-const COLOR_PAGADO = "#16a34a";
+const COLOR_PAGADO = "#2563eb";
 const COLOR_PENDIENTE = "#dc2626";
 
 // Agrupa las compras de UN proveedor por mes calendario (año-mes de
@@ -885,7 +885,7 @@ export default function ReporteComprasProveedoresPage() {
                     </p>
                     <p>
                       Total Pagado:{" "}
-                      <span className="text-green-700">
+                      <span className="text-blue-700">
                         {formatMiles(p.total_pagado)}
                       </span>
                     </p>
@@ -1006,7 +1006,7 @@ export default function ReporteComprasProveedoresPage() {
                                 <td className="px-2 py-1 text-right">
                                   {formatMiles(f.total)}
                                 </td>
-                                <td className="px-2 py-1 text-right text-green-700">
+                                <td className="px-2 py-1 text-right text-blue-700">
                                   {formatMiles(pagadoCompra(f))}
                                 </td>
                                 <td className="px-2 py-1 text-right">

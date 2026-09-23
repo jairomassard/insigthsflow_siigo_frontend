@@ -168,6 +168,11 @@ function retencionesTotalCompra(f: FacturaDetalle): number {
   return Number(f.retencion_total || 0);
 }
 
+const TOOLTIP_ANOMALIA_SALDO =
+  "Saldo ajustado: el sistema ya descontó la retención de este documento, " +
+  "aunque Siigo todavía no la aplica en su propio saldo. El valor mostrado " +
+  "es el correcto (lo que realmente se le debe al proveedor).";
+
 function retencionesTooltipCompra(f: FacturaDetalle): string {
   if (!Array.isArray(f.retenciones) || f.retenciones.length === 0) {
     return "Sin retenciones aplicadas";
@@ -1464,7 +1469,11 @@ export default function ReporteFinancieroComprasGastosPage() {
                               : estado === "parcial"
                               ? "Parcial"
                               : "Pendiente"}
-                            {esAnomalia ? " ⚠️" : ""}
+                            {esAnomalia ? (
+                              <span title={TOOLTIP_ANOMALIA_SALDO}> ⚠️</span>
+                            ) : (
+                              ""
+                            )}
                           </td>
                           <td className="p-2">{r.centro_costo_nombre || "—"}</td>
                           <td className="p-2 text-right whitespace-nowrap">

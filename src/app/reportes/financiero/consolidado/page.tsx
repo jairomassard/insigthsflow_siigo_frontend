@@ -1687,6 +1687,11 @@ function IngresosTable({ rows }: { rows: any[] }) {
   );
 }
 
+const TOOLTIP_ANOMALIA_SALDO =
+  "Saldo ajustado: el sistema ya descontó la retención de este documento, " +
+  "aunque Siigo todavía no la aplica en su propio saldo. El valor mostrado " +
+  "es el correcto (lo que realmente se le debe al proveedor).";
+
 function EgresosTable({ rows }: { rows: any[] }) {
   return (
     <table className="w-full min-w-[1180px] border-separate border-spacing-0 text-sm">
@@ -1771,7 +1776,11 @@ function EgresosTable({ rows }: { rows: any[] }) {
                     : estado === "parcial"
                       ? "Parcial"
                       : "Pendiente"}
-                  {esAnomalia ? " ⚠️" : ""}
+                  {esAnomalia ? (
+                    <span title={TOOLTIP_ANOMALIA_SALDO}> ⚠️</span>
+                  ) : (
+                    ""
+                  )}
                 </td>
                 <td className="border-b border-slate-100 px-3 py-3">
                   {c.centro_costo_nombre || "—"}

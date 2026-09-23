@@ -491,7 +491,7 @@ export default function ReporteComprasProveedoresPage() {
             </CardTitle>
           </CardHeader>
 
-          <CardContent className="text-xl font-bold text-red-600">
+          <CardContent className="text-xl font-bold text-[#7B2D3E]">
             {formatMiles(kpis.total_saldo)}
           </CardContent>
         </Card>
@@ -891,7 +891,7 @@ export default function ReporteComprasProveedoresPage() {
                     </p>
                     <p>
                       Saldo Pendiente:{" "}
-                      <span className="text-red-600">{formatMiles(p.total_saldo)}</span>
+                      <span className="text-[#7B2D3E]">{formatMiles(p.total_saldo)}</span>
                     </p>
                     <p># Compras: {formatCantidad(p.num_compras)}</p>
                     <p>Última compra: {formatFecha(p.ultima_fecha)}</p>
@@ -964,7 +964,7 @@ export default function ReporteComprasProveedoresPage() {
                                 key={`${f.idcompra}-${i}`}
                                 className={
                                   f.estado === "pendiente"
-                                    ? "text-red-700"
+                                    ? "text-[#7B2D3E]"
                                     : f.estado === "parcial"
                                     ? "text-orange-700"
                                     : ""

@@ -202,7 +202,7 @@ interface CompraMensual {
 }
 
 const COLOR_PAGADO = "#2563eb";
-const COLOR_PENDIENTE = "#dc2626";
+const COLOR_PENDIENTE = "#7B2D3E"; // vino tinto, menos agresivo que el rojo puro
 
 // Agrupa las compras de UN proveedor por mes calendario (año-mes de
 // f.fecha), sumando el total de cada factura/documento de compra - misma

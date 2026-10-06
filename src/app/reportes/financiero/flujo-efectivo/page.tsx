@@ -404,9 +404,16 @@ export default function FlujoEfectivoPage() {
         return;
       }
 
-      if (fechas.length >= 2) {
-        setFechaInicio(fechas[fechas.length - 2]);
-        setFechaFin(fechas[fechas.length - 1]);
+      // Por defecto se proponen los dos últimos cortes YA CERRADOS (fecha
+      // <= hoy). Un corte fechado a fin del mes en curso todavía está
+      // parcial; proponerlo de entrada mostraba un mes incompleto como si
+      // fuera el período natural. Sigue disponible en la lista.
+      const hoyIso = new Date().toISOString().slice(0, 10);
+      const cerradas = fechas.filter((f) => f <= hoyIso);
+      const base = cerradas.length >= 2 ? cerradas : fechas;
+      if (base.length >= 2) {
+        setFechaInicio(base[base.length - 2]);
+        setFechaFin(base[base.length - 1]);
       }
     };
     cargarFechas();

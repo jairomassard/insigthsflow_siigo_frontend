@@ -278,15 +278,21 @@ function GraficoCascada({
   flujoInversion,
   flujoFinanciacion,
   cajaFinal,
+  pasosDetallados,
+  alto = 320,
 }: {
   cajaInicial: number;
   flujoOperacion: number;
   flujoInversion: number;
   flujoFinanciacion: number;
   cajaFinal: number;
+  // Si viene, reemplaza los 3 pasos por defecto (lo usa el análisis con IA
+  // para abrir "Operación" en utilidad + capital de trabajo).
+  pasosDetallados?: { label: string; delta: number }[];
+  alto?: number;
 }) {
   let running = cajaInicial;
-  const pasos = [
+  const pasos = pasosDetallados ?? [
     { label: "Operación", delta: flujoOperacion },
     { label: "Inversión", delta: flujoInversion },
     { label: "Financiación", delta: flujoFinanciacion },
@@ -316,7 +322,7 @@ function GraficoCascada({
   };
 
   return (
-    <ResponsiveContainer width="100%" height={320}>
+    <ResponsiveContainer width="100%" height={alto}>
       <BarChart data={data} margin={{ top: 28, right: 10, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
         <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: "bold" }} />
@@ -337,6 +343,25 @@ function GraficoCascada({
       </BarChart>
     </ResponsiveContainer>
   );
+}
+
+// Cascada del análisis con IA: abre el flujo de operación en sus partes
+// (utilidad, depreciación, capital de trabajo) porque ahí está la respuesta
+// a "¿por qué mi utilidad no se parece a la plata en el banco?". Mismo
+// criterio que generar_grafico_cascada_flujo() en backend/analisis_ia.py
+// (el Word debe mostrar el mismo gráfico que la pantalla).
+type KpisFlujo = NonNullable<FlujoEfectivoResponse["kpis"]>;
+
+function pasosCascadaAnalisis(k: KpisFlujo) {
+  const sinExplicar = k.delta_caja_real - k.total_flujos_calculado;
+  return [
+    { label: "Utilidad neta", delta: k.utilidad_neta },
+    ...(Math.abs(k.dep_amort) >= 1 ? [{ label: "Depreciación", delta: k.dep_amort }] : []),
+    { label: "Capital de trabajo", delta: k.variacion_capital_trabajo },
+    { label: "Inversión", delta: k.flujo_inversion },
+    { label: "Financiación", delta: k.flujo_financiacion },
+    ...(Math.abs(sinExplicar) >= 1 ? [{ label: "Sin explicar", delta: sinExplicar }] : []),
+  ];
 }
 
 export default function FlujoEfectivoPage() {
@@ -406,6 +431,10 @@ export default function FlujoEfectivoPage() {
   const [analisisIAFuente, setAnalisisIAFuente] = useState<"cache" | "nuevo" | null>(null);
   const [analisisIAUso, setAnalisisIAUso] = useState<{ actual: number; tope: number } | null>(null);
   const [analisisIAPeriodoLabel, setAnalisisIAPeriodoLabel] = useState<string>("");
+  // KPIs del período ANALIZADO (puede ser distinto al que está consultado en
+  // pantalla, ej. al abrir un análisis anterior desde el historial).
+  const [analisisIAKpis, setAnalisisIAKpis] = useState<KpisFlujo | null>(null);
+  const [analisisIAFechas, setAnalisisIAFechas] = useState<{ desde: string; hasta: string } | null>(null);
   const [analisisIAUsoGlobal, setAnalisisIAUsoGlobal] = useState<{ actual: number; tope: number } | null>(null);
   const [analisisIAHistorial, setAnalisisIAHistorial] = useState<
     { periodo_desde: string; periodo_hasta: string; generado_en: string | null }[]
@@ -445,12 +474,24 @@ export default function FlujoEfectivoPage() {
     setAnalisisIAOpen(true);
     setAnalisisIALoading(true);
     setAnalisisIAError(null);
+    setAnalisisIAKpis(null);
+
+    // Datos para el gráfico de cascada del análisis: consulta normal del
+    // reporte (sin costo de IA). Si falla, el análisis se muestra igual,
+    // solo que sin gráfico.
+    const kpisPromise: Promise<KpisFlujo | null> = authFetch(
+      `/reportes/flujo_efectivo_v1?fecha_inicio=${desde}&fecha_fin=${hasta}`
+    )
+      .then((r: FlujoEfectivoResponse) => r?.kpis ?? null)
+      .catch(() => null);
 
     try {
       const res = await authFetch("/reportes/flujo_efectivo_v1/analisis-ia", {
         method: "POST",
         body: JSON.stringify({ fecha_inicio: desde, fecha_fin: hasta, forzar }),
       });
+      setAnalisisIAKpis(await kpisPromise);
+      setAnalisisIAFechas({ desde, hasta });
       setAnalisisIATexto(res.analisis ?? "");
       setAnalisisIAFuente(res.fuente ?? null);
       setAnalisisIAPeriodoLabel(`${formatFechaCorta(desde)} a ${formatFechaCorta(hasta)}`);
@@ -535,6 +576,8 @@ export default function FlujoEfectivoPage() {
           analisis_markdown: analisisIATexto,
           nombre_cliente: nombreCliente || "Cliente InsightsFlow",
           periodo: analisisIAPeriodoLabel,
+          fecha_inicio: analisisIAFechas?.desde,
+          fecha_fin: analisisIAFechas?.hasta,
         }),
       });
 
@@ -1266,6 +1309,40 @@ export default function FlujoEfectivoPage() {
                       </span>
                     </div>
                   )}
+                  {analisisIAKpis && (
+                    <div className="mb-5 rounded-2xl border border-slate-100 bg-slate-50/60 p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2 px-1 mb-1">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                          De la caja inicial a la caja final
+                        </p>
+                        <div className="flex gap-3 text-[10px] text-slate-500 font-semibold">
+                          <span className="flex items-center gap-1">
+                            <div className="w-2 h-2 rounded-sm bg-slate-600"></div> Saldo de caja
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <div className="w-2 h-2 rounded-sm bg-emerald-500"></div> Entra caja
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <div className="w-2 h-2 rounded-sm bg-rose-500"></div> Sale caja
+                          </span>
+                        </div>
+                      </div>
+                      <p className="px-1 mb-1 text-[11px] leading-4 text-slate-500">
+                        Cada barra de color suma o resta sobre la anterior. La distancia entre <b>Utilidad neta</b> y{" "}
+                        <b>Caja final</b> es lo que explica por qué la utilidad no se parece a la plata en el banco.
+                      </p>
+                      <GraficoCascada
+                        cajaInicial={analisisIAKpis.caja_inicial}
+                        flujoOperacion={analisisIAKpis.flujo_operacion}
+                        flujoInversion={analisisIAKpis.flujo_inversion}
+                        flujoFinanciacion={analisisIAKpis.flujo_financiacion}
+                        cajaFinal={analisisIAKpis.caja_final}
+                        pasosDetallados={pasosCascadaAnalisis(analisisIAKpis)}
+                        alto={230}
+                      />
+                    </div>
+                  )}
+
                   <div className="prose prose-sm prose-slate max-w-none prose-headings:font-black prose-h2:text-base prose-h3:text-sm prose-table:text-xs prose-th:whitespace-nowrap prose-td:whitespace-nowrap">
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}

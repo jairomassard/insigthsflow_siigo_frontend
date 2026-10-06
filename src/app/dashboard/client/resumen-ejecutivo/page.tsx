@@ -21,6 +21,8 @@ import {
   BarChart,
   Bar,
   LabelList,
+  ComposedChart,
+  Cell,
 } from "recharts";
 import {
   Sparkles,
@@ -606,6 +608,373 @@ function EmptyState({ text = "Sin datos para mostrar." }: { text?: string }) {
 /* =========================================================
  * PÁGINA
  * ========================================================= */
+/* =========================================================
+ * TABLERO DEL DIAGNÓSTICO INTEGRAL CON IA
+ * Franja de cifras clave + un gráfico por cada fuente que el diagnóstico
+ * cruza (Estado de Resultados, Balance, Indicadores, Flujo de Efectivo y
+ * panel operativo). Los datos vienen en `graficos` del endpoint
+ * /dashboard/resumen-ejecutivo/analisis-ia (ver
+ * construir_graficos_diagnostico_integral en backend/analisis_ia.py): salen
+ * de los reportes, no del texto de la IA. Cada bloque se omite si su fuente
+ * no está disponible para el período. El Word exporta el mismo tablero.
+ * ========================================================= */
+type CifraTablero = {
+  label: string;
+  valor: number;
+  formato: "moneda" | "pct" | "meses" | "veces";
+  detalle?: string;
+  fuente?: string;
+};
+
+type GraficosDiagnostico = {
+  cifras: CifraTablero[];
+  tendencia: { label: string; ventas: number; egresos: number; ebitda: number }[];
+  estructura: {
+    activo_corriente: number;
+    activo_no_corriente: number;
+    pasivo_corriente: number;
+    pasivo_no_corriente: number;
+    patrimonio: number;
+  } | null;
+  ciclo_caja: { dias_cobro: number; dias_pago: number } | null;
+  cascada_flujo: {
+    caja_inicial: number;
+    caja_final: number;
+    utilidad_neta: number;
+    dep_amort: number;
+    variacion_capital_trabajo: number;
+    flujo_inversion: number;
+    flujo_financiacion: number;
+    delta_caja_real: number;
+    total_flujos_calculado: number;
+  } | null;
+  top_clientes: { nombre: string; valor: number }[];
+  top_gastos: { nombre: string; valor: number }[];
+};
+
+type PasoCascadaTablero = {
+  label: string;
+  base: number;
+  valor: number;
+  tipo: "total" | "positivo" | "negativo";
+  real: number;
+};
+
+function formatCifraTablero(c: CifraTablero): string {
+  const v = Number(c.valor || 0);
+  if (c.formato === "moneda") return formatCurrencyShort(v);
+  if (c.formato === "pct") return `${v.toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+  if (c.formato === "meses")
+    return `${v.toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} meses`;
+  return v.toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function PanelTablero({
+  titulo,
+  fuente,
+  comoLeerlo,
+  leyenda,
+  children,
+}: {
+  titulo: string;
+  fuente: string;
+  comoLeerlo: string;
+  leyenda?: { color: string; texto: string }[];
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{titulo}</p>
+        <span className="text-[9px] font-bold uppercase tracking-wider text-violet-500">{fuente}</span>
+      </div>
+      <p className="px-1 mt-0.5 mb-2 text-[11px] leading-4 text-slate-500">{comoLeerlo}</p>
+      {children}
+      {leyenda && (
+        <div className="flex flex-wrap gap-x-3 gap-y-1 px-1 mt-2 text-[10px] text-slate-500 font-semibold">
+          {leyenda.map((l) => (
+            <span key={l.texto} className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-sm inline-block" style={{ background: l.color }} /> {l.texto}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BarrasHorizontalesTablero({ datos, color }: { datos: { nombre: string; valor: number }[]; color: string }) {
+  const tope = Math.max(...datos.map((d) => Math.abs(d.valor)), 1);
+  return (
+    <div className="space-y-1.5 px-1">
+      {datos.slice(0, 5).map((d) => (
+        <div key={d.nombre} className="flex items-center gap-2 text-[11px]">
+          <span className="w-[42%] truncate text-slate-600 font-semibold" title={d.nombre}>
+            {d.nombre}
+          </span>
+          <div className="flex-1 h-4 rounded bg-slate-100 overflow-hidden">
+            <div className="h-full rounded" style={{ width: `${(Math.abs(d.valor) / tope) * 100}%`, background: color }} />
+          </div>
+          <span className="w-16 text-right font-black text-slate-700">{formatCurrencyShort(d.valor)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TableroDiagnostico({ g }: { g: GraficosDiagnostico }) {
+  const COLOR = {
+    ventas: "#10b981",
+    egresos: "#f43f5e",
+    ebitda: "#4f46e5",
+    activoCorriente: "#10b981",
+    activoNoCorriente: "#0f766e",
+    pasivoCorto: "#f43f5e",
+    pasivoLargo: "#f59e0b",
+    patrimonio: "#4f46e5",
+    saldo: "#475569",
+  };
+
+  const e = g.estructura;
+  const columnasEstructura = e
+    ? [
+        {
+          titulo: "Lo que tiene",
+          segmentos: [
+            { nombre: "Activo corriente", valor: e.activo_corriente, color: COLOR.activoCorriente },
+            { nombre: "Activo no corriente", valor: e.activo_no_corriente, color: COLOR.activoNoCorriente },
+          ],
+        },
+        {
+          titulo: "Cómo lo financia",
+          segmentos: [
+            { nombre: "Pasivo de corto plazo", valor: e.pasivo_corriente, color: COLOR.pasivoCorto },
+            { nombre: "Pasivo de largo plazo", valor: e.pasivo_no_corriente, color: COLOR.pasivoLargo },
+            { nombre: "Patrimonio", valor: e.patrimonio, color: COLOR.patrimonio },
+          ],
+        },
+      ]
+    : [];
+  const topeEstructura = Math.max(
+    ...columnasEstructura.map((c) => c.segmentos.reduce((a, s) => a + Math.max(s.valor, 0), 0)),
+    1,
+  );
+
+  const cc = g.ciclo_caja;
+  const topeCiclo = cc ? Math.max(cc.dias_cobro, cc.dias_pago, 1) : 1;
+  const brecha = cc ? cc.dias_cobro - cc.dias_pago : 0;
+
+  const k = g.cascada_flujo;
+  let pasosCascada: PasoCascadaTablero[] = [];
+  if (k) {
+    const sinExplicar = k.delta_caja_real - k.total_flujos_calculado;
+    const deltas = [
+      { label: "Utilidad neta", delta: k.utilidad_neta },
+      ...(Math.abs(k.dep_amort) >= 1 ? [{ label: "Depreciación", delta: k.dep_amort }] : []),
+      { label: "Capital de trabajo", delta: k.variacion_capital_trabajo },
+      { label: "Inversión", delta: k.flujo_inversion },
+      { label: "Financiación", delta: k.flujo_financiacion },
+      ...(Math.abs(sinExplicar) >= 1 ? [{ label: "Sin explicar", delta: sinExplicar }] : []),
+    ];
+    let acumulado = k.caja_inicial;
+    const intermedios: PasoCascadaTablero[] = deltas.map((d) => {
+      const antes = acumulado;
+      acumulado += d.delta;
+      return {
+        label: d.label,
+        base: Math.min(antes, acumulado),
+        valor: Math.abs(d.delta),
+        tipo: d.delta >= 0 ? "positivo" : "negativo",
+        real: d.delta,
+      };
+    });
+    pasosCascada = [
+      { label: "Caja inicial", base: Math.min(k.caja_inicial, 0), valor: Math.abs(k.caja_inicial), tipo: "total", real: k.caja_inicial },
+      ...intermedios,
+      { label: "Caja final", base: Math.min(k.caja_final, 0), valor: Math.abs(k.caja_final), tipo: "total", real: k.caja_final },
+    ];
+  }
+  const colorCascada = { total: COLOR.saldo, positivo: COLOR.ventas, negativo: COLOR.egresos };
+
+  return (
+    <div className="mb-6 space-y-3">
+      {g.cifras.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
+          {g.cifras.map((c) => (
+            <div key={c.label} className="rounded-2xl border border-slate-100 bg-white px-3 py-2.5 shadow-sm">
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{c.label}</p>
+              <p className="mt-0.5 text-lg font-black text-slate-800 leading-6">{formatCifraTablero(c)}</p>
+              <p className="text-[10px] font-semibold text-slate-400 truncate">{c.detalle || c.fuente || ""}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {g.tendencia.length > 0 && (
+        <PanelTablero
+          titulo="Tendencia mensual del período"
+          fuente="Estado de Resultados"
+          comoLeerlo="Barras: lo que se vendió y lo que se gastó cada mes. Línea: lo que dejó la operación (EBITDA). Mientras más separadas estén las barras, mejor fue el mes."
+          leyenda={[
+            { color: COLOR.ventas, texto: "Ventas" },
+            { color: COLOR.egresos, texto: "Costos y gastos" },
+            { color: COLOR.ebitda, texto: "EBITDA" },
+          ]}
+        >
+          <ResponsiveContainer width="100%" height={210}>
+            <ComposedChart data={g.tendencia} margin={{ top: 22, right: 10, left: 10, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: "bold" }} />
+              <YAxis hide />
+              <Tooltip formatter={(v: unknown) => formatCurrency(Number(v))} />
+              <Bar dataKey="ventas" name="Ventas" fill={COLOR.ventas} radius={[4, 4, 0, 0]} barSize={22}>
+                <LabelList
+                  dataKey="ventas"
+                  position="top"
+                  formatter={(v: unknown) => abreviar(Number(v))}
+                  style={{ fontSize: 9, fontWeight: 700, fill: "#334155" }}
+                />
+              </Bar>
+              <Bar dataKey="egresos" name="Costos y gastos" fill={COLOR.egresos} radius={[4, 4, 0, 0]} barSize={22} />
+              <Line type="monotone" dataKey="ebitda" name="EBITDA" stroke={COLOR.ebitda} strokeWidth={2.5} dot={{ r: 3 }} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </PanelTablero>
+      )}
+
+      {(e || cc) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {e && (
+            <PanelTablero
+              titulo="Estructura financiera"
+              fuente="Balance General"
+              comoLeerlo="Izquierda: lo que la empresa tiene. Derecha: con qué lo financia. Mientras más patrimonio y menos pasivo de corto plazo, más sólida."
+              leyenda={columnasEstructura.flatMap((c) =>
+                c.segmentos.filter((s) => s.valor > 0).map((s) => ({ color: s.color, texto: s.nombre })),
+              )}
+            >
+              <div className="flex items-end justify-center gap-10 h-[190px] px-4">
+                {columnasEstructura.map((col) => (
+                  <div key={col.titulo} className="flex flex-col items-center h-full w-28">
+                    <div className="flex-1 w-full flex flex-col-reverse justify-start">
+                      {col.segmentos
+                        .filter((s) => s.valor > 0)
+                        .map((s) => {
+                          const pct = (s.valor / topeEstructura) * 100;
+                          return (
+                            <div
+                              key={s.nombre}
+                              className="w-full flex items-center justify-center text-[10px] font-black text-white first:rounded-b-lg last:rounded-t-lg"
+                              style={{ height: `${pct}%`, background: s.color }}
+                              title={`${s.nombre}: ${formatCurrency(s.valor)}`}
+                            >
+                              {pct >= 12 ? formatCurrencyShort(s.valor) : ""}
+                            </div>
+                          );
+                        })}
+                    </div>
+                    <p className="mt-1.5 text-[10px] font-black text-slate-600">{col.titulo}</p>
+                  </div>
+                ))}
+              </div>
+            </PanelTablero>
+          )}
+
+          {cc && (
+            <PanelTablero
+              titulo="Ciclo de caja"
+              fuente="Indicadores Financieros"
+              comoLeerlo="Días que la empresa tarda en cobrarle a sus clientes frente a los días que tarda en pagarle a sus proveedores. Si cobra más tarde de lo que paga, está financiando a sus clientes."
+            >
+              <div className="h-[190px] flex flex-col justify-center gap-4 px-2">
+                {[
+                  { texto: "Tarda en cobrar", dias: cc.dias_cobro, color: COLOR.egresos },
+                  { texto: "Tarda en pagar", dias: cc.dias_pago, color: COLOR.ventas },
+                ].map((b) => (
+                  <div key={b.texto}>
+                    <div className="flex justify-between text-[11px] font-bold text-slate-600 mb-1">
+                      <span>{b.texto}</span>
+                      <span className="font-black text-slate-800">{Math.round(b.dias)} días</span>
+                    </div>
+                    <div className="h-5 rounded bg-slate-100 overflow-hidden">
+                      <div className="h-full rounded" style={{ width: `${(b.dias / topeCiclo) * 100}%`, background: b.color }} />
+                    </div>
+                  </div>
+                ))}
+                <p
+                  className={`text-center text-xs font-black rounded-xl py-1.5 ${
+                    brecha > 0 ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"
+                  }`}
+                >
+                  {brecha > 0
+                    ? `Cobra ${Math.round(Math.abs(brecha))} días después de pagar`
+                    : `Cobra ${Math.round(Math.abs(brecha))} días antes de pagar`}
+                </p>
+              </div>
+            </PanelTablero>
+          )}
+        </div>
+      )}
+
+      {k && (
+        <PanelTablero
+          titulo="De la caja inicial a la caja final"
+          fuente="Flujo de Efectivo"
+          comoLeerlo="Cada barra de color suma o resta sobre la anterior. La distancia entre Utilidad neta y Caja final explica por qué la utilidad no se parece a la plata en el banco."
+          leyenda={[
+            { color: COLOR.saldo, texto: "Saldo de caja" },
+            { color: COLOR.ventas, texto: "Entra caja" },
+            { color: COLOR.egresos, texto: "Sale caja" },
+          ]}
+        >
+          <ResponsiveContainer width="100%" height={210}>
+            <BarChart data={pasosCascada} margin={{ top: 22, right: 10, left: 10, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: "bold" }} />
+              <YAxis hide />
+              <Bar dataKey="base" stackId="c" fill="transparent" isAnimationActive={false} />
+              <Bar dataKey="valor" stackId="c" radius={[5, 5, 5, 5]} barSize={48}>
+                {pasosCascada.map((paso, idx) => (
+                  <Cell key={idx} fill={colorCascada[paso.tipo]} />
+                ))}
+                <LabelList
+                  dataKey="real"
+                  position="top"
+                  formatter={(v: unknown) => abreviar(Number(v))}
+                  style={{ fontSize: 9, fontWeight: 700, fill: "#334155" }}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </PanelTablero>
+      )}
+
+      {(g.top_clientes.length > 0 || g.top_gastos.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {g.top_clientes.length > 0 && (
+            <PanelTablero
+              titulo="Principales clientes"
+              fuente="Panel operativo"
+              comoLeerlo="Los clientes que más facturaron en el período. Una barra mucho más larga que las demás indica dependencia de un solo cliente."
+            >
+              <BarrasHorizontalesTablero datos={g.top_clientes} color={COLOR.ebitda} />
+            </PanelTablero>
+          )}
+          {g.top_gastos.length > 0 && (
+            <PanelTablero
+              titulo="Principales gastos"
+              fuente="Panel operativo"
+              comoLeerlo="Las cuentas de gasto más grandes del período. Es donde un ajuste tiene más efecto sobre la utilidad."
+            >
+              <BarrasHorizontalesTablero datos={g.top_gastos} color={COLOR.egresos} />
+            </PanelTablero>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DashboardResumenEjecutivoPage() {
   const defaults = getDefaultDates();
 
@@ -642,6 +1011,12 @@ export default function DashboardResumenEjecutivoPage() {
   const [analisisIAFuente, setAnalisisIAFuente] = useState<"cache" | "nuevo" | null>(null);
   const [analisisIAUso, setAnalisisIAUso] = useState<{ actual: number; tope: number } | null>(null);
   const [analisisIAPeriodoLabel, setAnalisisIAPeriodoLabel] = useState<string>("");
+  // Tablero visual del diagnóstico + parámetros exactos con los que se pidió
+  // (el Word los reenvía para dibujar el mismo tablero).
+  const [analisisIAGraficos, setAnalisisIAGraficos] = useState<GraficosDiagnostico | null>(null);
+  const [analisisIAParams, setAnalisisIAParams] = useState<
+    { desde: string; hasta: string; centro_costos?: string; modo_periodo?: string } | null
+  >(null);
   const [exportandoWord, setExportandoWord] = useState(false);
   const [analisisIAUsoGlobal, setAnalisisIAUsoGlobal] = useState<{ actual: number; tope: number } | null>(null);
   const [analisisIAHistorial, setAnalisisIAHistorial] = useState<
@@ -694,6 +1069,13 @@ export default function DashboardResumenEjecutivoPage() {
         }),
       });
       setAnalisisIATexto(res.analisis ?? "");
+      setAnalisisIAGraficos(res.graficos ?? null);
+      setAnalisisIAParams({
+        desde: fd,
+        hasta: fh,
+        centro_costos: centroCostos ? String(centroCostos) : undefined,
+        modo_periodo: modoPeriodo,
+      });
       setAnalisisIAFuente(res.fuente ?? null);
       setAnalisisIAPeriodoLabel(`${formatDateSafe(fd)} a ${formatDateSafe(fh)}`);
       setAnalisisIAUso(
@@ -791,6 +1173,7 @@ export default function DashboardResumenEjecutivoPage() {
           analisis_markdown: analisisIATexto,
           nombre_cliente: nombreCliente || "Cliente InsightsFlow",
           periodo: analisisIAPeriodoLabel,
+          ...(analisisIAParams || {}),
         }),
       });
 
@@ -2075,6 +2458,8 @@ export default function DashboardResumenEjecutivoPage() {
                       </span>
                     </div>
                   )}
+                  {analisisIAGraficos && <TableroDiagnostico g={analisisIAGraficos} />}
+
                   <div className="prose prose-sm prose-slate max-w-none prose-headings:font-black prose-h2:text-base prose-h3:text-sm prose-table:text-xs prose-th:whitespace-nowrap prose-td:whitespace-nowrap">
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}

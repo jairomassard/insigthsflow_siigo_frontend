@@ -22,6 +22,7 @@ import {
 import { format } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import { getWhoAmI } from "@/lib/authInfo";
+import CuadreSiigo from "./CuadreSiigo";
 
 interface EvolucionMes {
   mes: string;
@@ -942,6 +943,8 @@ export default function ReporteFinancieroComprasGastosPage() {
           <KpiCard key={item.id} item={item} onSelect={setSelectedKpi} />
         ))}
       </div>
+
+      {proveedorDatos === "siigo" && <CuadreSiigo />}
 
       {selectedKpi && (
         <div

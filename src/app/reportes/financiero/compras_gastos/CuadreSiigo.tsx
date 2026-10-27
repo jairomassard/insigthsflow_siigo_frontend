@@ -75,7 +75,17 @@ function LineaPuente({
   );
 }
 
-export default function CuadreSiigo() {
+export default function CuadreSiigo({
+  pendienteFiltrado,
+  periodoTexto,
+  conFiltroCentro,
+}: {
+  // KPI "Pendiente" de arriba (filtrado por período/centro de costo), para
+  // explicar por qué difiere del pendiente de todos los años de este cuadre.
+  pendienteFiltrado: number;
+  periodoTexto: string;
+  conFiltroCentro: boolean;
+}) {
   const [data, setData] = useState<RespuestaCuadre | null>(null);
   const [error, setError] = useState("");
   const [verDetalle, setVerDetalle] = useState(false);
@@ -96,20 +106,25 @@ export default function CuadreSiigo() {
 
   const t = data.totales;
   const proveedores = data.proveedores || [];
+  const fueraDelFiltro = t.pend_docs - pendienteFiltrado;
+  const textoFiltro = conFiltroCentro ? `período ${periodoTexto} y centro de costo seleccionado` : `período ${periodoTexto}`;
 
   return (
     <Card className="border-sky-200 shadow-sm">
       <CardHeader className="px-3 py-2">
         <div className="flex flex-col gap-1 md:flex-row md:items-baseline md:justify-between">
-          <CardTitle className="text-base font-black">Cuadre con Siigo · Cuentas por pagar</CardTitle>
+          <CardTitle className="text-base font-black">
+            Cuadre con Siigo · Deuda total con proveedores (todos los años)
+          </CardTitle>
           <span className="text-[11px] font-semibold text-slate-500">
             Foto de Siigo al {fechaCorte(data.corte)} · no usa los filtros de fecha ni centro de costo
           </span>
         </div>
         <p className="text-[12px] leading-snug text-slate-600">
-          El pendiente del reporte suma factura por factura. Siigo, en su informe de cuentas por pagar por
-          proveedor, además descuenta los anticipos (saldos a favor) e incluye deudas que no corresponden a una
-          factura o documento soporte. Este cuadre muestra paso a paso cómo se llega de un número al otro.
+          Las tarjetas y gráficas de arriba muestran solo las compras del {textoFiltro}. Este cuadre muestra
+          toda la deuda vigente con proveedores, sin importar el año de la compra, y la compara con Siigo: Siigo,
+          en su informe de cuentas por pagar por proveedor, además descuenta los anticipos (saldos a favor) e
+          incluye deudas que no corresponden a una factura o documento soporte.
         </p>
       </CardHeader>
 
@@ -117,9 +132,13 @@ export default function CuadreSiigo() {
         <div className="rounded-xl border border-slate-200 bg-white px-3">
           <LineaPuente
             signo=""
-            label="Pendiente por facturas y documentos soporte"
+            label="Pendiente por facturas y documentos soporte (todos los años)"
             valor={t.pend_docs}
-            ayuda="Saldo pendiente de todas las compras (FC y DS), sumado documento por documento, sin filtro de fechas."
+            ayuda={
+              Math.abs(fueraDelFiltro) > 1
+                ? `De estos, ${cop(pendienteFiltrado)} son compras del ${textoFiltro} (es el KPI "Pendiente" de arriba) y ${cop(fueraDelFiltro)} son compras fuera de esos filtros, la mayoría de años anteriores.`
+                : `Saldo pendiente de todas las compras (FC y DS), documento por documento. Coincide con el KPI "Pendiente" de arriba porque los filtros actuales abarcan todas las compras con saldo.`
+            }
           />
           <LineaPuente
             signo="+"

@@ -944,8 +944,6 @@ export default function ReporteFinancieroComprasGastosPage() {
         ))}
       </div>
 
-      {proveedorDatos === "siigo" && <CuadreSiigo />}
-
       {selectedKpi && (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/20 px-3 pb-4 sm:items-center"
@@ -1229,6 +1227,14 @@ export default function ReporteFinancieroComprasGastosPage() {
         </CardContent>
       </Card>
       </div>
+
+      {proveedorDatos === "siigo" && (
+        <CuadreSiigo
+          pendienteFiltrado={safeNumber(kpis.total_saldo)}
+          periodoTexto={periodoTexto}
+          conFiltroCentro={Boolean(centroCostos)}
+        />
+      )}
 
       {modalOpen && (
         <div

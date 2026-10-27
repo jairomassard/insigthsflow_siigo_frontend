@@ -994,6 +994,11 @@ export default function DashboardResumenEjecutivoPage() {
 
   const [cxcTotal, setCxcTotal] = useState<number | null>(null);
   const [cxpTotal, setCxpTotal] = useState<number | null>(null);
+  const [cxpSiigo, setCxpSiigo] = useState<{
+    total: number;
+    documentos: number;
+    saldoFavor: number;
+  } | null>(null);
   const [cxcPendienteAntiguo, setCxcPendienteAntiguo] =
     useState<PendienteAntiguo>(null);
   const [cxpPendienteAntiguo, setCxpPendienteAntiguo] =
@@ -1270,15 +1275,33 @@ export default function DashboardResumenEjecutivoPage() {
         ? `centro_costos=${encodeURIComponent(centroCostos)}`
         : "";
 
-      const [cxcRes, cxpRes] = await Promise.all([
+      const [cxcRes, cxpRes, cuadreRes] = await Promise.all([
         authFetch(`/reportes/cuentas-por-cobrar?detalle=1`),
         authFetch(
           `/reportes/financiero/compras-gastos${sufijoCentro ? `?${sufijoCentro}` : ""}`,
         ),
+        // Clientes Siigo: la deuda real con proveedores es la CxP neta de
+        // Siigo (descuenta anticipos), ver "Cuadre con Siigo" en Compras y
+        // Gastos. Ese cuadre no se puede filtrar por centro de costo, asi
+        // que con centro de costo se sigue usando el pendiente por documentos.
+        sufijoCentro
+          ? Promise.resolve(null)
+          : authFetch(`/reportes/financiero/compras-gastos/cuadre-siigo`).catch(() => null),
       ]);
 
       setCxcTotal(Number(cxcRes?.resumen_global?.total_global_num ?? 0));
-      setCxpTotal(Number(cxpRes?.kpis?.total_saldo ?? 0));
+
+      if (cuadreRes?.disponible && cuadreRes?.totales) {
+        setCxpSiigo({
+          total: Number(cuadreRes.totales.total_siigo || 0),
+          documentos: Number(cuadreRes.totales.pend_docs || 0),
+          saldoFavor: Number(cuadreRes.totales.saldo_favor || 0),
+        });
+        setCxpTotal(Number(cuadreRes.totales.total_siigo || 0));
+      } else {
+        setCxpSiigo(null);
+        setCxpTotal(Number(cxpRes?.kpis?.total_saldo ?? 0));
+      }
 
       const facturasCxC: Array<{
         fecha?: string;
@@ -1354,6 +1377,7 @@ export default function DashboardResumenEjecutivoPage() {
       console.error("Error cargando KPIs de cartera y cuentas por pagar", e);
       setCxcTotal(null);
       setCxpTotal(null);
+      setCxpSiigo(null);
       setCxcPendienteAntiguo(null);
       setCxpPendienteAntiguo(null);
     }
@@ -1596,8 +1620,9 @@ export default function DashboardResumenEjecutivoPage() {
         label: "Cuentas por pagar",
         value: cxpTotal != null ? formatCurrencyShort(cxpTotal) : "Cargando...",
         valueFull: cxpTotal != null ? formatCurrency(cxpTotal) : "Cargando...",
-        description:
-          "Saldo total pendiente de pago a proveedores por compras y gastos, a la fecha actual.",
+        description: cxpSiigo
+          ? `Deuda total con proveedores según Siigo, a la fecha actual: ${formatCurrency(cxpSiigo.documentos)} en facturas y documentos soporte pendientes, menos ${formatCurrency(cxpSiigo.saldoFavor)} de anticipos (saldos a favor) aún no cruzados, más ajustes que Siigo registra sin factura. Coincide con el "Total general" del informe de cuentas por pagar de Siigo; el paso a paso está en "Cuadre con Siigo", al final de Compras y Gastos.`
+          : "Saldo total pendiente de pago a proveedores por compras y gastos, a la fecha actual.",
         delta: cxpPendienteAntiguo
           ? `Debes desde ${formatDateSafe(cxpPendienteAntiguo.fecha)}`
           : "Ver detalle de compras/gastos",
@@ -1656,7 +1681,7 @@ export default function DashboardResumenEjecutivoPage() {
     }
 
     return cards;
-  }, [data, hayAuxiliar, cxcTotal, cxpTotal, cxcPendienteAntiguo, cxpPendienteAntiguo, fechaDesde, fechaHasta]);
+  }, [data, hayAuxiliar, cxcTotal, cxpTotal, cxpSiigo, cxcPendienteAntiguo, cxpPendienteAntiguo, fechaDesde, fechaHasta]);
 
   const detalleIndicador = useMemo<DetalleIndicador | null>(() => {
     if (!data?.kpis) return null;

@@ -1,0 +1,2768 @@
+// src/app/dashboard/client/resumen-ejecutivo/page.tsx
+"use client";
+
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import Link from "next/link";
+import { authFetch, API, getToken } from "@/lib/api";
+import { getWhoAmI } from "@/lib/authInfo";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  BarChart,
+  Bar,
+  LabelList,
+  ComposedChart,
+  Cell,
+} from "recharts";
+import {
+  Sparkles,
+  TrendingUp,
+  Wallet,
+  Banknote,
+  Activity,
+  TriangleAlert,
+  Target,
+  RefreshCcw,
+  Lightbulb,
+  Building2,
+  Users,
+  CircleHelp,
+  X,
+  HandCoins,
+  Receipt,
+  ArrowRight,
+  CalendarClock,
+  PiggyBank,
+  ArrowRightLeft,
+} from "lucide-react";
+
+/* =========================================================
+ * TIPOS
+ * ========================================================= */
+type Variacion = {
+  actual: number;
+  anterior: number;
+  diff: number;
+  pct: number;
+};
+
+type KPIEficiencia = {
+  actual: number;
+  anterior: number;
+  diff: number;
+  promedio_6m: number;
+  meta: number;
+};
+
+type KPICaja = {
+  actual: number;
+};
+
+type KPIRunway = {
+  actual: number;
+  burn_promedio_3m?: number;
+  burn_promedio?: number;
+  gasto_promedio?: number;
+  gasto_promedio_3m?: number;
+  egresos_promedio?: number;
+  egresos_promedio_3m?: number;
+  meses_promedio?: number;
+  unidad: string;
+  requiere_parametrizacion?: boolean;
+  mensaje?: string;
+  formula?: string;
+};
+
+type Kpis = {
+  ventas_netas: Variacion;
+  egresos_totales: Variacion;
+  ebitda: Variacion;
+  utilidad_neta: Variacion;
+  utilidad_operativa: Variacion;
+  eficiencia_operativa: KPIEficiencia;
+  caja_disponible: KPICaja;
+  cash_runway: KPIRunway;
+};
+
+type SerieMensual = {
+  label: string;
+  ventas: number;
+  ebitda: number;
+  utilidad_neta: number;
+  eficiencia_operativa: number;
+  costos_venta: number;
+  gastos_operacionales: number;
+  gastos_no_operacionales: number;
+  egresos_totales: number;
+  dep_amort: number;
+};
+
+type TopItem = {
+  nombre: string;
+  total: number;
+};
+
+type TopGasto = {
+  cuenta: string;
+  nombre: string;
+  valor: number;
+};
+
+type Alerta = {
+  nivel: "alta" | "media" | "baja";
+  titulo: string;
+  descripcion: string;
+};
+
+type DashboardResponse = {
+  periodo: {
+    desde: string;
+    hasta: string;
+    anterior_desde: string;
+    anterior_hasta: string;
+    rango_auto?: boolean;
+    ajuste_por_corte?: boolean;
+    modo_periodo?: "ytd_cerrado" | "ultimo_mes_cerrado" | "manual";
+    tipo_corte?: "cerrado" | "al_dia";
+    ultima_fecha_auxiliar?: string | null;
+    fecha_corte_confiable?: string | null;
+  };
+  metadata?: {
+    hay_datos_auxiliar_actual: boolean;
+    ultima_fecha_auxiliar?: string | null;
+    fecha_corte_confiable?: string | null;
+    mes_actual_parcial?: boolean;
+    modo_periodo?: "ytd_cerrado" | "ultimo_mes_cerrado" | "manual";
+    tipo_corte?: "cerrado" | "al_dia";
+    mensaje_contexto?: string | null;
+  };
+  kpis: Kpis;
+  flujo_efectivo?: {
+    ok: boolean;
+    error?: string;
+    kpis?: {
+      flujo_operacion: number;
+      flujo_inversion: number;
+      flujo_financiacion: number;
+      cuadra: boolean;
+    };
+  };
+  series: {
+    mensual: SerieMensual[];
+  };
+  top_gastos: TopGasto[];
+  top_clientes: TopItem[];
+  top_proveedores: TopItem[];
+  explicaciones: string[];
+  acciones: string[];
+  alertas: Alerta[];
+};
+
+type CentroCosto = {
+  id: string | number;
+  nombre: string;
+};
+
+type ModoPeriodo = "ytd_cerrado" | "manual";
+
+type DashboardMetadata = {
+  ultima_fecha_auxiliar?: string | null;
+  fecha_corte_confiable?: string | null;
+  desde_sugerido?: string | null;
+  hasta_sugerido?: string | null;
+  mes_actual_parcial?: boolean;
+  modo_periodo?: string | null;
+  mensaje_contexto?: string | null;
+};
+
+type IndicadorVista =
+  | "eficiencia_operativa"
+  | "ebitda"
+  | "utilidad_neta"
+  | "ventas_netas"
+  | "egresos_totales"
+  | "caja_disponible"
+  | "autonomia_caja";
+
+type TarjetaIndicador = {
+  label: string;
+  value: string;
+  accent: string;
+};
+
+type DetalleIndicador = {
+  nombre: string;
+  subtitulo: string;
+  lectura: string;
+  interpretacion: string;
+  tarjetas: TarjetaIndicador[];
+  chartKey?: keyof SerieMensual;
+  chartName?: string;
+  chartColor?: string;
+  chartTipo?: "dinero" | "porcentaje";
+  emptyChartText?: string;
+  // Aclaración de dónde sale el número, solo cuando puede confundirse con
+  // otro reporte que mide algo distinto (ej. Egresos totales vs. el
+  // reporte de Compras y Gastos - misma "palabra", fuente distinta).
+  notaFuente?: string;
+};
+
+type KpiCardItem = {
+  label: string;
+  value: string;
+  valueFull: string;
+  description?: string;
+  delta?: string;
+  accent: string;
+  chip: string;
+  bar: string;
+  glow: string;
+  icon: ReactNode;
+  helpText?: string;
+  helpAlign?: "left" | "center" | "right";
+  link?: { href: string; label: string };
+  sinceLabel?: string;
+};
+
+type PendienteAntiguo = {
+  fecha: string;
+  numero: string;
+  nombre: string;
+} | null;
+
+/* =========================================================
+ * HELPERS
+ * ========================================================= */
+function formatCurrency(valor: number): string {
+  return new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    maximumFractionDigits: 0,
+  }).format(Number(valor || 0));
+}
+
+function formatCurrencyShort(valor: number): string {
+  return `$ ${abreviar(Number(valor || 0))}`;
+}
+
+function formatPercent(valor?: number): string {
+  return `${Number(valor || 0).toFixed(1)}%`;
+}
+
+function formatMonths(valor?: number): string {
+  return `${Number(valor || 0).toFixed(1)} meses`;
+}
+
+function getGastoPromedioRunway(
+  runway?: KPIRunway,
+  cajaActual?: number,
+): number {
+  const directo = Number(
+    runway?.burn_promedio_3m ||
+      runway?.gasto_promedio_3m ||
+      runway?.egresos_promedio_3m ||
+      runway?.burn_promedio ||
+      runway?.gasto_promedio ||
+      runway?.egresos_promedio ||
+      0,
+  );
+
+  if (directo > 0) return directo;
+
+  const meses = Number(runway?.actual || 0);
+  const caja = Number(cajaActual || 0);
+
+  if (meses > 0 && caja > 0) return caja / meses;
+
+  return 0;
+}
+
+function abreviar(valor: number): string {
+  const n = Number(valor || 0);
+  const abs = Math.abs(n);
+
+  if (abs >= 1_000_000_000) {
+    const millones = n / 1_000_000;
+    return `${millones.toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}M`;
+  }
+  if (abs >= 1_000_000) {
+    const millones = n / 1_000_000;
+    return `${millones.toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}M`;
+  }
+  if (abs >= 1_000) {
+    const miles = n / 1_000;
+    return `${miles.toLocaleString("es-CO", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}K`;
+  }
+  return `${Math.round(n).toLocaleString("es-CO")}`;
+}
+
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
+
+function getDefaultDates() {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  // formatToParts es seguro en todos los navegadores modernos
+  const parts = new Intl.DateTimeFormat("es-CO", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+
+  const get = (type: string) =>
+    parts.find((p) => p.type === type)?.value ?? "01";
+
+  const year = get("year");
+  const month = get("month");
+  const day = get("day");
+
+  // Inicio del año en curso y hoy, ambos en zona del usuario
+  const desde = `${year}-01-01`;
+  const hasta = `${year}-${month}-${day}`;
+
+  return { desde, hasta };
+}
+
+function diffLabel(diff: number, suffix = "") {
+  const n = Number(diff || 0);
+  const sign = n > 0 ? "+" : "";
+  return `${sign}${n.toFixed(1)}${suffix}`;
+}
+
+function formatDateSafe(value?: string | null) {
+  if (!value) return "—";
+  const raw = String(value).slice(0, 10);
+  const [y, m, d] = raw.split("-");
+  if (!y || !m || !d) return String(value);
+  return `${d}/${m}/${y}`;
+}
+
+function restarUnDia(fechaStr: string): string {
+  const d = new Date(`${fechaStr}T00:00:00`);
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function toYYYYMM(value: string): string {
+  const raw = String(value || "").slice(0, 10);
+  const [y, m] = raw.split("-");
+  if (y && m) return `${y}-${m}`;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${mm}`;
+}
+
+function shortenName(value: string, max = 28) {
+  const text = String(value || "Sin nombre").trim();
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 1)}…`;
+}
+
+/* =========================================================
+ * COMPONENTES PEQUEÑOS
+ * ========================================================= */
+function InfoBubble({
+  text,
+  align = "center",
+}: {
+  text: string;
+  align?: "left" | "center" | "right";
+}) {
+  const alignClass =
+    align === "left"
+      ? "right-0"
+      : align === "right"
+        ? "left-0"
+        : "left-1/2 -translate-x-1/2";
+
+  return (
+    <span className="group/info relative z-[80] inline-flex shrink-0">
+      <span
+        aria-label="Ver explicación"
+        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-500 shadow-sm transition group-hover/info:border-slate-400 group-hover/info:text-slate-700"
+      >
+        <CircleHelp size={13} />
+      </span>
+
+      <span
+        className={cx(
+          "pointer-events-none absolute top-7 z-[100] hidden w-72 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-[12px] font-medium leading-5 text-slate-700 shadow-2xl group-hover/info:block",
+          alignClass,
+        )}
+      >
+        {text}
+      </span>
+    </span>
+  );
+}
+
+function KpiCard({
+  item,
+  onOpen,
+}: {
+  item: KpiCardItem;
+  onOpen: (item: KpiCardItem) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(item)}
+      aria-label={`Abrir detalle de ${item.label}: ${item.valueFull}`}
+      className="relative z-0 text-left outline-none transition hover:z-30 focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2"
+    >
+      <Card
+        className={cx(
+          "relative h-[92px] overflow-visible rounded-[1.25rem] border border-slate-200 shadow-sm transition-all duration-300",
+          "hover:-translate-y-0.5 hover:shadow-md bg-gradient-to-br",
+          item.accent,
+        )}
+      >
+        <div className={cx("absolute bottom-3 left-0 top-3 w-1 rounded-r-full", item.bar)} />
+        <div className={cx("pointer-events-none absolute -right-4 -top-5 h-20 w-20 rounded-full blur-2xl", item.glow)} />
+
+        <CardContent className="relative flex h-full flex-col justify-between p-2.5">
+          <div className="flex items-start justify-between gap-1.5">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <div className="line-clamp-1 text-[9px] font-black uppercase tracking-[0.16em] text-slate-600">
+                  {item.label}
+                </div>
+                {item.helpText && <InfoBubble text={item.helpText} align={item.helpAlign} />}
+              </div>
+            </div>
+
+            <div className={cx("rounded-xl border p-1.5 shadow-sm", item.chip)}>
+              {item.icon}
+            </div>
+          </div>
+
+          <div>
+            <div className="truncate text-[17px] font-black leading-none tracking-tight text-slate-900">
+              {item.value}
+            </div>
+
+            <div className="mt-1 flex items-center justify-between gap-1.5">
+              {item.delta && (
+                <div className="truncate rounded-full border border-slate-200 bg-white/90 px-2 py-0.5 text-[9px] font-black text-slate-700 shadow-sm">
+                  {item.delta}
+                </div>
+              )}
+              <span className="ml-auto text-[9px] font-bold text-slate-400">Tocar</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </button>
+  );
+}
+
+function KpiDetailModal({
+  item,
+  periodo,
+  centroCostos,
+  onClose,
+}: {
+  item: KpiCardItem | null;
+  periodo: { desde: string; hasta: string };
+  centroCostos: string;
+  onClose: () => void;
+}) {
+  if (!item) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 p-3 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className={cx("relative overflow-hidden bg-gradient-to-br p-4", item.accent)}>
+          <div className={cx("pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full blur-3xl", item.glow)} />
+          <div className="relative flex items-start justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
+                KPI seleccionado
+              </div>
+              <h3 className="mt-1 text-xl font-black tracking-tight text-slate-900">
+                {item.label}
+              </h3>
+            </div>
+            <button
+              onClick={onClose}
+              className="rounded-2xl border border-slate-200 bg-white/80 p-2 text-slate-600 shadow-sm transition hover:bg-white"
+              aria-label="Cerrar"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-3 p-4">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">
+              Valor completo
+            </div>
+            <div className="mt-1 break-words text-2xl font-black text-slate-900">
+              {item.valueFull}
+            </div>
+          </div>
+
+          {item.description && (
+            <p className="rounded-2xl border border-slate-200 bg-white p-3 text-sm font-semibold leading-6 text-slate-700">
+              {item.description}
+            </p>
+          )}
+
+          {item.helpText && (
+            <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-3 text-sm leading-6 text-indigo-800">
+              {item.helpText}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-2 text-xs font-semibold text-slate-600">
+            <div className="rounded-2xl bg-slate-50 p-3">
+              <div className="text-[10px] uppercase tracking-wide text-slate-400">Desde</div>
+              <div>{formatDateSafe(periodo.desde)}</div>
+            </div>
+            <div className="rounded-2xl bg-slate-50 p-3">
+              <div className="text-[10px] uppercase tracking-wide text-slate-400">Hasta</div>
+              <div>{formatDateSafe(periodo.hasta)}</div>
+            </div>
+            <div className="col-span-2 rounded-2xl bg-slate-50 p-3">
+              <div className="text-[10px] uppercase tracking-wide text-slate-400">
+                Centro de costos
+              </div>
+              <div>{centroCostos ? "Filtrado" : "Todos"}</div>
+            </div>
+          </div>
+
+          {item.sinceLabel && (
+            <div className="flex items-start gap-2 rounded-2xl border border-amber-100 bg-amber-50 p-3 text-sm font-semibold leading-6 text-amber-800">
+              <CalendarClock size={16} className="mt-0.5 shrink-0" />
+              <span>{item.sinceLabel}</span>
+            </div>
+          )}
+
+          {item.link && (
+            <Link
+              href={item.link.href}
+              className="flex items-center justify-between gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-lg transition hover:bg-black active:scale-[0.99]"
+            >
+              {item.link.label}
+              <ArrowRight size={16} />
+            </Link>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SectionTitle({
+  badge,
+  title,
+  subtitle,
+}: {
+  badge: string;
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <div className="mb-2.5">
+      <div className="mb-1 inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+        {badge}
+      </div>
+      <h2 className="text-[15px] font-black tracking-tight text-slate-900 md:text-[16px]">
+        {title}
+      </h2>
+      <p className="mt-0.5 text-[12px] font-medium leading-5 text-slate-500">
+        {subtitle}
+      </p>
+    </div>
+  );
+}
+
+function EmptyState({ text = "Sin datos para mostrar." }: { text?: string }) {
+  return (
+    <div className="flex h-full min-h-[160px] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 text-center text-sm font-medium text-slate-500">
+      {text}
+    </div>
+  );
+}
+
+/* =========================================================
+ * PÁGINA
+ * ========================================================= */
+/* =========================================================
+ * TABLERO DEL DIAGNÓSTICO INTEGRAL CON IA
+ * Franja de cifras clave + un gráfico por cada fuente que el diagnóstico
+ * cruza (Estado de Resultados, Balance, Indicadores, Flujo de Efectivo y
+ * panel operativo). Los datos vienen en `graficos` del endpoint
+ * /dashboard/resumen-ejecutivo/analisis-ia (ver
+ * construir_graficos_diagnostico_integral en backend/analisis_ia.py): salen
+ * de los reportes, no del texto de la IA. Cada bloque se omite si su fuente
+ * no está disponible para el período. El Word exporta el mismo tablero.
+ * ========================================================= */
+type CifraTablero = {
+  label: string;
+  valor: number;
+  formato: "moneda" | "pct" | "meses" | "veces";
+  detalle?: string;
+  fuente?: string;
+};
+
+type GraficosDiagnostico = {
+  cifras: CifraTablero[];
+  tendencia: { label: string; ventas: number; egresos: number; ebitda: number }[];
+  estructura: {
+    activo_corriente: number;
+    activo_no_corriente: number;
+    pasivo_corriente: number;
+    pasivo_no_corriente: number;
+    patrimonio: number;
+  } | null;
+  ciclo_caja: { dias_cobro: number; dias_pago: number } | null;
+  cascada_flujo: {
+    caja_inicial: number;
+    caja_final: number;
+    utilidad_neta: number;
+    dep_amort: number;
+    variacion_capital_trabajo: number;
+    flujo_inversion: number;
+    flujo_financiacion: number;
+    delta_caja_real: number;
+    total_flujos_calculado: number;
+  } | null;
+  top_clientes: { nombre: string; valor: number }[];
+  top_gastos: { nombre: string; valor: number }[];
+};
+
+type PasoCascadaTablero = {
+  label: string;
+  base: number;
+  valor: number;
+  tipo: "total" | "positivo" | "negativo";
+  real: number;
+};
+
+function formatCifraTablero(c: CifraTablero): string {
+  const v = Number(c.valor || 0);
+  if (c.formato === "moneda") return formatCurrencyShort(v);
+  if (c.formato === "pct") return `${v.toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+  if (c.formato === "meses")
+    return `${v.toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} meses`;
+  return v.toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function PanelTablero({
+  titulo,
+  fuente,
+  comoLeerlo,
+  leyenda,
+  children,
+}: {
+  titulo: string;
+  fuente: string;
+  comoLeerlo: string;
+  leyenda?: { color: string; texto: string }[];
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{titulo}</p>
+        <span className="text-[9px] font-bold uppercase tracking-wider text-violet-500">{fuente}</span>
+      </div>
+      <p className="px-1 mt-0.5 mb-2 text-[11px] leading-4 text-slate-500">{comoLeerlo}</p>
+      {children}
+      {leyenda && (
+        <div className="flex flex-wrap gap-x-3 gap-y-1 px-1 mt-2 text-[10px] text-slate-500 font-semibold">
+          {leyenda.map((l) => (
+            <span key={l.texto} className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-sm inline-block" style={{ background: l.color }} /> {l.texto}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BarrasHorizontalesTablero({ datos, color }: { datos: { nombre: string; valor: number }[]; color: string }) {
+  const tope = Math.max(...datos.map((d) => Math.abs(d.valor)), 1);
+  return (
+    <div className="space-y-1.5 px-1">
+      {datos.slice(0, 5).map((d) => (
+        <div key={d.nombre} className="flex items-center gap-2 text-[11px]">
+          <span className="w-[42%] truncate text-slate-600 font-semibold" title={d.nombre}>
+            {d.nombre}
+          </span>
+          <div className="flex-1 h-4 rounded bg-slate-100 overflow-hidden">
+            <div className="h-full rounded" style={{ width: `${(Math.abs(d.valor) / tope) * 100}%`, background: color }} />
+          </div>
+          <span className="w-16 text-right font-black text-slate-700">{formatCurrencyShort(d.valor)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TableroDiagnostico({ g }: { g: GraficosDiagnostico }) {
+  const COLOR = {
+    ventas: "#10b981",
+    egresos: "#f43f5e",
+    ebitda: "#4f46e5",
+    activoCorriente: "#10b981",
+    activoNoCorriente: "#0f766e",
+    pasivoCorto: "#f43f5e",
+    pasivoLargo: "#f59e0b",
+    patrimonio: "#4f46e5",
+    saldo: "#475569",
+  };
+
+  const e = g.estructura;
+  const columnasEstructura = e
+    ? [
+        {
+          titulo: "Lo que tiene",
+          segmentos: [
+            { nombre: "Activo corriente", valor: e.activo_corriente, color: COLOR.activoCorriente },
+            { nombre: "Activo no corriente", valor: e.activo_no_corriente, color: COLOR.activoNoCorriente },
+          ],
+        },
+        {
+          titulo: "Cómo lo financia",
+          segmentos: [
+            { nombre: "Pasivo de corto plazo", valor: e.pasivo_corriente, color: COLOR.pasivoCorto },
+            { nombre: "Pasivo de largo plazo", valor: e.pasivo_no_corriente, color: COLOR.pasivoLargo },
+            { nombre: "Patrimonio", valor: e.patrimonio, color: COLOR.patrimonio },
+          ],
+        },
+      ]
+    : [];
+  const topeEstructura = Math.max(
+    ...columnasEstructura.map((c) => c.segmentos.reduce((a, s) => a + Math.max(s.valor, 0), 0)),
+    1,
+  );
+
+  const cc = g.ciclo_caja;
+  const topeCiclo = cc ? Math.max(cc.dias_cobro, cc.dias_pago, 1) : 1;
+  const brecha = cc ? cc.dias_cobro - cc.dias_pago : 0;
+
+  const k = g.cascada_flujo;
+  let pasosCascada: PasoCascadaTablero[] = [];
+  if (k) {
+    const sinExplicar = k.delta_caja_real - k.total_flujos_calculado;
+    const deltas = [
+      { label: "Utilidad neta", delta: k.utilidad_neta },
+      ...(Math.abs(k.dep_amort) >= 1 ? [{ label: "Depreciación", delta: k.dep_amort }] : []),
+      { label: "Capital de trabajo", delta: k.variacion_capital_trabajo },
+      { label: "Inversión", delta: k.flujo_inversion },
+      { label: "Financiación", delta: k.flujo_financiacion },
+      ...(Math.abs(sinExplicar) >= 1 ? [{ label: "Sin explicar", delta: sinExplicar }] : []),
+    ];
+    let acumulado = k.caja_inicial;
+    const intermedios: PasoCascadaTablero[] = deltas.map((d) => {
+      const antes = acumulado;
+      acumulado += d.delta;
+      return {
+        label: d.label,
+        base: Math.min(antes, acumulado),
+        valor: Math.abs(d.delta),
+        tipo: d.delta >= 0 ? "positivo" : "negativo",
+        real: d.delta,
+      };
+    });
+    pasosCascada = [
+      { label: "Caja inicial", base: Math.min(k.caja_inicial, 0), valor: Math.abs(k.caja_inicial), tipo: "total", real: k.caja_inicial },
+      ...intermedios,
+      { label: "Caja final", base: Math.min(k.caja_final, 0), valor: Math.abs(k.caja_final), tipo: "total", real: k.caja_final },
+    ];
+  }
+  const colorCascada = { total: COLOR.saldo, positivo: COLOR.ventas, negativo: COLOR.egresos };
+
+  return (
+    <div className="mb-6 space-y-3">
+      {g.cifras.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
+          {g.cifras.map((c) => (
+            <div key={c.label} className="rounded-2xl border border-slate-100 bg-white px-3 py-2.5 shadow-sm">
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{c.label}</p>
+              <p className="mt-0.5 text-lg font-black text-slate-800 leading-6">{formatCifraTablero(c)}</p>
+              <p className="text-[10px] font-semibold text-slate-400 truncate">{c.detalle || c.fuente || ""}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {g.tendencia.length > 0 && (
+        <PanelTablero
+          titulo="Tendencia mensual del período"
+          fuente="Estado de Resultados"
+          comoLeerlo="Barras: lo que se vendió y lo que se gastó cada mes. Línea: lo que dejó la operación (EBITDA). Mientras más separadas estén las barras, mejor fue el mes."
+          leyenda={[
+            { color: COLOR.ventas, texto: "Ventas" },
+            { color: COLOR.egresos, texto: "Costos y gastos" },
+            { color: COLOR.ebitda, texto: "EBITDA" },
+          ]}
+        >
+          <ResponsiveContainer width="100%" height={210}>
+            <ComposedChart data={g.tendencia} margin={{ top: 22, right: 10, left: 10, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: "bold" }} />
+              <YAxis hide />
+              <Tooltip formatter={(v: unknown) => formatCurrency(Number(v))} />
+              <Bar dataKey="ventas" name="Ventas" fill={COLOR.ventas} radius={[4, 4, 0, 0]} barSize={22}>
+                <LabelList
+                  dataKey="ventas"
+                  position="top"
+                  formatter={(v: unknown) => abreviar(Number(v))}
+                  style={{ fontSize: 9, fontWeight: 700, fill: "#334155" }}
+                />
+              </Bar>
+              <Bar dataKey="egresos" name="Costos y gastos" fill={COLOR.egresos} radius={[4, 4, 0, 0]} barSize={22} />
+              <Line type="monotone" dataKey="ebitda" name="EBITDA" stroke={COLOR.ebitda} strokeWidth={2.5} dot={{ r: 3 }} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </PanelTablero>
+      )}
+
+      {(e || cc) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {e && (
+            <PanelTablero
+              titulo="Estructura financiera"
+              fuente="Balance General"
+              comoLeerlo="Izquierda: lo que la empresa tiene. Derecha: con qué lo financia. Mientras más patrimonio y menos pasivo de corto plazo, más sólida."
+              leyenda={columnasEstructura.flatMap((c) =>
+                c.segmentos.filter((s) => s.valor > 0).map((s) => ({ color: s.color, texto: s.nombre })),
+              )}
+            >
+              <div className="flex items-end justify-center gap-10 h-[190px] px-4">
+                {columnasEstructura.map((col) => (
+                  <div key={col.titulo} className="flex flex-col items-center h-full w-28">
+                    <div className="flex-1 w-full flex flex-col-reverse justify-start">
+                      {col.segmentos
+                        .filter((s) => s.valor > 0)
+                        .map((s) => {
+                          const pct = (s.valor / topeEstructura) * 100;
+                          return (
+                            <div
+                              key={s.nombre}
+                              className="w-full flex items-center justify-center text-[10px] font-black text-white first:rounded-b-lg last:rounded-t-lg"
+                              style={{ height: `${pct}%`, background: s.color }}
+                              title={`${s.nombre}: ${formatCurrency(s.valor)}`}
+                            >
+                              {pct >= 12 ? formatCurrencyShort(s.valor) : ""}
+                            </div>
+                          );
+                        })}
+                    </div>
+                    <p className="mt-1.5 text-[10px] font-black text-slate-600">{col.titulo}</p>
+                  </div>
+                ))}
+              </div>
+            </PanelTablero>
+          )}
+
+          {cc && (
+            <PanelTablero
+              titulo="Ciclo de caja"
+              fuente="Indicadores Financieros"
+              comoLeerlo="Días que la empresa tarda en cobrarle a sus clientes frente a los días que tarda en pagarle a sus proveedores. Si cobra más tarde de lo que paga, está financiando a sus clientes."
+            >
+              <div className="h-[190px] flex flex-col justify-center gap-4 px-2">
+                {[
+                  { texto: "Tarda en cobrar", dias: cc.dias_cobro, color: COLOR.egresos },
+                  { texto: "Tarda en pagar", dias: cc.dias_pago, color: COLOR.ventas },
+                ].map((b) => (
+                  <div key={b.texto}>
+                    <div className="flex justify-between text-[11px] font-bold text-slate-600 mb-1">
+                      <span>{b.texto}</span>
+                      <span className="font-black text-slate-800">{Math.round(b.dias)} días</span>
+                    </div>
+                    <div className="h-5 rounded bg-slate-100 overflow-hidden">
+                      <div className="h-full rounded" style={{ width: `${(b.dias / topeCiclo) * 100}%`, background: b.color }} />
+                    </div>
+                  </div>
+                ))}
+                <p
+                  className={`text-center text-xs font-black rounded-xl py-1.5 ${
+                    brecha > 0 ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"
+                  }`}
+                >
+                  {brecha > 0
+                    ? `Cobra ${Math.round(Math.abs(brecha))} días después de pagar`
+                    : `Cobra ${Math.round(Math.abs(brecha))} días antes de pagar`}
+                </p>
+              </div>
+            </PanelTablero>
+          )}
+        </div>
+      )}
+
+      {k && (
+        <PanelTablero
+          titulo="De la caja inicial a la caja final"
+          fuente="Flujo de Efectivo"
+          comoLeerlo="Cada barra de color suma o resta sobre la anterior. La distancia entre Utilidad neta y Caja final explica por qué la utilidad no se parece a la plata en el banco."
+          leyenda={[
+            { color: COLOR.saldo, texto: "Saldo de caja" },
+            { color: COLOR.ventas, texto: "Entra caja" },
+            { color: COLOR.egresos, texto: "Sale caja" },
+          ]}
+        >
+          <ResponsiveContainer width="100%" height={210}>
+            <BarChart data={pasosCascada} margin={{ top: 22, right: 10, left: 10, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: "bold" }} />
+              <YAxis hide />
+              <Bar dataKey="base" stackId="c" fill="transparent" isAnimationActive={false} />
+              <Bar dataKey="valor" stackId="c" radius={[5, 5, 5, 5]} barSize={48}>
+                {pasosCascada.map((paso, idx) => (
+                  <Cell key={idx} fill={colorCascada[paso.tipo]} />
+                ))}
+                <LabelList
+                  dataKey="real"
+                  position="top"
+                  formatter={(v: unknown) => abreviar(Number(v))}
+                  style={{ fontSize: 9, fontWeight: 700, fill: "#334155" }}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </PanelTablero>
+      )}
+
+      {(g.top_clientes.length > 0 || g.top_gastos.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {g.top_clientes.length > 0 && (
+            <PanelTablero
+              titulo="Principales clientes"
+              fuente="Panel operativo"
+              comoLeerlo="Los clientes que más facturaron en el período. Una barra mucho más larga que las demás indica dependencia de un solo cliente."
+            >
+              <BarrasHorizontalesTablero datos={g.top_clientes} color={COLOR.ebitda} />
+            </PanelTablero>
+          )}
+          {g.top_gastos.length > 0 && (
+            <PanelTablero
+              titulo="Principales gastos"
+              fuente="Panel operativo"
+              comoLeerlo="Las cuentas de gasto más grandes del período. Es donde un ajuste tiene más efecto sobre la utilidad."
+            >
+              <BarrasHorizontalesTablero datos={g.top_gastos} color={COLOR.egresos} />
+            </PanelTablero>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function DashboardResumenEjecutivoPage() {
+  const defaults = getDefaultDates();
+
+  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState<DashboardResponse | null>(null);
+  const [error, setError] = useState<string>("");
+
+  const [fechaDesde, setFechaDesde] = useState(defaults.desde);
+  const [fechaHasta, setFechaHasta] = useState(defaults.hasta);
+  const [modoPeriodo, setModoPeriodo] = useState<ModoPeriodo>("ytd_cerrado");
+  const [centroCostos, setCentroCostos] = useState<string>("");
+  const [centros, setCentros] = useState<CentroCosto[]>([]);
+  const [initReady, setInitReady] = useState(false);
+  const [indicadorSeleccionado, setIndicadorSeleccionado] =
+    useState<IndicadorVista>("eficiencia_operativa");
+  const [selectedKpi, setSelectedKpi] = useState<KpiCardItem | null>(null);
+
+  const [cxcTotal, setCxcTotal] = useState<number | null>(null);
+  const [cxpTotal, setCxpTotal] = useState<number | null>(null);
+  const [cxcPendienteAntiguo, setCxcPendienteAntiguo] =
+    useState<PendienteAntiguo>(null);
+  const [cxpPendienteAntiguo, setCxpPendienteAntiguo] =
+    useState<PendienteAntiguo>(null);
+
+  // "Diagnóstico Integral con IA" - combina PyG + Balance + Indicadores +
+  // el panel operativo de esta misma página en un solo análisis (mismo
+  // patrón de cache/tope/modal que los otros 3, backend:
+  // analisis_ia.py, tipo_reporte "diagnostico_integral").
+  const [nombreCliente, setNombreCliente] = useState<string>("");
+  const [analisisIAOpen, setAnalisisIAOpen] = useState(false);
+  const [analisisIALoading, setAnalisisIALoading] = useState(false);
+  const [analisisIAError, setAnalisisIAError] = useState<string | null>(null);
+  const [analisisIATexto, setAnalisisIATexto] = useState<string | null>(null);
+  const [analisisIAFuente, setAnalisisIAFuente] = useState<"cache" | "nuevo" | null>(null);
+  const [analisisIAUso, setAnalisisIAUso] = useState<{ actual: number; tope: number } | null>(null);
+  const [analisisIAPeriodoLabel, setAnalisisIAPeriodoLabel] = useState<string>("");
+  // Tablero visual del diagnóstico + parámetros exactos con los que se pidió
+  // (el Word los reenvía para dibujar el mismo tablero).
+  const [analisisIAGraficos, setAnalisisIAGraficos] = useState<GraficosDiagnostico | null>(null);
+  const [analisisIAParams, setAnalisisIAParams] = useState<
+    { desde: string; hasta: string; centro_costos?: string; modo_periodo?: string } | null
+  >(null);
+  const [exportandoWord, setExportandoWord] = useState(false);
+  const [analisisIAUsoGlobal, setAnalisisIAUsoGlobal] = useState<{ actual: number; tope: number } | null>(null);
+  const [analisisIAHistorial, setAnalisisIAHistorial] = useState<
+    { periodo_desde: string; periodo_hasta: string; generado_en: string | null }[]
+  >([]);
+  const [historialOpen, setHistorialOpen] = useState(false);
+  const [confirmGasto, setConfirmGasto] = useState<
+    { mensaje: string; forzar: boolean; fechaDesde: string; fechaHasta: string } | null
+  >(null);
+
+  const cargarEstadoAnalisisIA = async () => {
+    try {
+      const [estado, hist] = await Promise.all([
+        authFetch("/dashboard/resumen-ejecutivo/analisis-ia/estado"),
+        authFetch("/dashboard/resumen-ejecutivo/analisis-ia/historial"),
+      ]);
+      if (typeof estado?.uso_mensual === "number" && typeof estado?.tope_mensual === "number") {
+        setAnalisisIAUsoGlobal({ actual: estado.uso_mensual, tope: estado.tope_mensual });
+      }
+      setAnalisisIAHistorial(Array.isArray(hist?.historial) ? hist.historial : []);
+    } catch {
+      // silencioso a propósito - no rompe el resto del panel
+    }
+  };
+
+  // fechaDesdeParam/fechaHastaParam: se usan solo al reabrir un análisis
+  // desde "Ver análisis anteriores" (mismo motivo que en los otros 3
+  // reportes - evita depender de un estado que aún no se re-renderizó).
+  const ejecutarAnalisisIA = async (
+    forzar: boolean,
+    fechaDesdeParam?: string,
+    fechaHastaParam?: string
+  ) => {
+    const fd = fechaDesdeParam ?? fechaDesde;
+    const fh = fechaHastaParam ?? fechaHasta;
+
+    setAnalisisIAOpen(true);
+    setAnalisisIALoading(true);
+    setAnalisisIAError(null);
+
+    try {
+      const res = await authFetch("/dashboard/resumen-ejecutivo/analisis-ia", {
+        method: "POST",
+        body: JSON.stringify({
+          desde: fd,
+          hasta: fh,
+          centro_costos: centroCostos || undefined,
+          modo_periodo: modoPeriodo,
+          forzar,
+        }),
+      });
+      setAnalisisIATexto(res.analisis ?? "");
+      setAnalisisIAGraficos(res.graficos ?? null);
+      setAnalisisIAParams({
+        desde: fd,
+        hasta: fh,
+        centro_costos: centroCostos ? String(centroCostos) : undefined,
+        modo_periodo: modoPeriodo,
+      });
+      setAnalisisIAFuente(res.fuente ?? null);
+      setAnalisisIAPeriodoLabel(`${formatDateSafe(fd)} a ${formatDateSafe(fh)}`);
+      setAnalisisIAUso(
+        typeof res.uso_mensual === "number" && typeof res.tope_mensual === "number"
+          ? { actual: res.uso_mensual, tope: res.tope_mensual }
+          : null
+      );
+      cargarEstadoAnalisisIA();
+    } catch (err) {
+      const mensaje = err instanceof Error ? err.message : "No fue posible generar el diagnóstico con IA.";
+      setAnalisisIAError(mensaje);
+    } finally {
+      setAnalisisIALoading(false);
+    }
+  };
+
+  const solicitarAnalisisIA = async (
+    forzar = false,
+    fechaDesdeParam?: string,
+    fechaHastaParam?: string
+  ) => {
+    const fd = fechaDesdeParam ?? fechaDesde;
+    const fh = fechaHastaParam ?? fechaHasta;
+
+    const restante = analisisIAUsoGlobal
+      ? Math.max(analisisIAUsoGlobal.tope - analisisIAUsoGlobal.actual, 0)
+      : null;
+    const sufijoRestante = restante !== null ? ` (te quedan ${restante})` : "";
+
+    if (forzar) {
+      setConfirmGasto({
+        mensaje: `Regenerar vuelve a redactar el diagnóstico desde cero con IA (combina PyG, Balance, Indicadores y este panel) y consume 1 de tus análisis del mes${sufijoRestante}.`,
+        forzar: true,
+        fechaDesde: fd,
+        fechaHasta: fh,
+      });
+      return;
+    }
+
+    const yaExiste = analisisIAHistorial.some(
+      (h) => h.periodo_desde === fd && h.periodo_hasta === fh
+    );
+
+    if (!yaExiste) {
+      setConfirmGasto({
+        mensaje: `Este período todavía no se ha analizado de forma integral. Se va a generar un diagnóstico nuevo combinando 4 fuentes y va a consumir 1 de tus análisis del mes${sufijoRestante}.`,
+        forzar: false,
+        fechaDesde: fd,
+        fechaHasta: fh,
+      });
+      return;
+    }
+
+    // Ya está en el historial - puede salir gratis del caché, pero hay
+    // que verificar primero si los datos cambiaron desde entonces, para
+    // avisar ANTES de gastar en vez de enterarse recién con el resultado.
+    try {
+      const verificacion = await authFetch("/dashboard/resumen-ejecutivo/analisis-ia/verificar", {
+        method: "POST",
+        body: JSON.stringify({
+          desde: fd,
+          hasta: fh,
+          centro_costos: centroCostos || undefined,
+          modo_periodo: modoPeriodo,
+        }),
+      });
+      if (verificacion?.actualizado) {
+        ejecutarAnalisisIA(false, fd, fh);
+      } else {
+        setConfirmGasto({
+          mensaje: `Los datos de este período cambiaron desde la última vez que se analizó, así que verlo de nuevo va a generar un diagnóstico nuevo y va a consumir 1 de tus análisis del mes${sufijoRestante}.`,
+          forzar: false,
+          fechaDesde: fd,
+          fechaHasta: fh,
+        });
+      }
+    } catch {
+      // Si la verificación falla, no bloquear al usuario - se deja pasar
+      // directo (mismo comportamiento que había antes de este cambio).
+      ejecutarAnalisisIA(false, fd, fh);
+    }
+  };
+
+  const handleExportarWord = async () => {
+    if (!analisisIATexto) return;
+    setExportandoWord(true);
+    try {
+      const res = await fetch(`${API}/dashboard/resumen-ejecutivo/analisis-ia/word`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({
+          analisis_markdown: analisisIATexto,
+          nombre_cliente: nombreCliente || "Cliente InsightsFlow",
+          periodo: analisisIAPeriodoLabel,
+          ...(analisisIAParams || {}),
+        }),
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `diagnostico_integral_IA_${(nombreCliente || "cliente").replace(/\s+/g, "_")}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert("No fue posible generar el Word del diagnóstico.");
+    } finally {
+      setExportandoWord(false);
+    }
+  };
+
+  async function cargarFechasSugeridas() {
+    try {
+      const meta: DashboardMetadata = await authFetch(
+        "/dashboard/resumen-ejecutivo/metadata",
+      );
+
+      if (meta?.desde_sugerido && meta?.hasta_sugerido) {
+        setFechaDesde(meta.desde_sugerido);
+        setFechaHasta(meta.hasta_sugerido);
+      }
+    } catch (e) {
+      console.error("Error cargando metadata del dashboard", e);
+    } finally {
+      setInitReady(true);
+    }
+  }
+
+  async function cargarDashboard() {
+    try {
+      setLoading(true);
+      setError("");
+
+      const qs = new URLSearchParams({
+        desde: fechaDesde,
+        hasta: fechaHasta,
+        modo_periodo: modoPeriodo,
+      });
+
+      if (centroCostos) qs.set("centro_costos", centroCostos);
+
+      const json: DashboardResponse = await authFetch(
+        `/dashboard/resumen-ejecutivo?${qs.toString()}`,
+      );
+
+      setData(json);
+
+      // En modo "Corte cerrado" sí sincronizamos los inputs con el corte confiable
+      // que devuelve el backend.
+      //
+      // En modo "Al día" NO sincronizamos automáticamente la fecha hasta,
+      // porque si el usuario pidió 08/06 y el backend ajustó a 31/05 por falta de auxiliar,
+      // cambiar el input dispara una segunda consulta y se pierde la cápsula informativa.
+      if (modoPeriodo !== "manual") {
+        if (json?.periodo?.desde && json.periodo.desde !== fechaDesde) {
+          setFechaDesde(json.periodo.desde);
+        }
+
+        if (json?.periodo?.hasta && json.periodo.hasta !== fechaHasta) {
+          setFechaHasta(json.periodo.hasta);
+        }
+      }
+    } catch (err: any) {
+      setError(err?.message || "Error cargando dashboard");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function cargarCentros() {
+    try {
+      const data = await authFetch(`/catalogos/centros-costo-consolidado`);
+      setCentros(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error("Error cargando centros de costo", e);
+      setCentros([]);
+    }
+  }
+
+  async function cargarCarteraKpis() {
+    try {
+      const sufijoCentro = centroCostos
+        ? `centro_costos=${encodeURIComponent(centroCostos)}`
+        : "";
+
+      const [cxcRes, cxpRes] = await Promise.all([
+        authFetch(`/reportes/cuentas-por-cobrar?detalle=1`),
+        authFetch(
+          `/reportes/financiero/compras-gastos${sufijoCentro ? `?${sufijoCentro}` : ""}`,
+        ),
+      ]);
+
+      setCxcTotal(Number(cxcRes?.resumen_global?.total_global_num ?? 0));
+      setCxpTotal(Number(cxpRes?.kpis?.total_saldo ?? 0));
+
+      const facturasCxC: Array<{
+        fecha?: string;
+        idfactura?: string;
+        cliente_nombre?: string;
+      }> = Array.isArray(cxcRes?.detalle) ? cxcRes.detalle : [];
+
+      // El detalle de CxC devuelve la fecha en formato DD/MM/YYYY (no ISO),
+      // por lo que no se puede ordenar como string directamente.
+      const parseFechaDDMMYYYY = (value: string) => {
+        const [d, m, y] = value.split("/");
+        if (!d || !m || !y) return 0;
+        return new Date(Number(y), Number(m) - 1, Number(d)).getTime();
+      };
+
+      const facturaMasAntigua = facturasCxC
+        .filter((f) => f.fecha)
+        .sort(
+          (a, b) =>
+            parseFechaDDMMYYYY(String(a.fecha)) - parseFechaDDMMYYYY(String(b.fecha)),
+        )[0];
+
+      setCxcPendienteAntiguo(
+        facturaMasAntigua
+          ? {
+              fecha: String(facturaMasAntigua.fecha),
+              numero: facturaMasAntigua.idfactura || "Sin número",
+              nombre: facturaMasAntigua.cliente_nombre || "Cliente sin nombre",
+            }
+          : null,
+      );
+
+      const evolucionCxP: Array<{ mes?: string; total_pendientes?: any }> =
+        Array.isArray(cxpRes?.evolucion) ? cxpRes.evolucion : [];
+
+      const mesesConPendiente = evolucionCxP
+        .filter((m) => m.mes && Number(m.total_pendientes || 0) > 0)
+        .map((m) => ({ mes: m.mes as string, t: new Date(m.mes as string).getTime() }))
+        .filter((m) => !Number.isNaN(m.t))
+        .sort((a, b) => a.t - b.t);
+
+      if (mesesConPendiente.length) {
+        const mesYYYYMM = toYYYYMM(mesesConPendiente[0].mes);
+        const urlDetalle = `/reportes/financiero/compras-gastos/detalle?mes=${mesYYYYMM}&estado=total&tipo_documento=todos${
+          sufijoCentro ? `&${sufijoCentro}` : ""
+        }`;
+
+        const documentosMes = await authFetch(urlDetalle);
+        const documentos: Array<{
+          fecha?: string;
+          factura?: string;
+          proveedor_nombre?: string;
+          saldo?: number;
+        }> = Array.isArray(documentosMes) ? documentosMes : [];
+
+        const documentoMasAntiguo = documentos
+          .filter((d) => Number(d.saldo || 0) > 0 && d.fecha)
+          .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)))[0];
+
+        setCxpPendienteAntiguo(
+          documentoMasAntiguo
+            ? {
+                fecha: String(documentoMasAntiguo.fecha),
+                numero: documentoMasAntiguo.factura || "Sin número",
+                nombre: documentoMasAntiguo.proveedor_nombre || "Proveedor sin nombre",
+              }
+            : null,
+        );
+      } else {
+        setCxpPendienteAntiguo(null);
+      }
+    } catch (e) {
+      console.error("Error cargando KPIs de cartera y cuentas por pagar", e);
+      setCxcTotal(null);
+      setCxpTotal(null);
+      setCxcPendienteAntiguo(null);
+      setCxpPendienteAntiguo(null);
+    }
+  }
+
+  useEffect(() => {
+    async function init() {
+      await cargarFechasSugeridas();
+      await cargarCentros();
+    }
+    init();
+    getWhoAmI().then((me) => {
+      if (me?.cliente?.nombre) setNombreCliente(me.cliente.nombre);
+    });
+    cargarEstadoAnalisisIA();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!initReady || !fechaDesde || !fechaHasta) return;
+    cargarDashboard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initReady, fechaDesde, fechaHasta, centroCostos, modoPeriodo]);
+
+  useEffect(() => {
+    if (!initReady) return;
+    cargarCarteraKpis();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initReady, centroCostos]);
+
+  const hayAuxiliar = data?.metadata?.hay_datos_auxiliar_actual ?? true;
+
+  const mensajeContextoDashboard = useMemo(() => {
+    if (!data?.metadata || !hayAuxiliar) return null;
+
+    if (data.metadata.mensaje_contexto) {
+      return data.metadata.mensaje_contexto;
+    }
+
+    if (modoPeriodo === "manual") {
+      const ultima = data.periodo?.ultima_fecha_auxiliar || data.metadata.ultima_fecha_auxiliar;
+      const hastaUsado = data.periodo?.hasta;
+
+      if (ultima) {
+        return `Vista al día: el análisis usa la información disponible en auxiliares hasta ${ultima}.`;
+      }
+
+      if (hastaUsado) {
+        return `Vista al día: el análisis usa información parcial hasta ${hastaUsado}.`;
+      }
+
+      return "Vista al día: el análisis puede incluir información parcial del mes en curso.";
+    }
+
+    if (data.periodo?.ajuste_por_corte) {
+      const corte = data.periodo?.fecha_corte_confiable || data.metadata.fecha_corte_confiable;
+
+      if (corte) {
+        return `Vista de corte cerrado: el rango solicitado se ajustó automáticamente hasta el último corte mensual confiable: ${corte}.`;
+      }
+
+      return "Vista de corte cerrado: el análisis se ajustó al último corte mensual confiable.";
+    }
+
+    return null;
+  }, [data, hayAuxiliar, modoPeriodo]);
+
+  const kpiCards = useMemo<KpiCardItem[]>(() => {
+    if (!data?.kpis) return [];
+
+    // Mismo período EFECTIVO que se muestra en el modal de detalle del KPI
+    // (data.periodo, ya ajustado por "vista de corte cerrado" si aplica) -
+    // se agrega como query param a los enlaces de "Ver [reporte]" para que
+    // el usuario no pierda coherencia al saltar a otro reporte (antes
+    // abrían siempre con las fechas por defecto de esa página, mostrando
+    // un número distinto al que el usuario acababa de ver acá).
+    const periodoDesdeEfectivo = data?.periodo?.desde || fechaDesde;
+    const periodoHastaEfectivo = data?.periodo?.hasta || fechaHasta;
+    const queryPeriodo = `?desde=${periodoDesdeEfectivo}&hasta=${periodoHastaEfectivo}`;
+
+    const ef = data.kpis.eficiencia_operativa;
+    const ebitda = data.kpis.ebitda;
+    const utilidadNeta = data.kpis.utilidad_neta;
+    const ventas = data.kpis.ventas_netas;
+    const caja = data.kpis.caja_disponible;
+    const runway = data.kpis.cash_runway;
+    const gastoPromedioRunway = getGastoPromedioRunway(runway, caja.actual);
+    const mesesPromedioRunway = Number(runway?.meses_promedio || 3);
+
+    const cards: KpiCardItem[] = [
+      {
+        label: "Eficiencia operativa",
+        value: hayAuxiliar ? formatPercent(ef.actual) : "Sin datos",
+        valueFull: hayAuxiliar ? formatPercent(ef.actual) : "Sin datos",
+        description: hayAuxiliar
+          ? `De cada $100 vendidos, quedan ${ef.actual < 0 ? "-$" : "$"}${Math.abs(ef.actual).toFixed(1)} como EBITDA.`
+          : "No hay auxiliar contable cargado para el período seleccionado.",
+        delta: hayAuxiliar
+          ? `${diffLabel(ef.diff, " pts")} vs anterior`
+          : `Último auxiliar: ${data?.metadata?.ultima_fecha_auxiliar || "N/D"}`,
+        accent: "from-indigo-100 via-violet-50 to-white",
+        chip: "bg-indigo-50 text-indigo-700 border-indigo-200",
+        bar: "bg-indigo-500",
+        glow: "bg-indigo-300/60",
+        icon: <Target size={16} />,
+        helpText:
+          "Mide qué porcentaje de las ventas se convierte en EBITDA. Ayuda a saber si el negocio está transformando las ventas en resultado operativo.",
+        helpAlign: "right" as const,
+        link: {
+          href: `/reportes/estado-resultados${queryPeriodo}`,
+          label: "Ver Estado de Resultados (PyG)",
+        },
+      },
+      {
+        label: "EBITDA",
+        value: hayAuxiliar ? formatCurrencyShort(ebitda.actual) : "Sin datos",
+        valueFull: hayAuxiliar ? formatCurrency(ebitda.actual) : "Sin datos",
+        description: hayAuxiliar
+          ? "Resultado operativo antes de impuestos, intereses, depreciaciones y amortizaciones."
+          : "El auxiliar contable no tiene datos para este período.",
+        delta: hayAuxiliar ? `${diffLabel(ebitda.pct, "%")} vs anterior` : "Pendiente",
+        accent: "from-emerald-100 via-green-50 to-white",
+        chip: "bg-emerald-50 text-emerald-700 border-emerald-200",
+        bar: "bg-emerald-500",
+        glow: "bg-emerald-300/60",
+        icon: <TrendingUp size={16} />,
+        helpText:
+          "Representa la utilidad operativa del negocio antes de considerar intereses, impuestos, depreciaciones y amortizaciones.",
+        helpAlign: "center" as const,
+        link: {
+          href: `/reportes/estado-resultados${queryPeriodo}`,
+          label: "Ver Estado de Resultados (PyG)",
+        },
+      },
+      {
+        label: "Utilidad neta",
+        value: hayAuxiliar ? formatCurrencyShort(utilidadNeta.actual) : "Sin datos",
+        valueFull: hayAuxiliar ? formatCurrency(utilidadNeta.actual) : "Sin datos",
+        description: hayAuxiliar
+          ? "Resultado final del período después de costos, gastos, impuestos y demás partidas - lo que realmente queda para la empresa."
+          : "El auxiliar contable no tiene datos para este período.",
+        delta: hayAuxiliar ? `${diffLabel(utilidadNeta.pct, "%")} vs anterior` : "Pendiente",
+        accent: "from-teal-100 via-emerald-50 to-white",
+        chip: "bg-teal-50 text-teal-700 border-teal-200",
+        bar: "bg-teal-600",
+        glow: "bg-teal-300/60",
+        icon: <PiggyBank size={16} />,
+        helpText:
+          "Es la línea de fondo: lo que realmente le queda a la empresa después de todos los costos, gastos e impuestos del período - no solo el resultado operativo (EBITDA).",
+        helpAlign: "center" as const,
+        link: {
+          href: `/reportes/estado-resultados${queryPeriodo}`,
+          label: "Ver Estado de Resultados (PyG)",
+        },
+      },
+      {
+        label: "Ventas netas",
+        value: hayAuxiliar ? formatCurrencyShort(ventas.actual) : "Sin datos",
+        valueFull: hayAuxiliar ? formatCurrency(ventas.actual) : "Sin datos",
+        description: hayAuxiliar
+          ? "Ingresos operacionales netos del período analizado."
+          : "No hay ventas contables disponibles en el auxiliar del período.",
+        delta: hayAuxiliar ? `${diffLabel(ventas.pct, "%")} vs anterior` : "Pendiente",
+        accent: "from-sky-100 via-blue-50 to-white",
+        chip: "bg-sky-50 text-sky-700 border-sky-200",
+        bar: "bg-sky-500",
+        glow: "bg-sky-300/60",
+        icon: <Banknote size={16} />,
+        helpText:
+          "Corresponde a los ingresos operacionales del período. Sirve para monitorear el tamaño real de la operación y su evolución mensual.",
+        helpAlign: "center" as const,
+        link: {
+          href: `/reportes/estado-resultados${queryPeriodo}`,
+          label: "Ver Estado de Resultados (PyG)",
+        },
+      },
+      {
+        label: "Caja disponible",
+        value: formatCurrencyShort(caja.actual),
+        valueFull: formatCurrency(caja.actual),
+        description:
+          "Saldo estimado de caja y bancos al cierre del período seleccionado.",
+        delta: "Base de liquidez",
+        accent: "from-amber-100 via-yellow-50 to-white",
+        chip: "bg-amber-50 text-amber-700 border-amber-200",
+        bar: "bg-amber-500",
+        glow: "bg-amber-300/60",
+        icon: <Wallet size={16} />,
+        helpText:
+          "Muestra la caja y bancos estimados disponibles. Sirve como base para evaluar liquidez inmediata y calcular cuántos meses puede operar la empresa.",
+        helpAlign: "center" as const,
+      },
+      {
+        label: "Autonomía de caja",
+        value: formatMonths(runway.actual),
+        valueFull: formatMonths(runway.actual),
+        description:
+          "Meses estimados de operación con la caja actual según el gasto promedio reciente.",
+        delta:
+          runway?.requiere_parametrizacion
+            ? "Pendiente parametrización"
+            : gastoPromedioRunway > 0
+              ? `Gasto ${mesesPromedioRunway}M: ${formatCurrencyShort(gastoPromedioRunway)}`
+              : "Gasto no disponible",
+        accent: "from-rose-100 via-pink-50 to-white",
+        chip: "bg-rose-50 text-rose-700 border-rose-200",
+        bar: "bg-rose-500",
+        glow: "bg-rose-300/60",
+        icon: <Activity size={16} />,
+        helpText:
+          "Indica cuántos meses podría operar la empresa con la caja actual, asumiendo el ritmo reciente de gasto.",
+        helpAlign: "left" as const,
+      },
+      {
+        label: "Cuentas por cobrar",
+        value: cxcTotal != null ? formatCurrencyShort(cxcTotal) : "Cargando...",
+        valueFull: cxcTotal != null ? formatCurrency(cxcTotal) : "Cargando...",
+        description:
+          "Saldo total que los clientes le deben a la empresa a la fecha, sumando cartera vigente y vencida.",
+        delta: cxcPendienteAntiguo
+          ? `Debe desde ${cxcPendienteAntiguo.fecha}`
+          : "Ver detalle de cartera",
+        accent: "from-teal-100 via-cyan-50 to-white",
+        chip: "bg-teal-50 text-teal-700 border-teal-200",
+        bar: "bg-teal-500",
+        glow: "bg-teal-300/60",
+        icon: <HandCoins size={16} />,
+        helpText:
+          "Muestra el dinero pendiente de recaudo a clientes a la fecha actual. Abre el detalle para ir directo a la Cartera (Cuentas por Cobrar) y revisar por cliente y factura.",
+        helpAlign: "right" as const,
+        sinceLabel: cxcPendienteAntiguo
+          ? `La factura pendiente más antigua es del ${cxcPendienteAntiguo.fecha}: N.° ${cxcPendienteAntiguo.numero}, cliente ${cxcPendienteAntiguo.nombre}`
+          : undefined,
+        link: {
+          href: "/reportes/financiero/cxc",
+          label: "Ver Cartera / Cuentas por Cobrar",
+        },
+      },
+      {
+        label: "Cuentas por pagar",
+        value: cxpTotal != null ? formatCurrencyShort(cxpTotal) : "Cargando...",
+        valueFull: cxpTotal != null ? formatCurrency(cxpTotal) : "Cargando...",
+        description:
+          "Saldo total pendiente de pago a proveedores por compras y gastos, a la fecha actual.",
+        delta: cxpPendienteAntiguo
+          ? `Debes desde ${formatDateSafe(cxpPendienteAntiguo.fecha)}`
+          : "Ver detalle de compras/gastos",
+        accent: "from-orange-100 via-amber-50 to-white",
+        chip: "bg-orange-50 text-orange-700 border-orange-200",
+        bar: "bg-orange-500",
+        glow: "bg-orange-300/60",
+        icon: <Receipt size={16} />,
+        helpText:
+          "Muestra el dinero pendiente de pagar a proveedores a la fecha actual. Abre el detalle para ir directo a Egresos por Compras/Gastos y revisar por proveedor y documento.",
+        helpAlign: "left" as const,
+        sinceLabel: cxpPendienteAntiguo
+          ? `El documento pendiente más antiguo es del ${formatDateSafe(cxpPendienteAntiguo.fecha)}: N.° ${cxpPendienteAntiguo.numero}, proveedor ${cxpPendienteAntiguo.nombre} — si es anterior al 1 de enero, amplía el filtro "Fecha desde" en Compras/Gastos para verlo (esa página abre por defecto desde el 1 de enero)`
+          : undefined,
+        link: {
+          href: `/reportes/financiero/compras_gastos${queryPeriodo}`,
+          label: "Ver Compras y Gastos / Cuentas por Pagar",
+        },
+      },
+    ];
+
+    // Flujo de Efectivo: solo se muestra si el período coincidió con
+    // Balance de Prueba real en ambas puntas (construir_flujo_efectivo lo
+    // exige) - la mayoría de períodos del dashboard NO lo van a tener, así
+    // que esta tarjeta se oculta con gracia en vez de mostrar un hueco o
+    // un error. No tiene "período anterior" para comparar (no es de eso
+    // que trata este reporte), por eso no lleva delta de variación.
+    const fe = data.flujo_efectivo;
+    if (fe?.ok && fe.kpis) {
+      cards.push({
+        label: "Flujo de Operación",
+        value: formatCurrencyShort(fe.kpis.flujo_operacion),
+        valueFull: formatCurrency(fe.kpis.flujo_operacion),
+        description:
+          "Efectivo generado (o consumido) por el negocio del día a día en este período - la parte del Flujo de Efectivo que más importa para saber si la caja es sostenible.",
+        delta: fe.kpis.cuadra ? "Cuadra contra el banco real" : "Revisar: no cuadra del todo",
+        accent: "from-violet-100 via-purple-50 to-white",
+        chip: "bg-violet-50 text-violet-700 border-violet-200",
+        bar: "bg-violet-500",
+        glow: "bg-violet-300/60",
+        icon: <ArrowRightLeft size={16} />,
+        helpText:
+          "Es la parte de tu Estado de Flujo de Efectivo que muestra si el negocio genuinamente genera caja con su operación (ventas, cobros, pagos), sin contar préstamos, aportes ni compra/venta de activos.",
+        helpAlign: "right" as const,
+        link: {
+          // Mismas 2 fechas que ya se usaron para calcular este KPI
+          // (fecha_inicio = cierre del período anterior, un día antes de
+          // que arranque este período - no "fecha desde" del Resumen
+          // Ejecutivo, que es el primer día, no una fecha de cierre) -
+          // así el reporte completo abre mostrando exactamente lo mismo
+          // que el usuario ya vio en esta tarjeta, no algo distinto.
+          href: `/reportes/financiero/flujo-efectivo?fecha_inicio=${restarUnDia(periodoDesdeEfectivo)}&fecha_fin=${periodoHastaEfectivo}`,
+          label: "Ver Flujo de Efectivo completo",
+        },
+      });
+    }
+
+    return cards;
+  }, [data, hayAuxiliar, cxcTotal, cxpTotal, cxcPendienteAntiguo, cxpPendienteAntiguo, fechaDesde, fechaHasta]);
+
+  const detalleIndicador = useMemo<DetalleIndicador | null>(() => {
+    if (!data?.kpis) return null;
+
+    const ef = data.kpis.eficiencia_operativa;
+    const ebitda = data.kpis.ebitda;
+    const utilidadNeta = data.kpis.utilidad_neta;
+    const ventas = data.kpis.ventas_netas;
+    const egresos = data.kpis.egresos_totales;
+    const caja = data.kpis.caja_disponible;
+    const runway = data.kpis.cash_runway;
+
+    switch (indicadorSeleccionado) {
+      case "eficiencia_operativa":
+        return {
+          nombre: "Eficiencia operativa",
+          subtitulo:
+            "Porcentaje de las ventas que se convierte en EBITDA. Útil para saber qué tan rentable está siendo la operación.",
+          lectura: hayAuxiliar ? formatPercent(ef.actual) : "Sin datos",
+          interpretacion: hayAuxiliar
+            ? `Por cada $100 vendidos, la empresa está convirtiendo aproximadamente ${ef.actual < 0 ? "-$" : "$"}${Math.abs(ef.actual).toFixed(1)} en EBITDA.`
+            : "No hay información del auxiliar para calcular la eficiencia operativa del período seleccionado.",
+          tarjetas: [
+            { label: "Período actual", value: hayAuxiliar ? formatPercent(ef.actual) : "Sin datos", accent: "bg-indigo-50 text-indigo-700 border-indigo-100" },
+            { label: "Período anterior", value: formatPercent(ef.anterior), accent: "bg-slate-50 text-slate-700 border-slate-200" },
+            { label: "Promedio 6 meses", value: formatPercent(ef.promedio_6m), accent: "bg-emerald-50 text-emerald-700 border-emerald-100" },
+            { label: "Meta", value: formatPercent(ef.meta), accent: "bg-amber-50 text-amber-700 border-amber-100" },
+          ],
+          chartKey: "eficiencia_operativa",
+          chartName: "Eficiencia operativa",
+          chartColor: "#4f46e5",
+          chartTipo: "porcentaje",
+        };
+
+      case "ebitda":
+        return {
+          nombre: "EBITDA",
+          subtitulo:
+            "Resultado operativo antes de impuestos, intereses, depreciaciones y amortizaciones.",
+          lectura: hayAuxiliar ? formatCurrency(ebitda.actual) : "Sin datos",
+          interpretacion: hayAuxiliar
+            ? `El EBITDA del período fue ${formatCurrency(ebitda.actual)} y cambió ${diffLabel(ebitda.pct, "%")} frente al período anterior.`
+            : "No hay información del auxiliar para calcular el EBITDA del período seleccionado.",
+          tarjetas: [
+            { label: "Período actual", value: hayAuxiliar ? formatCurrency(ebitda.actual) : "Sin datos", accent: "bg-emerald-50 text-emerald-700 border-emerald-100" },
+            { label: "Período anterior", value: formatCurrency(ebitda.anterior), accent: "bg-slate-50 text-slate-700 border-slate-200" },
+            { label: "Variación absoluta", value: formatCurrency(ebitda.diff), accent: "bg-sky-50 text-sky-700 border-sky-100" },
+            { label: "Variación %", value: formatPercent(ebitda.pct), accent: "bg-indigo-50 text-indigo-700 border-indigo-100" },
+          ],
+          chartKey: "ebitda",
+          chartName: "EBITDA",
+          chartColor: "#10b981",
+          chartTipo: "dinero",
+        };
+
+      case "utilidad_neta":
+        return {
+          nombre: "Utilidad neta",
+          subtitulo:
+            "Resultado final del período después de costos, gastos, impuestos y demás partidas - lo que realmente queda para la empresa.",
+          lectura: hayAuxiliar ? formatCurrency(utilidadNeta.actual) : "Sin datos",
+          interpretacion: hayAuxiliar
+            ? `La utilidad neta del período fue ${formatCurrency(utilidadNeta.actual)} y cambió ${diffLabel(utilidadNeta.pct, "%")} frente al período anterior.`
+            : "No hay información del auxiliar para calcular la utilidad neta del período seleccionado.",
+          tarjetas: [
+            { label: "Período actual", value: hayAuxiliar ? formatCurrency(utilidadNeta.actual) : "Sin datos", accent: "bg-emerald-50 text-emerald-700 border-emerald-100" },
+            { label: "Período anterior", value: formatCurrency(utilidadNeta.anterior), accent: "bg-slate-50 text-slate-700 border-slate-200" },
+            { label: "Variación absoluta", value: formatCurrency(utilidadNeta.diff), accent: "bg-sky-50 text-sky-700 border-sky-100" },
+            { label: "Variación %", value: formatPercent(utilidadNeta.pct), accent: "bg-indigo-50 text-indigo-700 border-indigo-100" },
+          ],
+          chartKey: "utilidad_neta",
+          chartName: "Utilidad neta",
+          chartColor: "#059669",
+          chartTipo: "dinero",
+        };
+
+      case "ventas_netas":
+        return {
+          nombre: "Ventas netas",
+          subtitulo:
+            "Ingresos operacionales netos del período. Sirve para monitorear tamaño del negocio y tendencia comercial.",
+          lectura: hayAuxiliar ? formatCurrency(ventas.actual) : "Sin datos",
+          interpretacion: hayAuxiliar
+            ? `Las ventas netas del período fueron ${formatCurrency(ventas.actual)} y variaron ${diffLabel(ventas.pct, "%")} frente al período anterior.`
+            : "No hay información del auxiliar para calcular las ventas netas del período seleccionado.",
+          tarjetas: [
+            { label: "Período actual", value: hayAuxiliar ? formatCurrency(ventas.actual) : "Sin datos", accent: "bg-sky-50 text-sky-700 border-sky-100" },
+            { label: "Período anterior", value: formatCurrency(ventas.anterior), accent: "bg-slate-50 text-slate-700 border-slate-200" },
+            { label: "Variación absoluta", value: formatCurrency(ventas.diff), accent: "bg-emerald-50 text-emerald-700 border-emerald-100" },
+            { label: "Variación %", value: formatPercent(ventas.pct), accent: "bg-indigo-50 text-indigo-700 border-indigo-100" },
+          ],
+          chartKey: "ventas",
+          chartName: "Ventas netas",
+          chartColor: "#0f172a",
+          chartTipo: "dinero",
+        };
+
+      case "egresos_totales":
+        return {
+          nombre: "Egresos totales",
+          subtitulo:
+            "Costos de venta más gastos operacionales y no operacionales del período. Es la contraparte directa de las ventas netas.",
+          lectura: hayAuxiliar ? formatCurrency(egresos.actual) : "Sin datos",
+          interpretacion: hayAuxiliar
+            ? `Los egresos totales del período fueron ${formatCurrency(egresos.actual)} y variaron ${diffLabel(egresos.pct, "%")} frente al período anterior.`
+            : "No hay información del auxiliar para calcular los egresos del período seleccionado.",
+          tarjetas: [
+            { label: "Período actual", value: hayAuxiliar ? formatCurrency(egresos.actual) : "Sin datos", accent: "bg-rose-50 text-rose-700 border-rose-100" },
+            { label: "Período anterior", value: formatCurrency(egresos.anterior), accent: "bg-slate-50 text-slate-700 border-slate-200" },
+            { label: "Variación absoluta", value: formatCurrency(egresos.diff), accent: "bg-amber-50 text-amber-700 border-amber-100" },
+            { label: "Variación %", value: formatPercent(egresos.pct), accent: "bg-indigo-50 text-indigo-700 border-indigo-100" },
+          ],
+          chartKey: "egresos_totales",
+          chartName: "Egresos totales",
+          chartColor: "#f43f5e",
+          chartTipo: "dinero",
+          notaFuente:
+            "Viene del auxiliar contable (costos y gastos reconocidos contablemente: incluye nómina, depreciación, gastos financieros, etc.) - no es lo mismo que las facturas de compra a proveedores. Para ver compras por documento y estado de pago, revisá el reporte de Egresos por Compras y Gastos.",
+        };
+
+      case "caja_disponible":
+        return {
+          nombre: "Caja disponible",
+          subtitulo:
+            "Saldo estimado de caja y bancos al cierre del período. Es la base de liquidez inmediata.",
+          lectura: formatCurrency(caja.actual),
+          interpretacion: `La caja disponible estimada al cierre del período es ${formatCurrency(caja.actual)}. Este valor es la base para evaluar liquidez inmediata y autonomía financiera.`,
+          tarjetas: [
+            { label: "Saldo actual", value: formatCurrency(caja.actual), accent: "bg-amber-50 text-amber-700 border-amber-100" },
+            { label: "Último corte auxiliar", value: data.metadata?.ultima_fecha_auxiliar || "No disponible", accent: "bg-slate-50 text-slate-700 border-slate-200" },
+            { label: "Centro de costos", value: centroCostos ? "Filtrado" : "Todos", accent: "bg-sky-50 text-sky-700 border-sky-100" },
+            { label: "Uso principal", value: "Liquidez", accent: "bg-emerald-50 text-emerald-700 border-emerald-100" },
+          ],
+          emptyChartText:
+            "Este indicador aún no trae una serie histórica mensual en la respuesta del backend.",
+        };
+
+      case "autonomia_caja":
+      default:
+        return {
+          nombre: "Autonomía de caja",
+          subtitulo:
+            "Meses que la empresa podría operar con la caja actual, usando como referencia el gasto promedio reciente.",
+          lectura: formatMonths(runway.actual),
+          interpretacion: `Con la caja actual y el gasto promedio reciente, la empresa tendría aproximadamente ${formatMonths(runway.actual)} de autonomía. El gasto promedio de referencia es ${formatCurrency(getGastoPromedioRunway(runway, caja.actual))}.`,
+          tarjetas: [
+            { label: "Autonomía estimada", value: formatMonths(runway.actual), accent: "bg-rose-50 text-rose-700 border-rose-100" },
+            { label: "Gasto promedio", value: formatCurrency(getGastoPromedioRunway(runway, caja.actual)), accent: "bg-slate-50 text-slate-700 border-slate-200" },
+            { label: "Unidad", value: runway.unidad || "Meses", accent: "bg-sky-50 text-sky-700 border-sky-100" },
+            { label: "Uso principal", value: "Resiliencia", accent: "bg-emerald-50 text-emerald-700 border-emerald-100" },
+          ],
+          emptyChartText:
+            "Este indicador se calcula con caja y gasto promedio. Si quieres ver una evolución mensual de autonomía, habría que incorporarla explícitamente en el backend.",
+        };
+    }
+  }, [data, hayAuxiliar, indicadorSeleccionado, centroCostos]);
+
+  const opcionesIndicador = [
+    { value: "eficiencia_operativa", label: "Eficiencia operativa" },
+    { value: "ebitda", label: "EBITDA" },
+    { value: "utilidad_neta", label: "Utilidad neta" },
+    { value: "ventas_netas", label: "Ventas netas" },
+    { value: "egresos_totales", label: "Egresos totales" },
+    { value: "caja_disponible", label: "Caja disponible" },
+    { value: "autonomia_caja", label: "Autonomía de caja" },
+  ] as const;
+
+  const serieMensual = data?.series?.mensual || [];
+  const periodoActual = {
+    desde: data?.periodo?.desde || fechaDesde,
+    hasta: data?.periodo?.hasta || fechaHasta,
+  };
+
+  return (
+    <div id="pagina-resumen-ejecutivo" className="min-h-screen bg-slate-50">
+      <div className="space-y-2.5 p-2 md:p-3">
+        {/* ENCABEZADO COMPACTO */}
+        <div className="relative overflow-hidden rounded-[1.35rem] border border-slate-200 bg-white shadow-sm">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(79,70,229,0.12),_transparent_30%),radial-gradient(circle_at_left,_rgba(16,185,129,0.14),_transparent_30%),linear-gradient(to_bottom_right,_rgba(255,255,255,1),_rgba(248,250,252,0.98))]" />
+          <div className="relative flex flex-col gap-2.5 p-3 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <div className="mb-1 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/85 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.16em] text-slate-500">
+                <Sparkles size={12} />
+                Panel ejecutivo inteligente
+              </div>
+              <h1 className="text-xl font-black tracking-tight text-slate-900 md:text-[1.55rem]">
+                Panel ejecutivo financiero
+              </h1>
+              <p className="mt-0.5 max-w-4xl text-[12px] font-medium leading-5 text-slate-600">
+                Foto rápida del desempeño financiero: indicadores clave, evolución y focos de atención.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 xl:min-w-[360px]">
+              <HeaderMiniMetric label="Meses" value={serieMensual.length || 0} />
+              <HeaderMiniMetric label="Clientes" value={data?.top_clientes?.length || 0} />
+              <HeaderMiniMetric label="Proveedores" value={data?.top_proveedores?.length || 0} />
+            </div>
+          </div>
+        </div>
+
+        {/* Fuera de la tarjeta de encabezado a propósito: esa tarjeta tiene
+            overflow-hidden (para recortar el degradado decorativo), y el
+            desplegable de historial de abajo necesita "salirse" del
+            contenedor con position:absolute - dentro del overflow-hidden
+            quedaba cortado (bug reportado). */}
+        <div className="relative flex flex-col gap-2 rounded-[1.35rem] border border-slate-200 bg-white px-3 py-2.5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <button
+              onClick={() => solicitarAnalisisIA(false)}
+              disabled={!data}
+              className="inline-flex items-center gap-2 rounded-2xl bg-violet-700 px-4 py-2.5 text-xs font-black text-white shadow-lg transition hover:bg-violet-800 active:scale-95 disabled:opacity-50"
+            >
+              <Sparkles size={16} />
+              Diagnóstico Integral con IA
+            </button>
+            <p className="mt-1 text-[10px] font-semibold text-slate-500">
+              Combina Estado de Resultados, Balance General, Indicadores y este panel en un solo diagnóstico.
+            </p>
+          </div>
+
+          {(analisisIAUsoGlobal || analisisIAHistorial.length > 0) && (
+            <div className="relative flex shrink-0 items-center gap-3">
+              {analisisIAUsoGlobal && (
+                <span className="text-[10px] font-bold text-violet-500">
+                  <Sparkles size={10} className="inline -mt-0.5 mr-1" />
+                  {Math.max(analisisIAUsoGlobal.tope - analisisIAUsoGlobal.actual, 0)}/{analisisIAUsoGlobal.tope} análisis con IA disponibles este mes
+                </span>
+              )}
+
+              {analisisIAHistorial.length > 0 && (
+                <button
+                  onClick={() => setHistorialOpen((v) => !v)}
+                  className="text-[10px] font-black text-violet-600 hover:text-violet-800 underline decoration-dotted"
+                >
+                  Ver análisis anteriores ({analisisIAHistorial.length})
+                </button>
+              )}
+
+              {historialOpen && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setHistorialOpen(false)} />
+                  <div className="absolute top-full right-0 mt-2 z-40 w-72 bg-white rounded-2xl border border-slate-100 shadow-2xl overflow-hidden">
+                    <div className="px-4 py-3 border-b border-slate-100">
+                      <p className="text-xs font-black text-slate-700">Diagnósticos ya generados</p>
+                      <p className="text-[10px] text-slate-400">Volver a ver uno de estos no gasta cupo del mes.</p>
+                    </div>
+                    <div className="max-h-64 overflow-y-auto">
+                      {analisisIAHistorial.map((h) => (
+                        <button
+                          key={`${h.periodo_desde}_${h.periodo_hasta}`}
+                          onClick={() => {
+                            setFechaDesde(h.periodo_desde);
+                            setFechaHasta(h.periodo_hasta);
+                            setHistorialOpen(false);
+                            solicitarAnalisisIA(false, h.periodo_desde, h.periodo_hasta);
+                          }}
+                          className="w-full text-left px-4 py-2.5 text-xs hover:bg-violet-50 border-b border-slate-50 last:border-0"
+                        >
+                          <div className="font-bold text-slate-700">{h.periodo_desde} a {h.periodo_hasta}</div>
+                          {h.generado_en && (
+                            <div className="text-[10px] text-slate-400">
+                              Generado el {new Date(h.generado_en).toLocaleDateString("es-CO")}
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* FILTROS COMPACTOS */}
+        <Card className="rounded-[1.35rem] border-slate-200 shadow-sm">
+          <CardContent className="p-3">
+            <div className="grid gap-2 lg:grid-cols-[1fr_1fr_1fr_1.2fr_auto_auto] lg:items-end">
+              <FilterField label="Fecha desde">
+                <Input
+                  type="date"
+                  value={fechaDesde}
+                  onChange={(e) => setFechaDesde(e.target.value)}
+                  className="h-9 rounded-xl border-slate-200 bg-white text-sm"
+                />
+              </FilterField>
+
+              <FilterField label="Fecha hasta">
+                <Input
+                  type="date"
+                  value={fechaHasta}
+                  onChange={(e) => setFechaHasta(e.target.value)}
+                  className="h-9 rounded-xl border-slate-200 bg-white text-sm"
+                />
+              </FilterField>
+
+              <FilterField label="Modo de análisis">
+                <select
+                  value={modoPeriodo}
+                  onChange={(e) => {
+                    const nuevo = e.target.value as ModoPeriodo;
+                    setModoPeriodo(nuevo);
+                    // Al cambiar a "Al día", forzar la fecha hasta a HOY
+                    // según la zona horaria real del navegador del usuario
+                    if (nuevo === "manual") {
+                      const { hasta } = getDefaultDates();
+                      setFechaHasta(hasta);
+                    }
+                  }}
+                  className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+                >
+                  <option value="ytd_cerrado">Corte cerrado</option>
+                  <option value="manual">Al día</option>
+                </select>
+              </FilterField>
+
+              <FilterField label="Centro de costos">
+                <select
+                  value={centroCostos}
+                  onChange={(e) => setCentroCostos(e.target.value)}
+                  className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-slate-400"
+                >
+                  <option value="">Todos</option>
+                  {centros.map((cc) => (
+                    <option key={cc.id} value={String(cc.id)}>
+                      {cc.nombre}
+                    </option>
+                  ))}
+                </select>
+              </FilterField>
+
+              <button
+                onClick={() => {
+                  const d = getDefaultDates();
+                  setFechaDesde(d.desde);
+                  setFechaHasta(d.hasta);
+                  setCentroCostos("");
+                  setModoPeriodo("ytd_cerrado");
+                }}
+                className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+              >
+                Limpiar
+              </button>
+
+              <button
+                onClick={cargarDashboard}
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-sm font-black text-white shadow-lg transition hover:bg-black active:scale-[0.98]"
+              >
+                {loading ? <RefreshCcw size={15} className="animate-spin" /> : <Sparkles size={15} />}
+                {loading ? "Actualizando..." : "Actualizar"}
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+
+
+
+        {error && (
+          <Card className="rounded-[1.35rem] border border-rose-200 bg-rose-50 shadow-sm">
+            <CardContent className="p-3 text-sm font-medium text-rose-700">
+              {error}
+            </CardContent>
+          </Card>
+        )}
+
+        {mensajeContextoDashboard ? (
+          <div
+            className={cx(
+              "rounded-2xl border px-3 py-2 text-xs font-semibold leading-5",
+              modoPeriodo === "manual" || data?.metadata?.tipo_corte === "al_dia"
+                ? "border-blue-100 bg-blue-50 text-blue-800"
+                : "border-emerald-100 bg-emerald-50 text-emerald-800",
+            )}
+          >
+            {mensajeContextoDashboard}
+          </div>
+        ) : null}
+
+        {data?.metadata && !data.metadata.hay_datos_auxiliar_actual && (
+          <Card className="rounded-[1.35rem] border border-amber-200 bg-amber-50 shadow-sm">
+            <CardContent className="p-3">
+              <div className="text-sm font-semibold text-amber-800">
+                {data.metadata.mensaje_contexto ||
+                  "No hay información de auxiliar contable para el período seleccionado."}
+              </div>
+              {data.metadata.ultima_fecha_auxiliar && (
+                <div className="mt-1 text-xs text-amber-700">
+                  Última fecha disponible en auxiliar: {data.metadata.ultima_fecha_auxiliar}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* KPIs EN UNA FILA PARA 1366PX */}
+        {!!kpiCards.length && (
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+            {kpiCards.map((item, i) => (
+              <KpiCard key={i} item={item} onOpen={setSelectedKpi} />
+            ))}
+          </div>
+        )}
+
+        {/* BLOQUE INDICADOR CON SELECTOR */}
+        {detalleIndicador && (
+          <Card className="overflow-hidden rounded-[1.35rem] border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-100 bg-slate-900 px-3 py-2.5 text-white">
+              <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <h2 className="text-[12px] font-black uppercase tracking-[0.16em]">
+                    Indicador bajo análisis
+                  </h2>
+                  <p className="mt-0.5 max-w-4xl text-[12px] leading-5 text-slate-300">
+                    {detalleIndicador.subtitulo}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="hidden text-[10px] font-black uppercase tracking-[0.14em] text-slate-300 sm:block">
+                    Indicador
+                  </span>
+                  <select
+                    value={indicadorSeleccionado}
+                    onChange={(e) => setIndicadorSeleccionado(e.target.value as IndicadorVista)}
+                    className="h-9 min-w-[220px] rounded-xl border border-white/10 bg-white px-3 text-sm font-bold text-slate-800 outline-none"
+                  >
+                    {opcionesIndicador.map((op) => (
+                      <option key={op.value} value={op.value}>
+                        {op.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <CardContent className="p-3">
+              <div className="grid gap-3 xl:grid-cols-[0.92fr_1.35fr]">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">
+                    Lectura ejecutiva
+                  </div>
+                  <div className="mt-1 text-2xl font-black tracking-tight text-slate-900">
+                    {detalleIndicador.lectura}
+                  </div>
+                  <p className="mt-2 text-sm font-medium leading-6 text-slate-700">
+                    {detalleIndicador.interpretacion}
+                  </p>
+
+                  {detalleIndicador.notaFuente && (
+                    <div className="mt-2 flex items-start gap-2 rounded-2xl border border-amber-100 bg-amber-50 p-2.5 text-[11px] font-semibold leading-5 text-amber-800">
+                      <CircleHelp size={13} className="mt-0.5 shrink-0" />
+                      <span>{detalleIndicador.notaFuente}</span>
+                    </div>
+                  )}
+
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    {detalleIndicador.tarjetas.map((card, idx) => (
+                      <div
+                        key={idx}
+                        className={cx("rounded-2xl border px-3 py-2", card.accent)}
+                      >
+                        <div className="text-[10px] font-black uppercase tracking-wide opacity-70">
+                          {card.label}
+                        </div>
+                        <div className="mt-1 truncate text-sm font-black">{card.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                  {detalleIndicador.chartKey ? (
+                    <div className="h-[218px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={serieMensual} margin={{ top: 12, right: 12, left: 0, bottom: 2 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                          <XAxis
+                            dataKey="label"
+                            tick={{ fontSize: 10, fontWeight: 700, fill: "#475569" }}
+                          />
+                          <YAxis
+                            tickFormatter={(value) =>
+                              detalleIndicador.chartTipo === "porcentaje"
+                                ? `${Number(value).toFixed(0)}%`
+                                : abreviar(Number(value))
+                            }
+                            tick={{ fontSize: 10, fontWeight: 700, fill: "#475569" }}
+                          />
+                          <Tooltip
+                            formatter={(value: any) =>
+                              detalleIndicador.chartTipo === "porcentaje"
+                                ? [`${Number(value).toFixed(1)}%`, detalleIndicador.chartName || "Indicador"]
+                                : [formatCurrency(Number(value)), detalleIndicador.chartName || "Indicador"]
+                            }
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey={detalleIndicador.chartKey}
+                            name={detalleIndicador.chartName}
+                            stroke={detalleIndicador.chartColor || "#0f172a"}
+                            strokeWidth={4}
+                            dot={{ r: 3 }}
+                            activeDot={{ r: 5 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
+                    <div className="flex h-[218px] items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 text-center text-sm font-medium leading-6 text-slate-500">
+                      {detalleIndicador.emptyChartText}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* CAPA 2 - EXPLICACIÓN */}
+        <div className="grid grid-cols-1 gap-2.5 xl:grid-cols-[1.45fr_0.95fr]">
+          <Card className="rounded-[1.35rem] border-slate-200 shadow-sm">
+            <CardContent className="p-3">
+              <SectionTitle
+                badge="Análisis"
+                title="Qué cambió y por qué"
+                subtitle="Evolución de ventas, egresos, EBITDA y eficiencia operativa en los últimos meses."
+              />
+
+              <div className="h-[218px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={serieMensual} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 10, fontWeight: 700, fill: "#475569" }}
+                    />
+                    <YAxis
+                      yAxisId="money"
+                      tickFormatter={(v) => abreviar(Number(v))}
+                      tick={{ fontSize: 10, fontWeight: 700, fill: "#475569" }}
+                    />
+                    <YAxis
+                      yAxisId="pct"
+                      orientation="right"
+                      tickFormatter={(v) => `${v}%`}
+                      tick={{ fontSize: 10, fontWeight: 700, fill: "#475569" }}
+                    />
+                    <Tooltip
+                      formatter={(value: any, name: string) => {
+                        if (name === "Eficiencia operativa") {
+                          return [`${Number(value).toFixed(1)}%`, "Eficiencia operativa"];
+                        }
+                        return [formatCurrency(Number(value)), name];
+                      }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 11, fontWeight: 800 }} />
+                    <Line
+                      yAxisId="money"
+                      type="monotone"
+                      dataKey="ventas"
+                      name="Ventas"
+                      stroke="#0f172a"
+                      strokeWidth={4}
+                      dot={{ r: 3 }}
+                    />
+                    <Line
+                      yAxisId="money"
+                      type="monotone"
+                      dataKey="egresos_totales"
+                      name="Egresos"
+                      stroke="#f43f5e"
+                      strokeWidth={4}
+                      dot={{ r: 3 }}
+                    />
+                    <Line
+                      yAxisId="money"
+                      type="monotone"
+                      dataKey="ebitda"
+                      name="EBITDA"
+                      stroke="#10b981"
+                      strokeWidth={4}
+                      dot={{ r: 3 }}
+                    />
+                    <Line
+                      yAxisId="pct"
+                      type="monotone"
+                      dataKey="eficiencia_operativa"
+                      name="Eficiencia operativa"
+                      stroke="#4f46e5"
+                      strokeWidth={4}
+                      dot={{ r: 3 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-[1.35rem] border-slate-200 shadow-sm">
+            <CardContent className="p-3">
+              <SectionTitle
+                badge="Lectura"
+                title="Explicaciones del sistema"
+                subtitle="Resumen narrativo para conversación ejecutiva."
+              />
+
+              <div className="space-y-2">
+                {(data?.explicaciones || []).slice(0, 4).map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-[12px] font-semibold leading-5 text-slate-700"
+                  >
+                    {item}
+                  </div>
+                ))}
+
+                {(data?.explicaciones || []).length === 0 && (
+                  <EmptyState text="No hay explicaciones disponibles para este período." />
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* TOPS */}
+        <div className="grid grid-cols-1 gap-2.5 xl:grid-cols-3">
+          <TopGastosCard data={data?.top_gastos || []} />
+          <TopSimpleCard
+            title="Top clientes"
+            subtitle="Clientes con mayor participación en ventas."
+            icon={<Users size={15} />}
+            data={data?.top_clientes || []}
+            tone="emerald"
+          />
+          <TopSimpleCard
+            title="Top proveedores"
+            subtitle="Proveedores con mayor participación en compras/gastos."
+            icon={<Building2 size={15} />}
+            data={data?.top_proveedores || []}
+            tone="rose"
+          />
+        </div>
+
+        {/* CAPA 3 - ACCIÓN */}
+        <div className="grid grid-cols-1 gap-2.5 xl:grid-cols-2">
+          <Card className="rounded-[1.35rem] border-slate-200 shadow-sm">
+            <CardContent className="p-3">
+              <SectionTitle
+                badge="Capa 3"
+                title="Qué revisar o decidir"
+                subtitle="Acciones sugeridas por el sistema con base en los indicadores."
+              />
+
+              <div className="space-y-2">
+                {(data?.acciones || []).slice(0, 5).map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5"
+                  >
+                    <div className="mt-0.5 rounded-2xl bg-indigo-50 p-2 text-indigo-700">
+                      <Lightbulb size={15} />
+                    </div>
+                    <div className="text-[12px] font-semibold leading-5 text-slate-700">
+                      {item}
+                    </div>
+                  </div>
+                ))}
+
+                {(data?.acciones || []).length === 0 && (
+                  <EmptyState text="No hay acciones sugeridas para este período." />
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-[1.35rem] border-slate-200 shadow-sm">
+            <CardContent className="p-3">
+              <SectionTitle
+                badge="Alertas"
+                title="Alertas y foco inmediato"
+                subtitle="Lecturas ejecutivas de riesgo y prioridad."
+              />
+
+              <div className="space-y-2">
+                {(data?.alertas || []).slice(0, 5).map((item, idx) => (
+                  <div
+                    key={idx}
+                    className={cx(
+                      "rounded-2xl border px-3 py-2.5",
+                      item.nivel === "alta" && "border-rose-200 bg-rose-50",
+                      item.nivel === "media" && "border-amber-200 bg-amber-50",
+                      item.nivel === "baja" && "border-emerald-200 bg-emerald-50",
+                    )}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={cx(
+                          "rounded-2xl p-2",
+                          item.nivel === "alta" && "bg-rose-100 text-rose-700",
+                          item.nivel === "media" && "bg-amber-100 text-amber-700",
+                          item.nivel === "baja" && "bg-emerald-100 text-emerald-700",
+                        )}
+                      >
+                        <TriangleAlert size={15} />
+                      </div>
+
+                      <div>
+                        <div className="text-sm font-black text-slate-900">
+                          {item.titulo}
+                        </div>
+                        <div className="mt-0.5 text-[12px] font-semibold leading-5 text-slate-700">
+                          {item.descripcion}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {(data?.alertas || []).length === 0 && (
+                  <EmptyState text="No hay alertas para este período." />
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      <KpiDetailModal
+        item={selectedKpi}
+        periodo={periodoActual}
+        centroCostos={centroCostos}
+        onClose={() => setSelectedKpi(null)}
+      />
+
+      {analisisIAOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/50 flex items-center justify-center p-4 print:hidden">
+          {/* Sin cierre por clic afuera a propósito - mismo motivo que en
+              los otros 3 reportes: con resize:both, soltar un arrastre de
+              redimensionado se puede interpretar como clic sobre el fondo
+              y cerrar el modal al agrandarlo. */}
+          <div
+            className="relative flex flex-col rounded-[2rem] bg-white shadow-2xl overflow-auto"
+            style={{
+              width: "min(96vw, 1100px)",
+              height: "min(92vh, 900px)",
+              minWidth: "480px",
+              minHeight: "420px",
+              maxWidth: "98vw",
+              maxHeight: "96vh",
+              resize: "both",
+            }}
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-4 px-6 py-4 border-b border-slate-100 bg-white rounded-t-[2rem]">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center">
+                  <Sparkles size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">Diagnóstico Integral con IA</h3>
+                  <p className="text-[11px] text-slate-400 font-medium">
+                    {analisisIAPeriodoLabel}
+                    {analisisIAFuente === "cache" && " · desde caché (sin cambios desde el último análisis)"}
+                    {analisisIAFuente === "nuevo" && " · análisis nuevo"}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setAnalisisIAOpen(false)}
+                className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 flex-1">
+              {analisisIALoading && (
+                <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-400">
+                  <RefreshCcw className="animate-spin" size={24} />
+                  <p className="text-xs font-bold">Combinando PyG, Balance, Indicadores y este panel…</p>
+                </div>
+              )}
+
+              {!analisisIALoading && analisisIAError && (
+                <div className="border border-rose-200 bg-rose-50 rounded-2xl p-4 text-sm text-rose-700 font-medium">
+                  {analisisIAError}
+                </div>
+              )}
+
+              {!analisisIALoading && !analisisIAError && analisisIATexto && (
+                <>
+                  {analisisIAFuente === "nuevo" && (
+                    <div className="mb-4 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-800">
+                      <Sparkles size={14} className="mt-0.5 shrink-0" />
+                      <span>
+                        Este diagnóstico se generó de nuevo (los datos del período cambiaron desde la
+                        última vez, no salió del caché) y consumió 1 de tus análisis del mes.
+                      </span>
+                    </div>
+                  )}
+                  {analisisIAGraficos && <TableroDiagnostico g={analisisIAGraficos} />}
+
+                  <div className="prose prose-sm prose-slate max-w-none prose-headings:font-black prose-h2:text-base prose-h3:text-sm prose-table:text-xs prose-th:whitespace-nowrap prose-td:whitespace-nowrap">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        table: ({ children }) => (
+                          <div className="overflow-x-auto">
+                            <table>{children}</table>
+                          </div>
+                        ),
+                      }}
+                    >
+                      {analisisIATexto}
+                    </ReactMarkdown>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="sticky bottom-0 flex items-center justify-between gap-3 px-6 py-4 border-t border-slate-100 bg-white rounded-b-[2rem]">
+              <p className="text-[11px] text-slate-400 font-medium">
+                {analisisIAUso
+                  ? `${analisisIAUso.actual}/${analisisIAUso.tope} análisis usados este mes`
+                  : ""}
+              </p>
+              {!analisisIALoading && !analisisIAError && analisisIATexto && (
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => {
+                      const tituloOriginal = document.title;
+                      document.title = `diagnostico_integral_IA_${(nombreCliente || "cliente").replace(/\s+/g, "_")}`;
+                      window.print();
+                      document.title = tituloOriginal;
+                    }}
+                    className="text-xs font-black text-slate-500 hover:text-slate-700"
+                  >
+                    Imprimir
+                  </button>
+                  <button
+                    onClick={handleExportarWord}
+                    disabled={exportandoWord}
+                    className="text-xs font-black text-slate-500 hover:text-slate-700 disabled:opacity-50"
+                  >
+                    {exportandoWord ? "Generando…" : "Exportar a Word"}
+                  </button>
+                  <button
+                    onClick={() => solicitarAnalisisIA(true)}
+                    className="text-xs font-black text-violet-700 hover:text-violet-900"
+                  >
+                    Regenerar análisis
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmGasto && (
+        <div
+          className="fixed inset-0 z-[110] bg-slate-900/50 flex items-center justify-center p-4"
+          onClick={() => setConfirmGasto(null)}
+        >
+          <div
+            className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-10 h-10 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center mb-3">
+              <Sparkles size={18} />
+            </div>
+            <h3 className="text-sm font-black text-slate-900 mb-1">Vas a generar un diagnóstico nuevo</h3>
+            <p className="text-xs text-slate-500 leading-relaxed mb-5">{confirmGasto.mensaje}</p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setConfirmGasto(null)}
+                className="px-4 py-2 text-xs font-black text-slate-500 hover:text-slate-700"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  const { forzar, fechaDesde: fd, fechaHasta: fh } = confirmGasto;
+                  setConfirmGasto(null);
+                  ejecutarAnalisisIA(forzar, fd, fh);
+                }}
+                className="px-4 py-2 bg-violet-700 text-white rounded-xl text-xs font-black hover:bg-violet-800"
+              >
+                Continuar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Área imprimible: vive fuera del resto del contenido a propósito -
+          mismo motivo que en los otros 3 reportes (el modal tiene
+          overflow/resize propio que rompe la paginación de impresión). */}
+      {analisisIATexto && (
+        <div id="analisis-ia-print-area" style={{ position: "absolute", top: "-9999px", left: 0, width: "800px" }}>
+          <div className="mb-4 pb-3 border-b border-slate-200">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/branding/insightsflow-logo.png" alt="InsightsFlow" className="h-8 w-auto mb-2" />
+            <div className="text-sm font-bold text-slate-700">{nombreCliente || "Cliente InsightsFlow"}</div>
+            <div className="text-xs text-slate-400">Diagnóstico Integral · {analisisIAPeriodoLabel}</div>
+          </div>
+
+          <div className="prose prose-sm prose-slate max-w-none">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{analisisIATexto}</ReactMarkdown>
+          </div>
+
+          <div className="mt-3 pt-2 border-t border-slate-200 text-center text-[10px] text-slate-400 italic">
+            Reporte generado por la IA de InsightsFlow {new Date().getFullYear()}
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @media print {
+          /* display:none (no visibility:hidden) en todo lo demás - un
+             elemento visibility:hidden sigue ocupando su espacio en el
+             flujo del documento y genera páginas en blanco extra. */
+          #pagina-resumen-ejecutivo > *:not(#analisis-ia-print-area) {
+            display: none !important;
+          }
+          #analisis-ia-print-area {
+            position: static !important;
+            width: 100% !important;
+          }
+          #analisis-ia-print-area table thead {
+            display: table-header-group;
+          }
+          #analisis-ia-print-area table tr {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function HeaderMiniMetric({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-white/60 bg-white/85 px-3 py-2 shadow-sm backdrop-blur">
+      <div className="text-[9px] font-bold uppercase tracking-wide text-slate-500">
+        {label}
+      </div>
+      <div className="text-base font-black text-slate-900">{value}</div>
+    </div>
+  );
+}
+
+function FilterField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <label className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function TopGastosCard({ data }: { data: TopGasto[] }) {
+  const rows = (data || []).slice(0, 8);
+
+  // Label inteligente: dentro si hay espacio, fuera si no
+  const SmartLabel = (props: any) => {
+    const { x, y, width, height, value } = props;
+    const texto = abreviar(Number(value));
+    // Estimamos ~7px por carácter + 8px de padding
+    const anchoTexto = texto.length * 7 + 8;
+    const cabe = width > anchoTexto + 12;
+
+    if (cabe) {
+      return (
+        <text
+          x={x + width - 8}
+          y={y + height / 2 + 1}
+          textAnchor="end"
+          dominantBaseline="middle"
+          fontSize={10}
+          fontWeight={800}
+          fill="#fff"
+        >
+          {texto}
+        </text>
+      );
+    }
+
+    return (
+      <text
+        x={x + width + 6}
+        y={y + height / 2 + 1}
+        textAnchor="start"
+        dominantBaseline="middle"
+        fontSize={10}
+        fontWeight={800}
+        fill="#9a3412"
+      >
+        {texto}
+      </text>
+    );
+  };
+
+  return (
+    <Card className="rounded-[1.35rem] border-slate-200 shadow-sm">
+      <CardContent className="p-3">
+        <SectionTitle
+          badge="Ranking"
+          title="Top gastos"
+          subtitle="Cuentas con mayor peso en el período."
+        />
+
+        <div className="h-[230px]">
+          {rows.length === 0 ? (
+            <EmptyState text="Sin gastos para mostrar." />
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={rows}
+                layout="vertical"
+                margin={{ top: 4, right: 48, left: 0, bottom: 4 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis
+                  type="number"
+                  tickFormatter={(v) => abreviar(Number(v))}
+                  tick={{ fontSize: 10, fill: "#64748b", fontWeight: 700 }}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="nombre"
+                  width={145}
+                  tickFormatter={(v) => shortenName(String(v), 21)}
+                  tick={{ fontSize: 10, fill: "#334155", fontWeight: 700 }}
+                />
+                <Tooltip
+                  formatter={(v: any) => formatCurrency(Number(v))}
+                  labelFormatter={(label) => String(label)}
+                />
+                <Bar dataKey="valor" name="Valor" fill="#f97316" radius={[0, 8, 8, 0]}>
+                  <LabelList dataKey="valor" content={<SmartLabel />} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function TopSimpleCard({
+  title,
+  subtitle,
+  icon,
+  data,
+  tone,
+}: {
+  title: string;
+  subtitle: string;
+  icon: ReactNode;
+  data: TopItem[];
+  tone: "emerald" | "rose";
+}) {
+  const rows = (data || []).slice(0, 7);
+  const toneClasses =
+    tone === "emerald"
+      ? "bg-emerald-50 text-emerald-700"
+      : "bg-rose-50 text-rose-700";
+
+  return (
+    <Card className="rounded-[1.35rem] border-slate-200 shadow-sm">
+      <CardContent className="p-3">
+        <SectionTitle badge="Ranking" title={title} subtitle={subtitle} />
+
+        <div className="space-y-2">
+          {rows.length === 0 && <EmptyState text="Sin datos para mostrar." />}
+
+          {rows.map((item, idx) => (
+            <div
+              key={`${item.nombre}-${idx}`}
+              className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm"
+              title={`${item.nombre}: ${formatCurrency(item.total)}`}
+            >
+              <div className="flex min-w-0 items-center gap-2.5">
+                <div className={cx("shrink-0 rounded-2xl p-2", toneClasses)}>{icon}</div>
+                <div className="min-w-0">
+                  <div className="line-clamp-1 text-[12px] font-black text-slate-800">
+                    {item.nombre}
+                  </div>
+                  <div className="text-[10px] uppercase tracking-wide text-slate-400">
+                    #{idx + 1}
+                  </div>
+                </div>
+              </div>
+              <div className="shrink-0 text-right text-[12px] font-black text-slate-900 tabular-nums">
+                {formatCurrency(item.total)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

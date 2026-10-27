@@ -18,6 +18,7 @@ import {
 } from "recharts";
 import { authFetch } from "@/lib/api";
 import { getDefaultYearToDateRange } from "@/lib/dateDefaults";
+import ComparativoAnual from "./ComparativoAnual";
 
 type Vendedor = { id: number; nombre: string };
 type CentroCosto = { id: number; nombre: string; codigo?: string };
@@ -241,6 +242,14 @@ export default function DashboardFinanciero() {
 
   const [incluyeImpuesto, setIncluyeImpuesto] = useState(true);
   const [incluyeNotaCredito, setIncluyeNotaCredito] = useState(true);
+
+  // Comparativo año contra año: el "año que se muestra" es el año de "Desde";
+  // el rango se corre completo al año elegido (ver ComparativoAnual.tsx).
+  const [modoComparativo, setModoComparativo] = useState(false);
+  const [aniosDisponibles, setAniosDisponibles] = useState<number[]>([]);
+  const [anioComparar, setAnioComparar] = useState<number | "">("");
+  const anioBase = desde ? Number(desde.slice(0, 4)) : 0;
+  const aniosComparables = aniosDisponibles.filter((a) => a !== anioBase);
 
   const totalVentasNetas = toNum(kpis.subtotal);
   const totalImpuestosNetos = toNum(kpis.impuestos);
@@ -601,6 +610,27 @@ export default function DashboardFinanciero() {
   }, [desde, hasta, sellerId, costCenter, clienteSel, incluyeImpuesto, incluyeNotaCredito]);
 
   useEffect(() => {
+    const loadAnios = async () => {
+      try {
+        const res = await authFetch("/reportes/ventas_anios_disponibles");
+        if (Array.isArray(res?.anios)) setAniosDisponibles(res.anios.map(Number));
+      } catch {}
+    };
+
+    loadAnios();
+  }, []);
+
+  // Si el año elegido deja de ser válido (por ejemplo, se cambió "Desde" a
+  // ese mismo año), se propone el año anterior al mostrado o el más reciente.
+  useEffect(() => {
+    if (anioComparar !== "" && aniosComparables.includes(anioComparar)) return;
+
+    if (aniosComparables.includes(anioBase - 1)) setAnioComparar(anioBase - 1);
+    else setAnioComparar(aniosComparables[0] ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anioBase, aniosDisponibles]);
+
+  useEffect(() => {
     const onEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setModalMovimientosOpen(false);
@@ -813,22 +843,71 @@ export default function DashboardFinanciero() {
               </button>
             </div>
           </div>
+
+          <div className="mt-4 flex flex-col gap-3 rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 md:flex-row md:items-center">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-indigo-700">Comparar {anioBase || "—"} con</span>
+
+              <select
+                value={anioComparar}
+                onChange={(e) => setAnioComparar(e.target.value ? Number(e.target.value) : "")}
+                disabled={aniosComparables.length === 0}
+                className="h-9 rounded-lg border border-indigo-200 bg-white px-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:opacity-60"
+              >
+                {aniosComparables.length === 0 && <option value="">Sin otros años con ventas</option>}
+                {aniosComparables.map((a) => (
+                  <option key={a} value={a}>
+                    {a}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                onClick={() => setModoComparativo((v) => !v)}
+                disabled={!modoComparativo && anioComparar === ""}
+                className={`h-9 rounded-lg px-4 text-sm font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                  modoComparativo
+                    ? "border border-indigo-300 bg-white text-indigo-700 hover:bg-indigo-50"
+                    : "bg-indigo-600 text-white hover:bg-indigo-700"
+                }`}
+              >
+                {modoComparativo ? "← Volver a la vista normal" : "Comparar años"}
+              </button>
+            </div>
+
+            <p className="text-xs leading-snug text-slate-500">
+              Compara las ventas del rango Desde–Hasta contra las mismas fechas del año elegido, con los mismos filtros.
+            </p>
+          </div>
         </div>
       </div>
 
-      {loading && (
+      {modoComparativo && anioComparar !== "" && (
+        <ComparativoAnual
+          desde={desde}
+          hasta={hasta}
+          anioComparar={anioComparar}
+          sellerId={sellerId}
+          costCenter={costCenter}
+          clienteSel={clienteSel}
+          incluyeImpuesto={incluyeImpuesto}
+          incluyeNotaCredito={incluyeNotaCredito}
+        />
+      )}
+
+      {!modoComparativo && loading && (
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <p className="text-sm text-slate-500">Cargando datos de ventas…</p>
         </div>
       )}
 
-      {err && (
+      {!modoComparativo && err && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-6 shadow-sm">
           <p className="font-medium text-red-700">Error: {err}</p>
         </div>
       )}
 
-      {!loading && !err && (
+      {!modoComparativo && !loading && !err && (
         <>
           <div className="overflow-x-auto pb-1">
             <div className="grid min-w-[1280px] grid-cols-8 gap-3">

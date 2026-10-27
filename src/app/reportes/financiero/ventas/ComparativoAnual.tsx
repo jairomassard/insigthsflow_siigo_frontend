@@ -12,6 +12,7 @@ import {
   CartesianGrid,
   Legend,
   ResponsiveContainer,
+  LabelList,
 } from "recharts";
 import { authFetch } from "@/lib/api";
 
@@ -48,7 +49,22 @@ const fmtPct = (n: number) =>
   `${n > 0 ? "+" : ""}${n.toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 
 const toNum = (v: any) => Number(v || 0);
-const pad = (n: number) => String(n).padStart(2, "0");
+
+// Mismo formato abreviado de las etiquetas de barra de la vista normal (page.tsx).
+function abreviar(valor: number): string {
+  const n = Number(valor || 0);
+  const abs = Math.abs(n);
+
+  if (abs >= 1_000_000) {
+    return `${(n / 1_000_000).toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}M`;
+  }
+  if (abs >= 1_000) {
+    return `${(n / 1_000).toLocaleString("es-CO", { maximumFractionDigits: 0 })}K`;
+  }
+  return `${Math.round(n).toLocaleString("es-CO")}`;
+}
+
+const pad =(n: number) => String(n).padStart(2, "0");
 
 const ultimoDiaMes = (y: number, m: number) => new Date(y, m, 0).getDate();
 
@@ -428,8 +444,22 @@ export default function ComparativoAnual({
                       cursor={{ fill: "rgba(99, 102, 241, 0.08)" }}
                     />
                     <Legend />
-                    <Bar yAxisId="valor" dataKey="a" name={labelA} fill={COLOR_ACTUAL} radius={[6, 6, 0, 0]} />
-                    <Bar yAxisId="valor" dataKey="b" name={labelB} fill={COLOR_COMPARADO} radius={[6, 6, 0, 0]} />
+                    <Bar yAxisId="valor" dataKey="a" name={labelA} fill={COLOR_ACTUAL} radius={[6, 6, 0, 0]}>
+                      <LabelList
+                        dataKey="a"
+                        position="top"
+                        formatter={(v: any) => abreviar(Number(v))}
+                        style={{ fontSize: 10, fill: COLOR_ACTUAL, fontWeight: 600 }}
+                      />
+                    </Bar>
+                    <Bar yAxisId="valor" dataKey="b" name={labelB} fill={COLOR_COMPARADO} radius={[6, 6, 0, 0]}>
+                      <LabelList
+                        dataKey="b"
+                        position="top"
+                        formatter={(v: any) => abreviar(Number(v))}
+                        style={{ fontSize: 10, fill: "#b45309", fontWeight: 600 }}
+                      />
+                    </Bar>
                     <Line
                       yAxisId="pct"
                       type="monotone"

@@ -733,18 +733,56 @@ export default function DashboardFinanciero() {
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b px-5 py-4">
-          <div className="inline-flex w-fit items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 shadow-sm">
-            Filtros del reporte
+        <div className="flex flex-col gap-4 border-b px-5 py-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="inline-flex w-fit items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 shadow-sm">
+              Filtros del reporte
+            </div>
+
+            <h2 className="mt-2 text-lg font-bold tracking-tight text-slate-950">
+              Consulta de ventas
+            </h2>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Los datos se actualizan automáticamente al cambiar los filtros.
+            </p>
           </div>
 
-          <h2 className="mt-2 text-lg font-bold tracking-tight text-slate-950">
-            Consulta de ventas
-          </h2>
+          <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 md:max-w-md">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-indigo-700">Comparar {anioBase || "—"} con</span>
 
-          <p className="mt-1 text-sm text-slate-500">
-            Los datos se actualizan automáticamente al cambiar los filtros.
-          </p>
+              <select
+                value={anioComparar}
+                onChange={(e) => setAnioComparar(e.target.value ? Number(e.target.value) : "")}
+                disabled={aniosComparables.length === 0}
+                className="h-9 rounded-lg border border-indigo-200 bg-white px-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:opacity-60"
+              >
+                {aniosComparables.length === 0 && <option value="">Sin otros años con ventas</option>}
+                {aniosComparables.map((a) => (
+                  <option key={a} value={a}>
+                    {a}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                onClick={() => setModoComparativo((v) => !v)}
+                disabled={!modoComparativo && anioComparar === ""}
+                className={`h-9 rounded-lg px-4 text-sm font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                  modoComparativo
+                    ? "border border-indigo-300 bg-white text-indigo-700 hover:bg-indigo-50"
+                    : "bg-indigo-600 text-white hover:bg-indigo-700"
+                }`}
+              >
+                {modoComparativo ? "← Volver a la vista normal" : "Comparar años"}
+              </button>
+            </div>
+
+            <p className="mt-1.5 text-[11px] leading-snug text-slate-500">
+              Mismo rango Desde–Hasta contra las mismas fechas del año elegido, con los mismos filtros.
+            </p>
+          </div>
         </div>
 
         <div className="p-4">
@@ -842,42 +880,6 @@ export default function DashboardFinanciero() {
                 Limpiar
               </button>
             </div>
-          </div>
-
-          <div className="mt-4 flex flex-col gap-3 rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 md:flex-row md:items-center">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold text-indigo-700">Comparar {anioBase || "—"} con</span>
-
-              <select
-                value={anioComparar}
-                onChange={(e) => setAnioComparar(e.target.value ? Number(e.target.value) : "")}
-                disabled={aniosComparables.length === 0}
-                className="h-9 rounded-lg border border-indigo-200 bg-white px-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:opacity-60"
-              >
-                {aniosComparables.length === 0 && <option value="">Sin otros años con ventas</option>}
-                {aniosComparables.map((a) => (
-                  <option key={a} value={a}>
-                    {a}
-                  </option>
-                ))}
-              </select>
-
-              <button
-                onClick={() => setModoComparativo((v) => !v)}
-                disabled={!modoComparativo && anioComparar === ""}
-                className={`h-9 rounded-lg px-4 text-sm font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                  modoComparativo
-                    ? "border border-indigo-300 bg-white text-indigo-700 hover:bg-indigo-50"
-                    : "bg-indigo-600 text-white hover:bg-indigo-700"
-                }`}
-              >
-                {modoComparativo ? "← Volver a la vista normal" : "Comparar años"}
-              </button>
-            </div>
-
-            <p className="text-xs leading-snug text-slate-500">
-              Compara las ventas del rango Desde–Hasta contra las mismas fechas del año elegido, con los mismos filtros.
-            </p>
           </div>
         </div>
       </div>

@@ -69,6 +69,10 @@ type BalanceResponse = {
     modo_comparativo?: boolean;
     comparacion_solicitada?: boolean;
     snapshot_comparativo_existe?: boolean;
+    origen_actual?: string | null;
+    origen_comparativo?: string | null;
+    metodos_distintos?: boolean;
+    cuentas_fuera_balance?: { cuenta: string; nombre: string; saldo: number }[];
     explicacion_filtros?: {
       fecha_corte?: string;
       comparar_con?: string;
@@ -1578,6 +1582,12 @@ export default function BalanceGeneralPage() {
   const fechaActualLabel = formatFechaCorta(data?.fechas?.fecha_corte || fechaCorte);
   const fechaAnteriorLabel = formatFechaCorta(data?.fechas?.comparar_con || compararCon);
 
+  const nombreSistema = proveedorDatos === "alegra" ? "Alegra" : "Siigo";
+  const cuentasFueraBalance = data?.meta?.cuentas_fuera_balance ?? [];
+  const sumaFueraBalance = Math.abs(cuentasFueraBalance.reduce((acc, c) => acc + (Number(c.saldo) || 0), 0));
+  const etiquetaOrigen = (origen?: string | null) =>
+    origen === "BALANCE_PRUEBA" ? "el Balance de Prueba de Siigo" : "el acumulado del auxiliar contable";
+
   const patrimonioCalculado = useMemo(() => {
     return !!data?.meta?.patrimonio?.usa_patrimonio_calculado;
   }, [data]);
@@ -2369,26 +2379,78 @@ export default function BalanceGeneralPage() {
           del reporte sea usable, pero eso no debe esconder que hay una señal
           real de un problema en los datos de origen - por eso banner propio,
           más severo (rojo) que el amber de cobertura, y siempre visible
-          arriba, no enterrado en el detalle técnico colapsado. */}
+          arriba, no enterrado en el detalle técnico colapsado. Aplica a
+          Siigo y Alegra: el texto nombra el sistema del cliente y, si el
+          backend encontró cuentas fuera del balance (clases 8/9), las nombra
+          como causa concreta. */}
       {typeof data?.kpis?.ajuste_cuadratura_residual_actual === "number" &&
         Math.abs(data.kpis.ajuste_cuadratura_residual_actual) >= 1 && (
-          <div className="bg-rose-50 border border-rose-200 rounded-[1.5rem] p-4 flex flex-col md:flex-row md:items-center gap-3">
+          <div className="bg-rose-50 border border-rose-200 rounded-[1.5rem] p-4 flex flex-col md:flex-row md:items-start gap-3">
             <div className="p-2 rounded-xl bg-rose-100 text-rose-700 shrink-0">
               <AlertTriangle size={20} />
             </div>
-            <p className="text-rose-900 text-xs font-medium leading-relaxed">
-              Este balance tiene una diferencia de{" "}
-              <strong>{formatCurrency(Math.abs(data.kpis.ajuste_cuadratura_residual_actual))}</strong> que{" "}
-              <strong>no se explica</strong> ni con las cuentas cargadas ni con el resultado (utilidad o pérdida)
-              del ejercicio. El sistema la muestra como un ajuste de patrimonio para que la ecuación contable
-              cierre y el resto del reporte se pueda seguir usando, pero es una señal de un posible error en los
-              datos de origen en Alegra — probablemente el mismo tipo de problema que ya hemos encontrado antes
-              (cuentas sin código, saldos iniciales incompletos, o datos corruptos en alguna cuenta). Pídele a tu
-              contador que lo revise directamente en Alegra antes de confiar en las cifras de patrimonio de este
-              balance.
-            </p>
+            <div className="text-rose-900 text-xs font-medium leading-relaxed space-y-2">
+              <p>
+                Este balance tiene una diferencia de{" "}
+                <strong>{formatCurrency(Math.abs(data.kpis.ajuste_cuadratura_residual_actual))}</strong> que{" "}
+                <strong>no se explica</strong> ni con las cuentas cargadas ni con el resultado (utilidad o pérdida)
+                del ejercicio. El sistema la muestra como un ajuste de patrimonio para que la ecuación contable
+                cierre y el resto del reporte se pueda seguir usando, pero es una señal de un posible error en los
+                datos de origen en {nombreSistema} (por ejemplo, un comprobante descuadrado, saldos iniciales
+                incompletos o cuentas sin clasificar). Pídele a tu contador que lo revise directamente en{" "}
+                {nombreSistema} antes de confiar en las cifras de patrimonio de este balance.
+              </p>
+              {cuentasFueraBalance.length > 0 && (
+                <div>
+                  <p>
+                    <strong>Causa encontrada:</strong> {nombreSistema} tiene saldo en cuentas que no pertenecen al
+                    balance (clases 8 y 9, cuentas de orden). Cuando un comprobante no cuadra, el sistema contable
+                    lo completa contra una cuenta de este tipo, y ese valor queda faltando en el balance:
+                  </p>
+                  <ul className="list-disc pl-5 mt-1">
+                    {cuentasFueraBalance.map((c) => (
+                      <li key={c.cuenta}>
+                        Cuenta <strong>{c.cuenta}</strong> {c.nombre}: <strong>{formatCurrency(c.saldo)}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                  {Math.abs(Math.abs(data.kpis.ajuste_cuadratura_residual_actual) - sumaFueraBalance) >= 1 && (
+                    <p className="mt-1">
+                      El resto de la diferencia (
+                      {formatCurrency(
+                        Math.abs(Math.abs(data.kpis.ajuste_cuadratura_residual_actual) - sumaFueraBalance)
+                      )}
+                      ) viene de que los débitos y créditos del propio reporte de {nombreSistema} no suman igual.
+                    </p>
+                  )}
+                  <p className="mt-1">
+                    En {nombreSistema}, busca los comprobantes que movieron esas cuentas y corrige su contrapartida.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         )}
+
+      {/* MÉTODOS DISTINTOS: el corte actual y el comparativo se armaron con
+          fuentes distintas (Balance de Prueba de Siigo vs acumulado del
+          auxiliar) - las variaciones mezclan diferencias de método. */}
+      {modoComparativo && data?.meta?.metodos_distintos && (
+        <div className="bg-amber-50 border border-amber-200 rounded-[1.5rem] p-4 flex flex-col md:flex-row md:items-center gap-3">
+          <div className="p-2 rounded-xl bg-amber-100 text-amber-700 shrink-0">
+            <AlertTriangle size={20} />
+          </div>
+          <p className="text-amber-900 text-xs font-medium leading-relaxed">
+            Los dos cortes se calcularon con <strong>métodos distintos</strong>: {fechaActualLabel} con{" "}
+            {etiquetaOrigen(data.meta.origen_actual)} y {fechaAnteriorLabel} con{" "}
+            {etiquetaOrigen(data.meta.origen_comparativo)}. Por eso las variaciones pueden no ser reales. Para
+            comparar bien, genera el balance de ambos cortes con el mismo método
+            {proveedorDatos === "siigo"
+              ? ` (en la tarjeta "Balance de Prueba real (Siigo)", con corte ${fechaAnteriorLabel}).`
+              : "."}
+          </p>
+        </div>
+      )}
 
       {/* ALERTAS */}
       {data?.resumen?.alertas?.length ? (
